@@ -1,0 +1,156 @@
+/* Lattice Web Visualization Styles */
+
+:root {
+    --color-bg: #111827;
+    --color-surface: #1f2937;
+    --color-border: #374151;
+    --color-text: #f3f4f6;
+    --color-text-muted: #9ca3af;
+    --color-primary: #6366f1;
+    --color-primary-light: #818cf8;
+}
+
+.light {
+    --color-bg: #f9fafb;
+    --color-surface: #ffffff;
+    --color-border: #e5e7eb;
+    --color-text: #111827;
+    --color-text-muted: #6b7280;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
+    overflow: hidden;
+}
+
+code, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+}
+
+/* Graph Nodes */
+.node {
+    cursor: pointer;
+}
+
+.node rect {
+    transition: all 0.2s ease;
+}
+
+.node:hover rect {
+    filter: brightness(1.2);
+}
+
+.node.selected rect {
+    stroke: var(--color-primary);
+    stroke-width: 3px;
+}
+
+.node text {
+    fill: white;
+    font-size: 12px;
+    font-weight: 500;
+    pointer-events: none;
+}
+
+/* Graph Edges */
+.edge {
+    fill: none;
+    stroke: #4b5563;
+    stroke-width: 2px;
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.edge.highlighted {
+    stroke: var(--color-primary);
+    stroke-width: 3px;
+    opacity: 1;
+}
+
+.edge-arrow {
+    fill: #4b5563;
+}
+
+.edge-arrow.highlighted {
+    fill: var(--color-primary);
+}
+
+/* Sidebar */
+.detail-section {
+    margin-bottom: 1rem;
+}
+
+.detail-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin-bottom: 0.25rem;
+}
+
+.detail-value {
+    color: var(--color-text);
+}
+
+.dep-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.dep-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: var(--color-primary-light);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.dep-badge:hover {
+    background: rgba(99, 102, 241, 0.3);
+}
+
+/* Group Colors */
+.group-default { fill: url(#gradient-default); }
+.group-analytics { fill: url(#gradient-analytics); }
+.group-data { fill: url(#gradient-data); }
+.group-ml { fill: url(#gradient-ml); }
+
+/* Animations */
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+.loading-pulse {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-text-muted);
+}
