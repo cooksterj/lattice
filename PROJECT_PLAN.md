@@ -80,19 +80,28 @@ def user_statistics(cleaned_users: pd.DataFrame) -> dict:
 
 ## Phase 2: Dependency Resolution & DAG
 
-**Goal:** Build execution graph with topological sort.
+**Goal:** Build execution graph with topological sort, plus web-based visualization.
 
 ```python
-from lattice import Definitions, materialize
+from lattice import asset, ExecutionPlan, get_global_registry
+from lattice.web.app import serve
 
-defs = Definitions(assets=[raw_users, cleaned_users, user_statistics])
+@asset
+def raw_data() -> dict:
+    return {"value": 1}
 
-# Resolve what to run for a target
-plan = defs.resolve(target="user_statistics")
-# -> ExecutionPlan(order=[raw_users, cleaned_users, user_statistics])
+@asset
+def processed(raw_data: dict) -> dict:
+    return {"processed": raw_data["value"] * 2}
 
-# Or materialize a subset
-materialize(assets=[cleaned_users])  # Also runs raw_users
+# Resolve execution plan
+plan = ExecutionPlan.resolve(get_global_registry(), target="processed")
+for asset_def in plan:
+    print(f"Execute: {asset_def.key}")
+
+# Start visualization server
+serve(host="127.0.0.1", port=8000)
+# Open http://localhost:8000
 ```
 
 **Python patterns:**
@@ -100,12 +109,55 @@ materialize(assets=[cleaned_users])  # Also runs raw_users
 - Kahn's algorithm or DFS for topological sort
 - Cycle detection with clear error messages
 - `__contains__`, `__iter__` protocol for plan objects
+- FastAPI for REST endpoints
+- D3.js force-directed graph visualization
 
 **Deliverables:**
 - `DependencyGraph` - builds DAG from registry
 - `ExecutionPlan` - ordered list of assets to materialize
 - Subset selection (run only what's needed for target)
-- Visualization helper (output DOT format for Graphviz)
+- `CyclicDependencyError` - exception with cycle path for debugging
+
+**Web Visualization:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Main HTML visualization page |
+| `/api/graph` | GET | Graph data (nodes + edges) for D3.js |
+| `/api/assets/{key}` | GET | Asset detail (dependencies, dependents, metadata) |
+| `/api/plan` | GET | Execution plan (optional `?target=` query param) |
+| `/health` | GET | Health check for containers |
+
+**Deployment Options:**
+- **Local development:** `serve(host="127.0.0.1", port=8000)` for localhost access
+- **Docker (future):** Containerized deployment to EC2 or ECS for team-wide access
+  - Dockerfile with uvicorn + gunicorn for production
+  - ECS Fargate for serverless container hosting
+  - EC2 for persistent instance with lower cost at scale
+
+**Optional dependencies** (install with `pip install lattice[web]`):
+- `fastapi>=0.115.0`
+- `uvicorn[standard]>=0.34.0`
+- `jinja2>=3.1.0`
+
+**UI Beautification:**
+
+| Component | Implementation |
+|-----------|----------------|
+| CSS Framework | Tailwind CSS via CDN (no build step) |
+| Color Scheme | Dark mode default with light mode toggle |
+| Typography | Inter font for UI, JetBrains Mono for code |
+| Icons | Lucide icons for actions and status indicators |
+| Animations | Smooth transitions for node hover/selection |
+
+Visual enhancements:
+- **Graph nodes:** Rounded rectangles with gradient fills, group-based coloring
+- **Edges:** Animated directional arrows showing dependency flow
+- **Sidebar:** Glassmorphism panel for asset details with syntax-highlighted metadata
+- **Status indicators:** Color-coded badges (success/pending/error) for materialization state
+- **Responsive layout:** Collapsible sidebar, mobile-friendly graph controls
+- **Loading states:** Skeleton loaders and spinners during API calls
+- **Tooltips:** Rich hover cards showing asset summary without clicking
 
 ---
 
