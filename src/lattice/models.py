@@ -7,9 +7,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class AssetKey(BaseModel):
-    """Unique identifier for an asset.
+    """
+    Unique identifier for an asset.
 
     Assets can be organized into groups for namespacing.
+
+    Attributes
+    ----------
+    name : str
+        The asset name. Must be at least 1 character.
+    group : str
+        The namespace group. Defaults to "default".
     """
 
     model_config = ConfigDict(frozen=True)
@@ -18,14 +26,45 @@ class AssetKey(BaseModel):
     group: str = Field(default="default", min_length=1)
 
     def __str__(self) -> str:
+        """
+        Return string representation of the asset key.
+
+        Returns
+        -------
+        str
+            Format "group/name" if group is not default, otherwise just "name".
+        """
         return f"{self.group}/{self.name}" if self.group != "default" else self.name
 
     def __hash__(self) -> int:
+        """
+        Return hash based on group and name.
+
+        Returns
+        -------
+        int
+            Hash value for use in sets and dict keys.
+        """
         return hash((self.group, self.name))
 
 
 class AssetDefinition(BaseModel):
-    """Metadata wrapper for an asset function."""
+    """
+    Metadata wrapper for an asset function.
+
+    Attributes
+    ----------
+    key : AssetKey
+        Unique identifier for this asset.
+    fn : Callable[..., Any]
+        The underlying asset function.
+    dependencies : tuple of AssetKey
+        Other assets this asset depends on.
+    return_type : Any
+        The return type annotation. Can be type, GenericAlias, or None.
+    description : str or None
+        Optional human-readable description.
+    """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
@@ -36,8 +75,30 @@ class AssetDefinition(BaseModel):
     description: str | None = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the underlying asset function."""
+        """
+        Execute the underlying asset function.
+
+        Parameters
+        ----------
+        *args : Any
+            Positional arguments passed to the asset function.
+        **kwargs : Any
+            Keyword arguments passed to the asset function.
+
+        Returns
+        -------
+        Any
+            The result of the asset function.
+        """
         return self.fn(*args, **kwargs)
 
     def __hash__(self) -> int:
+        """
+        Return hash based on the asset key.
+
+        Returns
+        -------
+        int
+            Hash value for use in sets and dict keys.
+        """
         return hash(self.key)
