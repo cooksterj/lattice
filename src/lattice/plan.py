@@ -1,0 +1,133 @@
+"""
+Execution plan for asset materialization.
+
+This module provides the ExecutionPlan class which resolves the order in
+which assets must be materialized based on their dependencies. Plans can
+target a specific asset (including only required upstream assets) or
+include all registered assets.
+"""
+
+from collections.abc import Iterator
+
+from pydantic import BaseModel, ConfigDict
+
+from lattice.graph import DependencyGraph
+from lattice.models import AssetDefinition, AssetKey
+from lattice.registry import AssetRegistry
+
+
+class ExecutionPlan(BaseModel):
+    """
+    An ordered plan for materializing assets.
+
+    The plan contains assets in topological order, ensuring dependencies
+    are materialized before the assets that depend on them.
+
+    Attributes
+    ----------
+    assets : tuple of AssetDefinition
+        Assets in execution order (dependencies first).
+    target : AssetKey or None
+        The target asset if a subset was resolved, None for full graph.
+    """
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
+    assets: tuple[AssetDefinition, ...]
+    target: AssetKey | None = None
+
+    @classmethod
+    def resolve(
+        cls,
+        registry: AssetRegistry,
+        target: AssetKey | str | None = None,
+    ) -> "ExecutionPlan":
+        """
+        Resolve an execution plan from a registry.
+
+        If a target is specified, only include assets required to materialize
+        that target. Otherwise, include all registered assets.
+
+        Parameters
+        ----------
+        registry : AssetRegistry
+            The registry containing asset definitions.
+        target : AssetKey, str, or None
+            Optional target asset to resolve. If string, converted to AssetKey.
+
+        Returns
+        -------
+        ExecutionPlan
+            An execution plan with assets in topological order.
+
+        Raises
+        ------
+        KeyError
+            If the target asset is not found in the registry.
+        CyclicDependencyError
+            If a cycle is detected in the dependency graph.
+        """
+        # Normalize target to AssetKey
+        target_key: AssetKey | None = None
+        if target is not None:
+            target_key = AssetKey(name=target) if isinstance(target, str) else target
+
+        # Build dependency graph
+        graph = DependencyGraph.from_registry(registry)
+
+        # Get topological order
+        sorted_keys = graph.topological_sort()
+
+        # If target specified, filter to only required assets
+        if target_key is not None:
+            if target_key not in registry:
+                raise KeyError(f"Target asset {target_key} not found in registry")
+
+            required = graph.get_all_upstream(target_key)
+            required.add(target_key)
+            sorted_keys = [k for k in sorted_keys if k in required]
+
+        # Convert keys to asset definitions
+        assets = tuple(registry.get(key) for key in sorted_keys)
+
+        return cls(assets=assets, target=target_key)
+
+    def __iter__(self) -> Iterator[AssetDefinition]:  # type: ignore[override]
+        """
+        Iterate over assets in execution order.
+
+        Yields
+        ------
+        AssetDefinition
+            Each asset definition in the plan.
+        """
+        return iter(self.assets)
+
+    def __len__(self) -> int:
+        """
+        Return the number of assets in the plan.
+
+        Returns
+        -------
+        int
+            The count of assets.
+        """
+        return len(self.assets)
+
+    def __contains__(self, key: AssetKey | str) -> bool:
+        """
+        Check if an asset is in the plan.
+
+        Parameters
+        ----------
+        key : AssetKey or str
+            The asset key to check.
+
+        Returns
+        -------
+        bool
+            True if the asset is in the plan.
+        """
+        if isinstance(key, str):
+            key = AssetKey(name=key)
+        return any(asset.key == key for asset in self.assets)
