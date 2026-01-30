@@ -1,4 +1,11 @@
-"""Core data models for Lattice."""
+"""
+Core data models for Lattice.
+
+This module defines the foundational Pydantic models used throughout the
+framework: AssetKey for unique asset identification with optional group
+namespacing, and AssetDefinition for wrapping asset functions with their
+metadata (dependencies, return type, description).
+"""
 
 from collections.abc import Callable
 from typing import Any

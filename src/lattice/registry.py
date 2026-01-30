@@ -1,6 +1,14 @@
-"""Asset registry for storing and retrieving asset definitions."""
+"""
+Asset registry for storing and retrieving asset definitions.
+
+This module provides the AssetRegistry class which serves as a container
+for asset definitions. A global singleton registry is available via
+get_global_registry(), or isolated registries can be instantiated for
+testing and modular configurations.
+"""
 
 from collections.abc import Iterator
+
 from lattice.models import AssetDefinition, AssetKey
 
 

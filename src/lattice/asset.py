@@ -1,4 +1,11 @@
-"""The @asset decorator for defining data assets."""
+"""
+The @asset decorator for defining data assets.
+
+This module provides the primary API for declaring assets in Lattice.
+The decorator automatically extracts dependencies from function parameter
+names, captures return type annotations, and registers the asset definition
+to a registry (global by default).
+"""
 
 import inspect
 from collections.abc import Callable
