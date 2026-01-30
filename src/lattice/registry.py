@@ -1,6 +1,7 @@
 """Asset registry for storing and retrieving asset definitions."""
 
 from collections.abc import Iterator
+
 from lattice.models import AssetDefinition, AssetKey
 
 
