@@ -8,10 +8,15 @@ Run with:
 Then open http://localhost:8000 in your browser.
 """
 
-import time
+from lattice import configure_logging
 
-from lattice import AssetKey, asset
-from lattice.web import serve
+# Configure logging before defining assets to see registration logs
+configure_logging()
+
+import time  # noqa: E402
+
+from lattice import AssetKey, asset  # noqa: E402
+from lattice.web import serve  # noqa: E402
 
 
 # Source assets (no dependencies)
