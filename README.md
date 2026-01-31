@@ -2,6 +2,42 @@
 
 An asset-centric orchestration framework inspired by Dagster's design philosophy.
 
+## Why Lattice?
+
+If you've chained shell scripts together for data pipelines, you've likely hit these limitations:
+
+| Concern | Shell Scripts | Lattice |
+|---------|---------------|---------|
+| **Dependencies** | Linear chains only | Complex DAGs (diamonds, fan-out/fan-in) |
+| **Parallelism** | Manual with `&` and `wait` | Automatic based on DAG structure |
+| **Partial runs** | All or nothing | Run single asset + its dependencies |
+| **Failure handling** | `set -e` stops everything | Skip downstream, continue independent branches |
+| **Observability** | Custom logging | Built-in status, timing, run history |
+| **Caching** | DIY file checks | IO managers handle storage/retrieval |
+| **Testing** | Difficult to unit test | Standard Python functions |
+
+The key insight is the **DAG model**: you declare what depends on what, and the framework handles execution order, parallelism, and failure propagation.
+
+```python
+from lattice import asset, materialize
+
+@asset
+def raw_data() -> list:
+    return fetch_from_api()
+
+@asset
+def cleaned_data(raw_data: list) -> list:
+    return [clean(r) for r in raw_data]
+
+@asset
+def report(cleaned_data: list) -> dict:
+    return generate_report(cleaned_data)
+
+# Run everything, or just what's needed for a specific target
+materialize()                    # all assets
+materialize(target="report")     # report + dependencies only
+```
+
 ## Development
 
 ```bash
