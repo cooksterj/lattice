@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.5.0](https://github.com/cooksterj/lattice/compare/v0.4.0...v0.5.0) (2026-01-31)
+
+
+### Features
+
+* A comphrensive logging framework has been added to the project. ([0388a53](https://github.com/cooksterj/lattice/commit/0388a5318d6c891aa5f789374f87033939503666))
+* Add the ability to run assets concurrently based on the level of the asset and its dependencies. ([d8a7343](https://github.com/cooksterj/lattice/commit/d8a734390dc52117b3d1ff30c1ea8d12871fd12d))
+* Added logging capabilities across all Lattice frameworks. ([084854f](https://github.com/cooksterj/lattice/commit/084854f8b21eb45c3dfa631de6684720deeb888c))
+* Configure logging to be present in the web demonstration. ([3c9e942](https://github.com/cooksterj/lattice/commit/3c9e9429a441d294aaab3553b71711b0fc7bbae8))
+
+
+### Documentation
+
+* Instructions on how to configure logging when using Lattice has been provided. ([d2bb5b7](https://github.com/cooksterj/lattice/commit/d2bb5b72dec8fbdd986c6474be0a513f37ed7a11))
+* Updates to the project's README.md to include the benefit of using Lattice. ([e69138d](https://github.com/cooksterj/lattice/commit/e69138d760dfff6fc5a51400f056eeff4b42c67a))
+
 ## [0.4.0](https://github.com/cooksterj/lattice/compare/v0.3.0...v0.4.0) (2026-01-31)
 
 
