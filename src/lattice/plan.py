@@ -70,7 +70,15 @@ class ExecutionPlan(BaseModel):
         # Normalize target to AssetKey
         target_key: AssetKey | None = None
         if target is not None:
-            target_key = AssetKey(name=target) if isinstance(target, str) else target
+            if isinstance(target, str):
+                # Parse "group/name" format or just "name"
+                if "/" in target:
+                    group, name = target.split("/", 1)
+                    target_key = AssetKey(name=name, group=group)
+                else:
+                    target_key = AssetKey(name=target)
+            else:
+                target_key = target
 
         # Build dependency graph
         graph = DependencyGraph.from_registry(registry)
@@ -121,7 +129,7 @@ class ExecutionPlan(BaseModel):
         Parameters
         ----------
         key : AssetKey or str
-            The asset key to check.
+            The asset key to check. String format: "name" or "group/name".
 
         Returns
         -------
@@ -129,5 +137,9 @@ class ExecutionPlan(BaseModel):
             True if the asset is in the plan.
         """
         if isinstance(key, str):
-            key = AssetKey(name=key)
+            if "/" in key:
+                group, name = key.split("/", 1)
+                key = AssetKey(name=name, group=group)
+            else:
+                key = AssetKey(name=key)
         return any(asset.key == key for asset in self.assets)
