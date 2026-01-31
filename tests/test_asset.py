@@ -82,6 +82,39 @@ class TestAssetDecorator:
             AssetKey(name="source_b"),
         )
 
+    def test_explicit_deps_for_grouped_assets(self) -> None:
+        """Test that deps parameter allows explicit dependency specification."""
+
+        @asset(
+            key=AssetKey(name="dashboard", group="analytics"),
+            deps={
+                "revenue": AssetKey(name="daily_revenue", group="analytics"),
+                "stats": AssetKey(name="user_stats", group="analytics"),
+            },
+        )
+        def dashboard(revenue: dict, stats: dict) -> dict:
+            return {"revenue": revenue, "stats": stats}
+
+        assert dashboard.dependencies == (
+            AssetKey(name="daily_revenue", group="analytics"),
+            AssetKey(name="user_stats", group="analytics"),
+        )
+        assert dashboard.key == AssetKey(name="dashboard", group="analytics")
+
+    def test_partial_explicit_deps(self) -> None:
+        """Test that deps can override some parameters while others use defaults."""
+
+        @asset(
+            deps={"grouped_dep": AssetKey(name="source", group="data")},
+        )
+        def mixed_deps(grouped_dep: int, regular_dep: int) -> int:
+            return grouped_dep + regular_dep
+
+        assert mixed_deps.dependencies == (
+            AssetKey(name="source", group="data"),
+            AssetKey(name="regular_dep"),
+        )
+
     def test_return_type_extraction(self) -> None:
         @asset
         def typed_asset() -> dict[str, int]:
