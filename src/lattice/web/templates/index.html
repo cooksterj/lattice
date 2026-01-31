@@ -3,36 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lattice - Asset Graph</title>
+    <title>LATTICE // Asset Graph</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body class="font-sans" style="background-color: var(--color-bg); color: var(--color-text);">
-    <div class="flex h-screen">
+<body class="font-mono">
+    <div class="flex h-screen relative z-10">
         <!-- Main Graph Area -->
         <div class="flex-1 relative">
             <!-- Header -->
             <header class="header absolute top-0 left-0 right-0 z-10 p-4 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
-                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+                <div class="flex items-center gap-4">
+                    <div class="logo-container">
+                        <div class="logo-glow"></div>
+                        <svg class="logo-icon" viewBox="0 0 32 32" fill="none">
+                            <rect x="2" y="2" width="12" height="12" stroke="currentColor" stroke-width="2"/>
+                            <rect x="18" y="2" width="12" height="12" stroke="currentColor" stroke-width="2"/>
+                            <rect x="2" y="18" width="12" height="12" stroke="currentColor" stroke-width="2"/>
+                            <rect x="18" y="18" width="12" height="12" stroke="currentColor" stroke-width="2"/>
+                            <line x1="14" y1="8" x2="18" y2="8" stroke="currentColor" stroke-width="2"/>
+                            <line x1="8" y1="14" x2="8" y2="18" stroke="currentColor" stroke-width="2"/>
+                            <line x1="24" y1="14" x2="24" y2="18" stroke="currentColor" stroke-width="2"/>
+                            <line x1="14" y1="24" x2="18" y2="24" stroke="currentColor" stroke-width="2"/>
                         </svg>
                     </div>
-                    <h1 class="text-xl font-semibold">Lattice</h1>
+                    <div class="title-container">
+                        <h1 class="title-main">LATTICE</h1>
+                        <div class="title-sub">ASSET ORCHESTRATION SYSTEM</div>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span id="asset-count" class="text-sm text-gray-400">Loading...</span>
-                    <button id="relayout-btn" class="header-btn p-2 rounded-lg transition-colors" title="Re-run layout">
+                <div class="flex items-center gap-3">
+                    <div class="status-display">
+                        <span class="status-label">NODES:</span>
+                        <span id="asset-count" class="status-value">---</span>
+                    </div>
+                    <div class="header-divider"></div>
+                    <button id="relayout-btn" class="header-btn" title="Re-run layout">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
                     </button>
-                    <button id="theme-toggle" class="header-btn p-2 rounded-lg transition-colors" title="Toggle theme">
+                    <button id="theme-toggle" class="header-btn" title="Toggle theme">
                         <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
                         </svg>
@@ -50,32 +65,45 @@
 
             <!-- Loading Overlay -->
             <div id="loading" class="loading-overlay absolute inset-0 flex items-center justify-center">
-                <div class="flex flex-col items-center gap-3">
-                    <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span class="text-gray-400">Loading graph...</span>
+                <div class="loader-container">
+                    <div class="loader-ring"></div>
+                    <div class="loader-ring delay-1"></div>
+                    <div class="loader-ring delay-2"></div>
+                    <div class="loader-text">INITIALIZING</div>
                 </div>
             </div>
         </div>
 
         <!-- Sidebar -->
-        <aside id="sidebar" class="sidebar w-80 backdrop-blur-xl transform translate-x-full transition-transform duration-300 ease-out">
+        <aside id="sidebar" class="sidebar w-96 transform translate-x-full transition-transform duration-300 ease-out">
             <div class="sidebar-header p-4 flex items-center justify-between">
-                <h2 class="font-semibold">Asset Details</h2>
-                <button id="close-sidebar" class="close-btn p-1 rounded transition-colors">
+                <div class="sidebar-title">
+                    <span class="sidebar-title-bracket">[</span>
+                    ASSET DATA
+                    <span class="sidebar-title-bracket">]</span>
+                </div>
+                <button id="close-sidebar" class="close-btn">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
                 </button>
             </div>
-            <div id="sidebar-content" class="p-4 space-y-4">
+            <div class="sidebar-glow"></div>
+            <div id="sidebar-content" class="p-5 space-y-5 overflow-y-auto" style="max-height: calc(100vh - 60px);">
                 <!-- Content populated by JavaScript -->
             </div>
         </aside>
     </div>
 
     <!-- Tooltip -->
-    <div id="tooltip" class="tooltip fixed z-50 px-3 py-2 rounded-lg shadow-xl text-sm pointer-events-none opacity-0 transition-opacity duration-150">
+    <div id="tooltip" class="tooltip fixed z-50 px-4 py-3 pointer-events-none opacity-0 transition-opacity duration-150">
     </div>
+
+    <!-- Corner decorations -->
+    <div class="corner-decor top-left"></div>
+    <div class="corner-decor top-right"></div>
+    <div class="corner-decor bottom-left"></div>
+    <div class="corner-decor bottom-right"></div>
 
     <script src="/static/js/graph.js"></script>
 </body>

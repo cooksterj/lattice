@@ -3,12 +3,13 @@
  * D3.js force-directed graph with interactive features
  */
 
+// Neon Grid color palette for asset groups
 const GROUP_COLORS = {
-    default: { start: '#6366f1', end: '#4f46e5' },
-    analytics: { start: '#10b981', end: '#059669' },
-    data: { start: '#f59e0b', end: '#d97706' },
-    ml: { start: '#ec4899', end: '#db2777' },
-    etl: { start: '#8b5cf6', end: '#7c3aed' },
+    default: { start: '#7b2cbf', end: '#3c096c', stroke: '#9d4edd' },    // Purple
+    analytics: { start: '#05d9e8', end: '#01949a', stroke: '#05d9e8' },  // Cyan
+    data: { start: '#ff2a6d', end: '#b5179e', stroke: '#ff2a6d' },       // Pink
+    ml: { start: '#f6ff00', end: '#d4af00', stroke: '#f6ff00' },         // Yellow
+    etl: { start: '#ff6b35', end: '#f72585', stroke: '#ff6b35' },        // Orange-Pink
 };
 
 class LatticeGraph {
@@ -129,12 +130,11 @@ class LatticeGraph {
             this.edges = data.edges.map(e => ({ ...e }));
 
             // Update asset count
-            document.getElementById('asset-count').textContent =
-                `${this.nodes.length} asset${this.nodes.length !== 1 ? 's' : ''}`;
+            document.getElementById('asset-count').textContent = String(this.nodes.length).padStart(3, '0');
 
         } catch (error) {
             console.error('Failed to load graph data:', error);
-            document.getElementById('asset-count').textContent = 'Error loading data';
+            document.getElementById('asset-count').textContent = 'ERR';
         }
     }
 
@@ -157,24 +157,31 @@ class LatticeGraph {
             .attr('class', 'node')
             .call(this.drag());
 
-        // Node rectangles
+        // Node rectangles with neon glow
         this.nodeElements.append('rect')
-            .attr('width', 120)
-            .attr('height', 40)
-            .attr('x', -60)
-            .attr('y', -20)
-            .attr('rx', 8)
+            .attr('width', 130)
+            .attr('height', 44)
+            .attr('x', -65)
+            .attr('y', -22)
+            .attr('rx', 4)
             .attr('class', d => `group-${d.group}`)
             .style('fill', d => {
-                const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`;
+            })
+            .style('stroke', d => {
+                const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
+                return colors.stroke;
+            })
+            .style('filter', d => {
+                const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
+                return `drop-shadow(0 0 8px ${colors.stroke}66)`;
             });
 
         // Node labels
         this.nodeElements.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', '0.35em')
-            .text(d => d.name.length > 14 ? d.name.slice(0, 12) + '...' : d.name);
+            .text(d => d.name.length > 16 ? d.name.slice(0, 14) + '...' : d.name);
 
         // Compute hierarchical layout (left-to-right)
         this.computeHierarchicalLayout();
@@ -317,9 +324,9 @@ class LatticeGraph {
         this.nodeElements
             .on('mouseenter', (event, d) => {
                 tooltip.innerHTML = `
-                    <div class="font-semibold">${d.name}</div>
-                    <div class="text-gray-400 text-xs">${d.group}</div>
-                    ${d.return_type ? `<div class="text-indigo-400 text-xs font-mono mt-1">${d.return_type}</div>` : ''}
+                    <div class="font-display font-bold" style="color: #05d9e8; text-shadow: 0 0 10px rgba(5,217,232,0.5);">${d.name}</div>
+                    <div style="color: #8888aa; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
+                    ${d.return_type ? `<div style="color: #ff2a6d; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
                 `;
                 tooltip.style.opacity = '1';
                 this.highlightConnections(d);
@@ -418,7 +425,7 @@ class LatticeGraph {
         this.nodeElements.classed('selected', d => d.id === node.id);
 
         // Show loading state
-        content.innerHTML = '<div class="loading-pulse text-gray-400">Loading...</div>';
+        content.innerHTML = '<div style="color: #05d9e8; font-family: Orbitron, sans-serif; letter-spacing: 0.2em; animation: textFlicker 1.5s ease-in-out infinite;">LOADING...</div>';
         sidebar.classList.remove('translate-x-full');
 
         try {
@@ -428,25 +435,25 @@ class LatticeGraph {
             content.innerHTML = `
                 <div class="detail-section">
                     <div class="detail-label">Name</div>
-                    <div class="detail-value font-semibold text-lg">${data.name}</div>
+                    <div class="detail-value font-display" style="font-size: 1.25rem; color: #05d9e8; text-shadow: 0 0 15px rgba(5,217,232,0.5);">${data.name}</div>
                 </div>
 
                 <div class="detail-section">
                     <div class="detail-label">Group</div>
-                    <div class="detail-value">${data.group}</div>
+                    <div class="detail-value" style="letter-spacing: 0.1em;">${data.group.toUpperCase()}</div>
                 </div>
 
                 ${data.return_type ? `
                 <div class="detail-section">
                     <div class="detail-label">Return Type</div>
-                    <div class="detail-value font-mono text-indigo-400">${data.return_type}</div>
+                    <div class="detail-value" style="color: #f6ff00; text-shadow: 0 0 10px rgba(246,255,0,0.4);">${data.return_type}</div>
                 </div>
                 ` : ''}
 
                 ${data.description ? `
                 <div class="detail-section">
                     <div class="detail-label">Description</div>
-                    <div class="detail-value text-gray-300">${data.description}</div>
+                    <div class="detail-value" style="color: #8888aa; line-height: 1.6;">${data.description}</div>
                 </div>
                 ` : ''}
 
@@ -455,7 +462,7 @@ class LatticeGraph {
                     <div class="dep-list">
                         ${data.dependencies.length > 0
                             ? data.dependencies.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                            : '<span class="text-gray-500 text-sm">None</span>'}
+                            : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
 
@@ -464,7 +471,7 @@ class LatticeGraph {
                     <div class="dep-list">
                         ${data.dependents.length > 0
                             ? data.dependents.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                            : '<span class="text-gray-500 text-sm">None</span>'}
+                            : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
             `;
@@ -479,7 +486,7 @@ class LatticeGraph {
             });
 
         } catch (error) {
-            content.innerHTML = `<div class="text-red-400">Failed to load asset details</div>`;
+            content.innerHTML = `<div style="color: #ff2a6d; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
         }
     }
 
@@ -501,7 +508,7 @@ class LatticeGraph {
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>
-                <span>Execute</span>
+                <span>EXECUTE</span>
             </button>
         `;
         document.body.appendChild(controls);
@@ -512,22 +519,22 @@ class LatticeGraph {
         memoryPanel.className = 'memory-panel hidden';
         memoryPanel.innerHTML = `
             <div class="memory-panel-header">
-                <span class="memory-panel-title">Memory Usage</span>
+                <span class="memory-panel-title">// MEMORY USAGE</span>
             </div>
             <div class="memory-stat">
-                <span class="memory-stat-label">Current RSS</span>
+                <span class="memory-stat-label">CURRENT RSS</span>
                 <span id="current-rss" class="memory-stat-value">-- MB</span>
             </div>
             <div class="memory-stat">
-                <span class="memory-stat-label">Peak RSS</span>
+                <span class="memory-stat-label">PEAK RSS</span>
                 <span id="peak-rss" class="memory-stat-value peak">-- MB</span>
             </div>
             <div class="memory-sparkline">
                 <svg viewBox="0 0 100 40" preserveAspectRatio="none">
                     <defs>
                         <linearGradient id="sparkline-gradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stop-color="#6366f1" stop-opacity="0.5"/>
-                            <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                            <stop offset="0%" stop-color="#05d9e8" stop-opacity="0.6"/>
+                            <stop offset="100%" stop-color="#05d9e8" stop-opacity="0"/>
                         </linearGradient>
                     </defs>
                     <path id="sparkline-area" class="memory-sparkline-area"/>
@@ -543,10 +550,13 @@ class LatticeGraph {
         progress.className = 'execution-progress hidden';
         progress.innerHTML = `
             <div class="execution-progress-spinner"></div>
-            <span class="execution-progress-text">Executing: </span>
+            <span class="execution-progress-text">EXECUTING:</span>
+            <span id="progress-current-asset" class="execution-progress-count" style="margin: 0 8px;">---</span>
+            <span class="execution-progress-text">[</span>
             <span id="progress-current" class="execution-progress-count">0</span>
-            <span class="execution-progress-text"> of </span>
+            <span class="execution-progress-text">/</span>
             <span id="progress-total" class="execution-progress-count">${this.nodes.length}</span>
+            <span class="execution-progress-text">]</span>
         `;
         document.body.appendChild(progress);
 
@@ -560,7 +570,7 @@ class LatticeGraph {
         const btn = document.getElementById('execute-btn');
         btn.disabled = true;
         btn.classList.add('running');
-        btn.querySelector('span').textContent = 'Connecting...';
+        btn.querySelector('span').textContent = 'CONNECTING...';
 
         // Show UI elements
         document.getElementById('memory-panel').classList.remove('hidden');
@@ -577,13 +587,19 @@ class LatticeGraph {
 
         // Reset progress display
         document.getElementById('progress-current').textContent = '0';
+        document.getElementById('progress-total').textContent = this.nodes.length;
+        const currentAssetEl = document.getElementById('progress-current-asset');
+        if (currentAssetEl) {
+            currentAssetEl.textContent = 'STARTING...';
+            currentAssetEl.style.color = '';  // Reset to default CSS color
+        }
         document.getElementById('current-rss').textContent = '-- MB';
         document.getElementById('peak-rss').textContent = '-- MB';
 
         // Connect WebSocket and wait for it to be ready
         try {
             await this.connectExecutionWebSocket();
-            btn.querySelector('span').textContent = 'Running...';
+            btn.querySelector('span').textContent = 'RUNNING...';
 
             // Start execution after WebSocket is connected
             const target = this.selectedNode ? this.selectedNode.id : null;
@@ -653,18 +669,41 @@ class LatticeGraph {
                 break;
 
             case 'execution_complete':
+                this.showExecutionComplete(message.data);
                 this.stopExecution();
                 break;
+        }
+    }
+
+    showExecutionComplete(data) {
+        const currentAssetEl = document.getElementById('progress-current-asset');
+        if (currentAssetEl) {
+            if (data.failed_count > 0) {
+                currentAssetEl.textContent = 'FAILED';
+                currentAssetEl.style.color = '#ff2a6d';
+            } else {
+                currentAssetEl.textContent = 'COMPLETE';
+                currentAssetEl.style.color = '#05d9e8';
+            }
         }
     }
 
     updateAssetStatus(assetId, status) {
         this.executionState.assetStatuses.set(assetId, status);
 
-        // Update node visual
-        this.nodeElements
-            .filter(d => d.id === assetId)
-            .attr('class', `node status-${status}`);
+        const node = this.nodeElements.filter(d => d.id === assetId);
+
+        // Update node class
+        node.attr('class', `node status-${status}`);
+
+        // Update current asset display when running
+        if (status === 'running') {
+            const currentAssetEl = document.getElementById('progress-current-asset');
+            if (currentAssetEl) {
+                const displayName = assetId.includes('/') ? assetId.split('/').pop() : assetId;
+                currentAssetEl.textContent = displayName.toUpperCase();
+            }
+        }
 
         // Update progress counter
         const completed = [...this.executionState.assetStatuses.values()]
@@ -721,7 +760,7 @@ class LatticeGraph {
         const btn = document.getElementById('execute-btn');
         btn.disabled = false;
         btn.classList.remove('running');
-        btn.querySelector('span').textContent = 'Execute';
+        btn.querySelector('span').textContent = 'EXECUTE';
 
         document.getElementById('execution-progress').classList.add('hidden');
 

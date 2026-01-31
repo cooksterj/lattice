@@ -226,4 +226,4 @@ class TestIndexPage:
         response = populated_client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
-        assert "Lattice" in response.text
+        assert "LATTICE" in response.text
