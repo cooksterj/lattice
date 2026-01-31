@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.4.0](https://github.com/cooksterj/lattice/compare/v0.3.0...v0.4.0) (2026-01-31)
+
+
+### Features
+
+* Added python assets to support phase 3, namely: input/outut managers and an executor. ([fa60d64](https://github.com/cooksterj/lattice/commit/fa60d6490064c6b02370749bc72a21e41a5a2626))
+* Added UI improvements. ([d1301f9](https://github.com/cooksterj/lattice/commit/d1301f99c5086a62c0bd72db79a06f299339fedd))
+* Added web assets to support phase 2, namely: graph data, asset detail, execution plan, and memory health checks. ([abb3481](https://github.com/cooksterj/lattice/commit/abb34817895081c49f5eb98b49751348de6ba538))
+* Bolstered project plan and .gitignore. ([80ac4a6](https://github.com/cooksterj/lattice/commit/80ac4a6168c3304b599f885a97fc301153695b23))
+* Pytest support - test driven development. ([0c22ad6](https://github.com/cooksterj/lattice/commit/0c22ad6776f93ca17cbbc7dbaa9f04578db1cf81))
+* Updates to the project plan and uv dependencies. ([8e5c64c](https://github.com/cooksterj/lattice/commit/8e5c64c5cc880fe2064e60984408356115206c45))
+
+
+### Bug Fixes
+
+* Fix an issue that didn't allow asset groups to be properly parsed. ([aa80481](https://github.com/cooksterj/lattice/commit/aa8048135a4f0d273c0a2edfa37ffd2fda0c61bf))
+
 ## [0.3.0](https://github.com/cooksterj/lattice/compare/v0.2.0...v0.3.0) (2026-01-30)
 
 
