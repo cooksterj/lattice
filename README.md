@@ -74,6 +74,51 @@ The visualization features:
 - Dependency highlighting on hover
 - Dark/light theme toggle
 
+## Logging
+
+Lattice uses Python's standard logging module. By default, logging is not configured (no output). You can enable it explicitly:
+
+```python
+from lattice import configure_logging
+
+configure_logging()  # Uses bundled default config (INFO level)
+```
+
+### Customization Options
+
+**Option 1: Environment variable**
+```bash
+export LATTICE_LOGGING_CONFIG=/path/to/custom.conf
+python my_pipeline.py
+```
+
+**Option 2: Programmatic path**
+```python
+from lattice import configure_logging
+
+configure_logging("/path/to/custom.conf")
+```
+
+**Option 3: Standard logging (bypass Lattice config)**
+```python
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+```
+
+### Configuration Format
+
+The config file uses Python's INI-based [logging.config.fileConfig](https://docs.python.org/3/library/logging.config.html#logging.config.fileConfig) format. See `src/lattice/logging/logging.conf` for the default configuration.
+
+### Log Levels
+
+| Level | What's Logged |
+|-------|---------------|
+| DEBUG | Dependency details, IO operations, graph algorithm steps |
+| INFO | Asset registration, execution start/complete, server startup |
+| WARNING | Cycle detection, missing assets |
+| ERROR | Execution failures with stack traces |
+
 ## Contributing
 
 This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated releases.
