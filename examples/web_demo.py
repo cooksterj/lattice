@@ -36,6 +36,27 @@ def raw_products() -> list[dict]:
     return [{"sku": "ABC", "price": 25.0}]
 
 
+@asset
+def raw_inventory() -> list[dict]:
+    """Raw inventory levels."""
+    time.sleep(0.4)  # Simulate warehouse API
+    return [{"sku": "ABC", "qty": 100}]
+
+
+@asset
+def raw_suppliers() -> list[dict]:
+    """Raw supplier data."""
+    time.sleep(0.3)  # Simulate supplier API
+    return [{"id": 1, "name": "Acme Corp"}]
+
+
+@asset
+def raw_shipping() -> list[dict]:
+    """Raw shipping rates."""
+    time.sleep(0.35)  # Simulate shipping API
+    return [{"zone": "US", "rate": 5.99}]
+
+
 # Cleaned/transformed assets
 @asset
 def cleaned_users(raw_users: list[dict]) -> list[dict]:
@@ -84,6 +105,20 @@ def product_performance(raw_products: list[dict], user_orders: list[dict]) -> di
     """Product sales performance."""
     time.sleep(0.2)
     return {"total_products": len(raw_products), "orders": len(user_orders)}
+
+
+@asset(key=AssetKey(name="inventory_status", group="analytics"))
+def inventory_status(raw_inventory: list[dict], raw_suppliers: list[dict]) -> dict:
+    """Current inventory status with supplier info."""
+    time.sleep(0.25)
+    return {"total_items": sum(i["qty"] for i in raw_inventory), "suppliers": len(raw_suppliers)}
+
+
+@asset(key=AssetKey(name="shipping_costs", group="analytics"))
+def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
+    """Shipping cost analysis."""
+    time.sleep(0.2)
+    return {"avg_rate": raw_shipping[0]["rate"] if raw_shipping else 0, "orders": len(user_orders)}
 
 
 # Final dashboard asset - uses deps to specify grouped dependencies
