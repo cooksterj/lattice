@@ -200,6 +200,28 @@ materialize(
 - `ParquetIOManager` - for DataFrames
 - `Executor` - walks plan, manages IO, invokes asset functions
 
+**Web UI Enhancements:**
+
+| Feature | Description |
+|---------|-------------|
+| **Execution Status Indicator** | Real-time visual indicator showing which assets are currently running |
+| **Memory Usage Summary** | Live memory consumption display during asset materialization |
+
+Execution monitoring components:
+- **Asset status badges:** Dynamic color-coded indicators (idle/running/completed/failed) on graph nodes
+- **Pulsing animation:** Animated glow effect on nodes currently being materialized
+- **Progress sidebar:** List view showing execution queue with current status per asset
+- **Memory metrics panel:** Real-time display of process memory usage (RSS, heap) during execution
+- **Memory sparkline:** Mini chart showing memory consumption over time during the run
+- **Peak memory indicator:** Highlight maximum memory usage reached during materialization
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/execution/status` | GET | Current execution state (running assets, queue) |
+| `/api/execution/memory` | GET | Memory usage snapshot (current, peak, timeline) |
+| `/api/execution/start` | POST | Trigger materialization for target asset(s) |
+| WebSocket `/ws/execution` | WS | Real-time updates for status and memory metrics |
+
 ---
 
 ## Phase 4: Async Execution & Concurrency
