@@ -22,6 +22,15 @@ class LatticeGraph {
         this.width = 0;
         this.height = 0;
 
+        // Execution state
+        this.executionState = {
+            isRunning: false,
+            assetStatuses: new Map(),
+            ws: null,
+            memoryTimeline: [],
+            peakRss: 0,
+        };
+
         this.init();
     }
 
@@ -32,6 +41,7 @@ class LatticeGraph {
         await this.loadData();
         this.render();
         this.setupEventListeners();
+        this.setupExecutionUI();
         this.hideLoading();
     }
 
@@ -343,8 +353,20 @@ class LatticeGraph {
 
         // Theme toggle
         document.getElementById('theme-toggle').addEventListener('click', () => {
-            document.documentElement.classList.toggle('dark');
-            document.documentElement.classList.toggle('light');
+            const html = document.documentElement;
+            const isCurrentlyDark = html.classList.contains('dark');
+
+            if (isCurrentlyDark) {
+                html.classList.remove('dark');
+                html.classList.add('light');
+            } else {
+                html.classList.remove('light');
+                html.classList.add('dark');
+            }
+
+            // Toggle sun/moon icons
+            document.querySelector('#theme-toggle .sun').classList.toggle('hidden');
+            document.querySelector('#theme-toggle .moon').classList.toggle('hidden');
         });
 
         // Relayout button
@@ -463,6 +485,252 @@ class LatticeGraph {
 
     hideLoading() {
         document.getElementById('loading').style.display = 'none';
+    }
+
+    // === Execution UI Methods ===
+
+    setupExecutionUI() {
+        // Create execute button
+        const controls = document.createElement('div');
+        controls.className = 'execution-controls';
+        controls.innerHTML = `
+            <button id="execute-btn" class="execute-btn">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <span>Execute</span>
+            </button>
+        `;
+        document.body.appendChild(controls);
+
+        // Create memory panel
+        const memoryPanel = document.createElement('div');
+        memoryPanel.id = 'memory-panel';
+        memoryPanel.className = 'memory-panel hidden';
+        memoryPanel.innerHTML = `
+            <div class="memory-panel-header">
+                <span class="memory-panel-title">Memory Usage</span>
+            </div>
+            <div class="memory-stat">
+                <span class="memory-stat-label">Current RSS</span>
+                <span id="current-rss" class="memory-stat-value">-- MB</span>
+            </div>
+            <div class="memory-stat">
+                <span class="memory-stat-label">Peak RSS</span>
+                <span id="peak-rss" class="memory-stat-value peak">-- MB</span>
+            </div>
+            <div class="memory-sparkline">
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="sparkline-gradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#6366f1" stop-opacity="0.5"/>
+                            <stop offset="100%" stop-color="#6366f1" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    <path id="sparkline-area" class="memory-sparkline-area"/>
+                    <path id="sparkline-path" class="memory-sparkline-path"/>
+                </svg>
+            </div>
+        `;
+        document.body.appendChild(memoryPanel);
+
+        // Create progress indicator
+        const progress = document.createElement('div');
+        progress.id = 'execution-progress';
+        progress.className = 'execution-progress hidden';
+        progress.innerHTML = `
+            <div class="execution-progress-spinner"></div>
+            <span class="execution-progress-text">Executing: </span>
+            <span id="progress-current" class="execution-progress-count">0</span>
+            <span class="execution-progress-text"> of </span>
+            <span id="progress-total" class="execution-progress-count">${this.nodes.length}</span>
+        `;
+        document.body.appendChild(progress);
+
+        // Event listener for execute button
+        document.getElementById('execute-btn').addEventListener('click', () => this.startExecution());
+    }
+
+    async startExecution() {
+        if (this.executionState.isRunning) return;
+
+        const btn = document.getElementById('execute-btn');
+        btn.disabled = true;
+        btn.classList.add('running');
+        btn.querySelector('span').textContent = 'Connecting...';
+
+        // Show UI elements
+        document.getElementById('memory-panel').classList.remove('hidden');
+        document.getElementById('execution-progress').classList.remove('hidden');
+
+        // Reset state
+        this.executionState.isRunning = true;
+        this.executionState.assetStatuses.clear();
+        this.executionState.memoryTimeline = [];
+        this.executionState.peakRss = 0;
+
+        // Reset node visual states
+        this.nodeElements.attr('class', 'node');
+
+        // Reset progress display
+        document.getElementById('progress-current').textContent = '0';
+        document.getElementById('current-rss').textContent = '-- MB';
+        document.getElementById('peak-rss').textContent = '-- MB';
+
+        // Connect WebSocket and wait for it to be ready
+        try {
+            await this.connectExecutionWebSocket();
+            btn.querySelector('span').textContent = 'Running...';
+
+            // Start execution after WebSocket is connected
+            const target = this.selectedNode ? this.selectedNode.id : null;
+            const response = await fetch('/api/execution/start', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ target }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to start execution');
+            }
+
+            console.log('Execution started successfully');
+        } catch (error) {
+            console.error('Execution failed:', error);
+            this.stopExecution();
+        }
+    }
+
+    connectExecutionWebSocket() {
+        return new Promise((resolve, reject) => {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const ws = new WebSocket(`${protocol}//${window.location.host}/ws/execution`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                resolve();
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                console.log('WebSocket message:', message);
+                this.handleWebSocketMessage(message);
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket closed');
+                if (this.executionState.isRunning) {
+                    // Reconnect if still running
+                    setTimeout(() => this.connectExecutionWebSocket(), 1000);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                reject(error);
+            };
+
+            this.executionState.ws = ws;
+        });
+    }
+
+    handleWebSocketMessage(message) {
+        switch (message.type) {
+            case 'asset_start':
+                this.updateAssetStatus(message.data.asset_id, 'running');
+                break;
+
+            case 'asset_complete':
+                this.updateAssetStatus(message.data.asset_id, message.data.status);
+                break;
+
+            case 'memory_update':
+                this.updateMemoryDisplay(message.data);
+                break;
+
+            case 'execution_complete':
+                this.stopExecution();
+                break;
+        }
+    }
+
+    updateAssetStatus(assetId, status) {
+        this.executionState.assetStatuses.set(assetId, status);
+
+        // Update node visual
+        this.nodeElements
+            .filter(d => d.id === assetId)
+            .attr('class', `node status-${status}`);
+
+        // Update progress counter
+        const completed = [...this.executionState.assetStatuses.values()]
+            .filter(s => s === 'completed' || s === 'failed').length;
+        document.getElementById('progress-current').textContent = completed;
+    }
+
+    updateMemoryDisplay(data) {
+        const rssMb = data.rss_mb.toFixed(1);
+        document.getElementById('current-rss').textContent = `${rssMb} MB`;
+
+        if (data.rss_mb > this.executionState.peakRss) {
+            this.executionState.peakRss = data.rss_mb;
+            document.getElementById('peak-rss').textContent = `${rssMb} MB`;
+        }
+
+        // Update sparkline
+        this.executionState.memoryTimeline.push(data.rss_mb);
+        if (this.executionState.memoryTimeline.length > 100) {
+            this.executionState.memoryTimeline.shift();
+        }
+        this.updateSparkline();
+    }
+
+    updateSparkline() {
+        const data = this.executionState.memoryTimeline;
+        if (data.length < 2) return;
+
+        const max = Math.max(...data) * 1.1;
+        const min = Math.min(...data) * 0.9;
+        const range = max - min || 1;
+
+        const points = data.map((v, i) => {
+            const x = (i / (data.length - 1)) * 100;
+            const y = 40 - ((v - min) / range) * 35;
+            return `${x},${y}`;
+        });
+
+        const pathD = `M${points.join(' L')}`;
+        const areaD = `M0,40 L${points.join(' L')} L100,40 Z`;
+
+        document.getElementById('sparkline-path').setAttribute('d', pathD);
+        document.getElementById('sparkline-area').setAttribute('d', areaD);
+    }
+
+    stopExecution() {
+        this.executionState.isRunning = false;
+
+        if (this.executionState.ws) {
+            this.executionState.ws.close();
+            this.executionState.ws = null;
+        }
+
+        const btn = document.getElementById('execute-btn');
+        btn.disabled = false;
+        btn.classList.remove('running');
+        btn.querySelector('span').textContent = 'Execute';
+
+        document.getElementById('execution-progress').classList.add('hidden');
+
+        // Keep memory panel visible for a bit to see final stats
+        setTimeout(() => {
+            if (!this.executionState.isRunning) {
+                document.getElementById('memory-panel').classList.add('hidden');
+            }
+        }, 5000);
     }
 }
 

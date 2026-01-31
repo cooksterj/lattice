@@ -1,4 +1,6 @@
-"""API routes for the web visualization service."""
+"""API routes for graph and asset visualization."""
+
+from __future__ import annotations
 
 from typing import Annotated
 
@@ -6,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from lattice import __version__
 from lattice.graph import DependencyGraph
 from lattice.models import AssetKey
 from lattice.plan import ExecutionPlan
@@ -20,18 +23,10 @@ from lattice.web.schemas import (
     PlanStepSchema,
 )
 
-# Try to get version, default to 0.2.0
-try:
-    from lattice import __version__  # type: ignore[attr-defined]
-
-    VERSION = __version__
-except ImportError:
-    VERSION = "0.2.0"
-
 
 def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRouter:
     """
-    Create an API router for the given registry.
+    Create an API router for graph and asset endpoints.
 
     Parameters
     ----------
@@ -124,7 +119,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     async def get_plan(
         target: Annotated[str | None, Query(description="Target asset key")] = None,
     ) -> PlanSchema:
-        """Get execution plan, optionally for a specific target."""
+        """Get the execution plan, optionally for a specific target."""
         try:
             plan = ExecutionPlan.resolve(registry, target=target)
         except KeyError as e:
@@ -151,7 +146,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
         """Health check endpoint."""
         return HealthSchema(
             status="healthy",
-            version=VERSION,
+            version=__version__,
             asset_count=len(registry),
         )
 

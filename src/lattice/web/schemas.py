@@ -1,4 +1,4 @@
-"""Pydantic schemas for API responses."""
+"""Pydantic schemas for graph and asset API responses."""
 
 from pydantic import BaseModel, ConfigDict
 

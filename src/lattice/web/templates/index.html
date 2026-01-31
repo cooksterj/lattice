@@ -11,12 +11,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
-<body class="bg-gray-900 text-gray-100 font-sans">
+<body class="font-sans" style="background-color: var(--color-bg); color: var(--color-text);">
     <div class="flex h-screen">
         <!-- Main Graph Area -->
         <div class="flex-1 relative">
             <!-- Header -->
-            <header class="absolute top-0 left-0 right-0 z-10 p-4 flex items-center justify-between bg-gradient-to-b from-gray-900 to-transparent">
+            <header class="header absolute top-0 left-0 right-0 z-10 p-4 flex items-center justify-between">
                 <div class="flex items-center gap-3">
                     <div class="w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
                         <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -27,12 +27,12 @@
                 </div>
                 <div class="flex items-center gap-2">
                     <span id="asset-count" class="text-sm text-gray-400">Loading...</span>
-                    <button id="relayout-btn" class="p-2 rounded-lg hover:bg-gray-800 transition-colors" title="Re-run layout">
+                    <button id="relayout-btn" class="header-btn p-2 rounded-lg transition-colors" title="Re-run layout">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
                         </svg>
                     </button>
-                    <button id="theme-toggle" class="p-2 rounded-lg hover:bg-gray-800 transition-colors" title="Toggle theme">
+                    <button id="theme-toggle" class="header-btn p-2 rounded-lg transition-colors" title="Toggle theme">
                         <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
                         </svg>
@@ -49,7 +49,7 @@
             </div>
 
             <!-- Loading Overlay -->
-            <div id="loading" class="absolute inset-0 flex items-center justify-center bg-gray-900/80">
+            <div id="loading" class="loading-overlay absolute inset-0 flex items-center justify-center">
                 <div class="flex flex-col items-center gap-3">
                     <div class="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                     <span class="text-gray-400">Loading graph...</span>
@@ -58,10 +58,10 @@
         </div>
 
         <!-- Sidebar -->
-        <aside id="sidebar" class="w-80 bg-gray-800/50 backdrop-blur-xl border-l border-gray-700/50 transform translate-x-full transition-transform duration-300 ease-out">
-            <div class="p-4 border-b border-gray-700/50 flex items-center justify-between">
+        <aside id="sidebar" class="sidebar w-80 backdrop-blur-xl transform translate-x-full transition-transform duration-300 ease-out">
+            <div class="sidebar-header p-4 flex items-center justify-between">
                 <h2 class="font-semibold">Asset Details</h2>
-                <button id="close-sidebar" class="p-1 rounded hover:bg-gray-700 transition-colors">
+                <button id="close-sidebar" class="close-btn p-1 rounded transition-colors">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                     </svg>
@@ -74,7 +74,7 @@
     </div>
 
     <!-- Tooltip -->
-    <div id="tooltip" class="fixed z-50 px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl text-sm pointer-events-none opacity-0 transition-opacity duration-150">
+    <div id="tooltip" class="tooltip fixed z-50 px-3 py-2 rounded-lg shadow-xl text-sm pointer-events-none opacity-0 transition-opacity duration-150">
     </div>
 
     <script src="/static/js/graph.js"></script>

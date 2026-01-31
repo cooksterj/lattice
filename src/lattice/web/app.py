@@ -7,6 +7,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from lattice.registry import AssetRegistry, get_global_registry
+from lattice.web.execution import (
+    ExecutionManager,
+    create_execution_router,
+    create_websocket_router,
+)
 from lattice.web.routes import create_router
 
 # Paths relative to this file
@@ -44,9 +49,20 @@ def create_app(registry: AssetRegistry | None = None) -> FastAPI:
     # Configure templates
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-    # Add routes
-    router = create_router(registry, templates)
-    app.include_router(router)
+    # Create a shared execution manager
+    execution_manager = ExecutionManager()
+
+    # Add graph/asset routes
+    graph_router = create_router(registry, templates)
+    app.include_router(graph_router)
+
+    # Add execution routes
+    execution_router = create_execution_router(registry, execution_manager)
+    app.include_router(execution_router)
+
+    # Add a WebSocket route (separate router for a path without /api prefix)
+    ws_router = create_websocket_router(execution_manager)
+    app.include_router(ws_router)
 
     return app
 
