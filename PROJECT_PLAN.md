@@ -387,7 +387,14 @@ lattice/
 │       │   └── static.py
 │       ├── checks.py          # Data quality checks
 │       ├── run.py             # RunResult, history
-│       └── cli.py             # Optional CLI
+│       ├── cli.py             # Optional CLI
+│       └── integrations/
+│           └── dbt/
+│               ├── __init__.py
+│               ├── manifest.py
+│               ├── assets.py
+│               ├── selectors.py
+│               └── io.py
 ├── tests/
 │   ├── conftest.py
 │   ├── test_asset.py
@@ -411,6 +418,126 @@ lattice/
 | 5 | Partitions are where orchestrators get interesting |
 | 6 | Observability makes it "real" |
 | 7 | Deploy your creation |
+| 8 | Integrate with existing dbt workflows |
+
+---
+
+## Phase 8: dbt Integration
+
+**Goal:** Import dbt models as Lattice assets with group support.
+
+```python
+from lattice import asset, AssetKey
+from lattice.integrations.dbt import DbtManifest, dbt_assets
+
+# Load dbt project manifest
+manifest = DbtManifest.from_project("./my_dbt_project")
+
+# Import all dbt models as Lattice assets
+@dbt_assets(manifest=manifest)
+def my_dbt_models():
+    """All models become Lattice assets with dependencies preserved."""
+    pass
+
+# Or selectively import with group filtering
+@dbt_assets(manifest=manifest, select="group:finance")
+def finance_models():
+    """Only models in the 'finance' group."""
+    pass
+
+# Mix dbt assets with native Lattice assets
+@asset(key=AssetKey(name="enriched_report", group="analytics"))
+def enriched_report(
+    stg_orders: dict,  # From dbt
+    external_api_data: dict,  # Native Lattice asset
+) -> dict:
+    """Combine dbt model output with external data."""
+    return {**stg_orders, **external_api_data}
+```
+
+**dbt Concepts Mapped to Lattice:**
+
+| dbt Concept | Lattice Equivalent |
+|-------------|-------------------|
+| Model | `AssetDefinition` |
+| `ref()` dependencies | `AssetDefinition.dependencies` |
+| dbt Group | `AssetKey.group` |
+| Tags | `AssetDefinition.metadata["tags"]` |
+| Description | `AssetDefinition.description` |
+| Materialization | `IOManager` strategy |
+| Tests | Asset checks (Phase 6) |
+| Sources | Source assets with no dependencies |
+
+**dbt Groups Integration:**
+
+dbt groups (introduced in dbt 1.5) provide access control and organization:
+
+```yaml
+# dbt_project.yml
+groups:
+  - name: finance
+    owner:
+      name: Finance Team
+      email: finance@company.com
+
+# models/staging/stg_orders.yml
+models:
+  - name: stg_orders
+    group: finance
+    access: protected
+```
+
+Lattice respects these groups:
+
+```python
+# Group becomes AssetKey.group
+manifest = DbtManifest.from_project("./dbt_project")
+
+for model in manifest.models:
+    print(f"{model.name} -> group: {model.group}")
+    # stg_orders -> group: finance
+    # stg_customers -> group: marketing
+
+# Filter by group
+finance_assets = manifest.select("group:finance")
+```
+
+**Python patterns:**
+- JSON parsing of dbt `manifest.json` and `run_results.json`
+- Factory pattern for creating assets from external metadata
+- Selector syntax parsing (dbt's `select` grammar)
+- Lazy loading of dbt artifacts
+
+**Deliverables:**
+- `DbtManifest` - parser for dbt `manifest.json`
+- `@dbt_assets` decorator - bulk import dbt models
+- Group mapping (`dbt group` → `AssetKey.group`)
+- Dependency resolution from `ref()` calls
+- Source asset creation from dbt sources
+- Selector support (`--select`, `--exclude` patterns)
+- `DbtCloudIOManager` - optional integration for dbt Cloud runs
+
+**File Structure:**
+
+```
+lattice/
+└── integrations/
+    └── dbt/
+        ├── __init__.py      # Public API
+        ├── manifest.py      # DbtManifest parser
+        ├── assets.py        # @dbt_assets decorator
+        ├── selectors.py     # dbt selector syntax parser
+        └── io.py            # DbtCloudIOManager
+```
+
+**Web UI Enhancements:**
+
+| Feature | Description |
+|---------|-------------|
+| **dbt Badge** | Visual indicator on nodes imported from dbt |
+| **Group Filtering** | Sidebar filter to show/hide assets by dbt group |
+| **Materialization Type** | Icon showing dbt materialization (table/view/incremental) |
+| **dbt Cloud Link** | Direct link to model in dbt Cloud (if configured) |
 
 ---
 
@@ -425,3 +552,4 @@ lattice/
 - **Graph algorithms**: topological sort, cycle detection
 - **Dependency injection**: resources, context managers
 - **Structured logging**: structlog, context propagation
+- **External integrations**: JSON manifest parsing, factory patterns, selector DSLs
