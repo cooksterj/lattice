@@ -60,6 +60,7 @@ class ExecutionStartRequest(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     target: str | None = None
+    include_downstream: bool = False
 
 
 class ExecutionStartResponse(BaseModel):

@@ -474,6 +474,7 @@ class LatticeGraph {
                             : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
+
             `;
 
             // Add click handlers for dependency badges
@@ -602,11 +603,10 @@ class LatticeGraph {
             btn.querySelector('span').textContent = 'RUNNING...';
 
             // Start execution after WebSocket is connected
-            const target = this.selectedNode ? this.selectedNode.id : null;
             const response = await fetch('/api/execution/start', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ target }),
+                body: JSON.stringify({}),
             });
 
             if (!response.ok) {
@@ -614,7 +614,6 @@ class LatticeGraph {
                 throw new Error(error.detail || 'Failed to start execution');
             }
 
-            console.log('Execution started successfully');
         } catch (error) {
             console.error('Execution failed:', error);
             this.stopExecution();
@@ -686,6 +685,10 @@ class LatticeGraph {
                 currentAssetEl.style.color = '#05d9e8';
             }
         }
+        // Update total count with actual executed count
+        const total = data.completed_count + data.failed_count;
+        document.getElementById('progress-total').textContent = total;
+        document.getElementById('progress-current').textContent = total;
     }
 
     updateAssetStatus(assetId, status) {
@@ -758,10 +761,12 @@ class LatticeGraph {
         }
 
         const btn = document.getElementById('execute-btn');
-        btn.disabled = false;
-        btn.classList.remove('running');
-        btn.querySelector('span').textContent = 'EXECUTE';
-
+        const controlsContainer = document.querySelector('.execution-controls');
+        if (btn) {
+            btn.disabled = false;
+            btn.classList.remove('running');
+            btn.querySelector('span').textContent = 'EXECUTE';
+        }
         document.getElementById('execution-progress').classList.add('hidden');
 
         // Keep memory panel visible for a bit to see final stats

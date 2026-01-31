@@ -41,12 +41,14 @@ class ExecutionPlan(BaseModel):
         cls,
         registry: AssetRegistry,
         target: AssetKey | str | None = None,
+        include_downstream: bool = False,
     ) -> "ExecutionPlan":
         """
         Resolve an execution plan from a registry.
 
         If a target is specified, only include assets required to materialize
-        that target. Otherwise, include all registered assets.
+        that target (upstream dependencies). If include_downstream is True,
+        include the target and all assets that depend on it instead.
 
         Parameters
         ----------
@@ -54,6 +56,9 @@ class ExecutionPlan(BaseModel):
             The registry containing asset definitions.
         target : AssetKey, str, or None
             Optional target asset to resolve. If string, converted to AssetKey.
+        include_downstream : bool
+            If True and target is specified, include the target and all
+            downstream dependents instead of upstream dependencies.
 
         Returns
         -------
@@ -91,8 +96,16 @@ class ExecutionPlan(BaseModel):
             if target_key not in registry:
                 raise KeyError(f"Target asset {target_key} not found in registry")
 
-            required = graph.get_all_upstream(target_key)
-            required.add(target_key)
+            if include_downstream:
+                # Include target, its upstream dependencies, AND all downstream dependents
+                # Use case: "execute from this asset and refresh everything downstream"
+                required = graph.get_all_upstream(target_key)  # Upstream needed to run target
+                required.add(target_key)
+                required.update(graph.get_all_downstream(target_key))  # Plus downstream
+            else:
+                # Include target and all upstream dependencies
+                required = graph.get_all_upstream(target_key)
+                required.add(target_key)
             sorted_keys = [k for k in sorted_keys if k in required]
 
         # Convert keys to asset definitions

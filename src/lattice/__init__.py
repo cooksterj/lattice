@@ -7,10 +7,12 @@ from lattice.exceptions import CyclicDependencyError
 from lattice.executor import (
     AssetExecutionResult,
     AssetStatus,
+    AsyncExecutor,
     ExecutionResult,
     ExecutionState,
     Executor,
     materialize,
+    materialize_async,
 )
 from lattice.graph import DependencyGraph
 from lattice.io import FileIOManager, IOManager, MemoryIOManager
@@ -32,10 +34,12 @@ __all__ = [
     # Execution
     "AssetExecutionResult",
     "AssetStatus",
+    "AsyncExecutor",
     "ExecutionResult",
     "ExecutionState",
     "Executor",
     "materialize",
+    "materialize_async",
     # IO
     "IOManager",
     "MemoryIOManager",

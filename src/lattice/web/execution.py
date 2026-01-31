@@ -23,10 +23,10 @@ from lattice.web.schemas_execution import (
 # TYPE_CHECKING is False at runtime but True during static analysis.
 # These imports are deferred to avoid circular dependencies between the web
 # module and the executor module, while still providing type hints.
-# - Executor: Used for type annotations on the _executor property
+# - AsyncExecutor: Used for type annotations on the _executor property
 # - AssetExecutionResult: Used in the _broadcast_asset_complete callback signature
 if TYPE_CHECKING:
-    from lattice.executor import AssetExecutionResult, Executor
+    from lattice.executor import AssetExecutionResult, AsyncExecutor
 
 
 def get_memory_snapshot() -> MemorySnapshotSchema:
@@ -59,14 +59,14 @@ class ExecutionManager:
     and memory usage metrics. Designed for single-server deployment.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, max_concurrency: int = 4) -> None:
         """Initialize with an empty state."""
-        self._executor: Executor | None = None
+        self._executor: AsyncExecutor | None = None
         self._is_running: bool = False
         self._websockets: set[WebSocket] = set()
         self._memory_timeline: list[MemorySnapshotSchema] = []
         self._peak_rss_mb: float = 0.0
-        self._loop: asyncio.AbstractEventLoop | None = None
+        self._max_concurrency = max_concurrency
 
     @property
     def is_running(self) -> bool:
@@ -74,7 +74,7 @@ class ExecutionManager:
         return self._is_running
 
     @property
-    def executor(self) -> Executor | None:
+    def executor(self) -> AsyncExecutor | None:
         """Get the current executor, if any."""
         return self._executor
 
@@ -92,7 +92,6 @@ class ExecutionManager:
         """Mark execution as stopped."""
         self._is_running = False
         self._executor = None
-        self._loop = None
 
     def add_websocket(self, ws: WebSocket) -> None:
         """Register a WebSocket client."""
@@ -118,22 +117,12 @@ class ExecutionManager:
                 dead_sockets.add(ws)
         self._websockets -= dead_sockets
 
-    def _broadcast_asset_start(self, key: AssetKey) -> None:
-        """Callback for when an asset starts execution (called from executor thread)."""
-        if self._loop is None:
-            return
+    async def _broadcast_asset_start(self, key: AssetKey) -> None:
+        """Callback for when an asset starts execution."""
+        await self.broadcast({"type": "asset_start", "data": {"asset_id": str(key)}})
 
-        self._loop.call_soon_threadsafe(
-            lambda: asyncio.create_task(
-                self.broadcast({"type": "asset_start", "data": {"asset_id": str(key)}})
-            )
-        )
-
-    def _broadcast_asset_complete(self, result: AssetExecutionResult) -> None:
-        """Callback for when an asset completes execution (called from executor thread)."""
-        if self._loop is None:
-            return
-
+    async def _broadcast_asset_complete(self, result: AssetExecutionResult) -> None:
+        """Callback for when an asset completes execution."""
         message: dict[str, Any] = {
             "type": "asset_complete",
             "data": {
@@ -143,15 +132,16 @@ class ExecutionManager:
                 "error": result.error,
             },
         }
+        await self.broadcast(message)
 
-        def _schedule_broadcast(msg: dict[str, Any] = message) -> None:
-            asyncio.create_task(self.broadcast(msg))
-
-        self._loop.call_soon_threadsafe(_schedule_broadcast)
-
-    async def run_execution(self, registry: AssetRegistry, target: str | None) -> None:
+    async def run_execution(
+        self,
+        registry: AssetRegistry,
+        target: str | None,
+        include_downstream: bool = False,
+    ) -> None:
         """
-        Run the asset materialization.
+        Run the asset materialization with parallel execution.
 
         Parameters
         ----------
@@ -159,27 +149,32 @@ class ExecutionManager:
             The registry containing asset definitions.
         target : str or None
             Optional target asset to materialize.
+        include_downstream : bool
+            If True, execute target and downstream dependents instead of
+            target and upstream dependencies.
         """
-        from lattice.executor import Executor
+        from lattice.executor import AsyncExecutor
         from lattice.io.memory import MemoryIOManager
 
         try:
-            plan = ExecutionPlan.resolve(registry, target=target)
+            plan = ExecutionPlan.resolve(
+                registry, target=target, include_downstream=include_downstream
+            )
             io_manager = MemoryIOManager()
 
-            self._loop = asyncio.get_running_loop()
             self._memory_timeline = []
             self._peak_rss_mb = 0.0
             self._is_running = True
 
-            executor = Executor(
+            executor = AsyncExecutor(
                 io_manager=io_manager,
+                max_concurrency=self._max_concurrency,
                 on_asset_start=self._broadcast_asset_start,
                 on_asset_complete=self._broadcast_asset_complete,
             )
             self._executor = executor
 
-            result = await self._loop.run_in_executor(None, executor.execute, plan)
+            result = await executor.execute(plan)
 
             await self.broadcast(
                 {
@@ -273,7 +268,9 @@ def create_execution_router(
         if manager.is_running:
             raise HTTPException(status_code=409, detail="Execution already in progress")
 
-        background_tasks.add_task(manager.run_execution, registry, request.target)
+        background_tasks.add_task(
+            manager.run_execution, registry, request.target, request.include_downstream
+        )
 
         return ExecutionStartResponse(
             run_id="starting",

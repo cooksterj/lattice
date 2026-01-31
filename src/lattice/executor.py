@@ -2,11 +2,14 @@
 
 This module provides the execution engine that walks an ExecutionPlan,
 loads dependencies via IO managers, invokes asset functions, and stores
-results.
+results. Includes both synchronous (Executor) and asynchronous (AsyncExecutor)
+implementations.
 """
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -15,6 +18,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lattice.graph import DependencyGraph
 from lattice.io.base import IOManager
 from lattice.io.memory import MemoryIOManager
 from lattice.models import AssetDefinition, AssetKey
@@ -335,6 +339,282 @@ class Executor:
             )
 
 
+class AsyncExecutor:
+    """
+    Asynchronous executor for parallel asset materialization.
+
+    Executes independent assets concurrently within each DAG level.
+    Supports both sync and async asset functions.
+
+    Parameters
+    ----------
+    io_manager : IOManager, optional
+        Storage backend for loading/storing assets.
+        Defaults to MemoryIOManager.
+    max_concurrency : int, optional
+        Maximum number of assets to execute in parallel.
+        Defaults to 4.
+    on_asset_start : callable, optional
+        Callback when asset execution starts. Can be sync or async.
+        Signature: fn(key: AssetKey) -> None or Coroutine
+    on_asset_complete : callable, optional
+        Callback when asset execution completes. Can be sync or async.
+        Signature: fn(result: AssetExecutionResult) -> None or Coroutine
+    """
+
+    def __init__(
+        self,
+        io_manager: IOManager | None = None,
+        max_concurrency: int = 4,
+        on_asset_start: Callable[[AssetKey], Any] | None = None,
+        on_asset_complete: Callable[[AssetExecutionResult], Any] | None = None,
+    ) -> None:
+        """Initialize async executor with IO manager and concurrency settings."""
+        self.io_manager = io_manager if io_manager is not None else MemoryIOManager()
+        self.max_concurrency = max_concurrency
+        self.on_asset_start = on_asset_start
+        self.on_asset_complete = on_asset_complete
+        self._current_state: ExecutionState | None = None
+        self._semaphore: asyncio.Semaphore | None = None
+        self._cancelled = False
+
+    @property
+    def current_state(self) -> ExecutionState | None:
+        """
+        Get the current execution state.
+
+        Returns None when not executing. During execution, returns
+        a mutable ExecutionState with current progress.
+
+        Returns
+        -------
+        ExecutionState or None
+            Current state if executing, None otherwise.
+        """
+        return self._current_state
+
+    async def execute(self, plan: ExecutionPlan) -> ExecutionResult:
+        """
+        Execute a materialization plan with parallel execution.
+
+        Assets at the same dependency level are executed concurrently,
+        respecting the max_concurrency limit.
+
+        Parameters
+        ----------
+        plan : ExecutionPlan
+            The plan to execute.
+
+        Returns
+        -------
+        ExecutionResult
+            Summary of the execution run.
+        """
+        run_id = str(uuid.uuid4())[:8]
+        started_at = datetime.now()
+        self._cancelled = False
+
+        # Initialize state
+        self._current_state = ExecutionState(
+            run_id=run_id,
+            started_at=started_at,
+            total_assets=len(plan),
+        )
+
+        self._semaphore = asyncio.Semaphore(self.max_concurrency)
+        results: list[AssetExecutionResult] = []
+        failed_keys: set[AssetKey] = set()
+
+        # Build a map of key -> AssetDefinition for quick lookup
+        asset_map: dict[AssetKey, AssetDefinition] = {
+            asset_def.key: asset_def for asset_def in plan
+        }
+
+        # Get execution levels from the graph
+        from lattice.registry import AssetRegistry
+
+        temp_registry = AssetRegistry()
+        for asset_def in plan:
+            temp_registry.register(asset_def)
+
+        graph = DependencyGraph.from_registry(temp_registry)
+        levels = graph.get_execution_levels(list(asset_map.keys()))
+
+        try:
+            for level in levels:
+                if self._cancelled:
+                    break
+
+                # Filter out assets whose dependencies have failed
+                runnable: list[AssetKey] = []
+                for key in level:
+                    asset_def = asset_map[key]
+                    deps_failed = any(dep in failed_keys for dep in asset_def.dependencies)
+                    if deps_failed:
+                        # Skip this asset
+                        result = AssetExecutionResult(
+                            key=key,
+                            status=AssetStatus.SKIPPED,
+                        )
+                        results.append(result)
+                        self._current_state.asset_results[str(key)] = result
+                        if self.on_asset_complete:
+                            cb_result = self.on_asset_complete(result)
+                            if inspect.iscoroutine(cb_result):
+                                await cb_result
+                    else:
+                        runnable.append(key)
+
+                if not runnable:
+                    continue
+
+                # Execute all runnable assets in this level concurrently
+                level_results = await self._execute_level([asset_map[k] for k in runnable])
+
+                for result in level_results:
+                    results.append(result)
+                    self._current_state.asset_results[str(result.key)] = result
+
+                    if result.status == AssetStatus.FAILED:
+                        failed_keys.add(result.key)
+                        self._current_state.failed_count += 1
+                    elif result.status == AssetStatus.COMPLETED:
+                        self._current_state.completed_count += 1
+
+                    if self.on_asset_complete:
+                        cb_result = self.on_asset_complete(result)
+                        if inspect.iscoroutine(cb_result):
+                            await cb_result
+
+            completed_at = datetime.now()
+            duration_ms = (completed_at - started_at).total_seconds() * 1000
+
+            self._current_state.completed_at = completed_at
+            self._current_state.status = (
+                AssetStatus.FAILED if failed_keys else AssetStatus.COMPLETED
+            )
+
+            return ExecutionResult(
+                run_id=run_id,
+                started_at=started_at,
+                completed_at=completed_at,
+                status=self._current_state.status,
+                asset_results=tuple(results),
+                total_assets=len(plan),
+                completed_count=self._current_state.completed_count,
+                failed_count=self._current_state.failed_count,
+                duration_ms=duration_ms,
+            )
+
+        finally:
+            self._current_state = None
+            self._semaphore = None
+
+    async def _execute_level(self, assets: list[AssetDefinition]) -> list[AssetExecutionResult]:
+        """
+        Execute all assets in a level concurrently.
+
+        Parameters
+        ----------
+        assets : list of AssetDefinition
+            Assets to execute in parallel.
+
+        Returns
+        -------
+        list of AssetExecutionResult
+            Results for each asset.
+        """
+        async with asyncio.TaskGroup() as tg:
+            tasks = [tg.create_task(self._execute_asset(a)) for a in assets]
+
+        return [task.result() for task in tasks]
+
+    async def _execute_asset(self, asset_def: AssetDefinition) -> AssetExecutionResult:
+        """
+        Execute a single asset with semaphore-controlled concurrency.
+
+        Parameters
+        ----------
+        asset_def : AssetDefinition
+            The asset to execute.
+
+        Returns
+        -------
+        AssetExecutionResult
+            Result of the execution.
+        """
+        assert self._semaphore is not None
+
+        async with self._semaphore:
+            if self._cancelled:
+                return AssetExecutionResult(
+                    key=asset_def.key,
+                    status=AssetStatus.SKIPPED,
+                )
+
+            key = asset_def.key
+            started_at = datetime.now()
+
+            # Update state
+            if self._current_state:
+                self._current_state.current_asset = key
+
+            if self.on_asset_start:
+                result = self.on_asset_start(key)
+                if inspect.iscoroutine(result):
+                    await result
+
+            try:
+                # Load dependencies using parameter names
+                kwargs: dict[str, Any] = {}
+                for param_name, dep_key in zip(
+                    asset_def.dependency_params, asset_def.dependencies, strict=True
+                ):
+                    kwargs[param_name] = self.io_manager.load(dep_key)
+
+                # Execute asset function (handle both sync and async)
+                if inspect.iscoroutinefunction(asset_def.fn):
+                    result_value = await asset_def.fn(**kwargs)
+                else:
+                    # Run sync function in thread pool to avoid blocking
+                    result_value = await asyncio.to_thread(asset_def.fn, **kwargs)
+
+                # Store result
+                self.io_manager.store(key, result_value)
+
+                completed_at = datetime.now()
+                duration_ms = (completed_at - started_at).total_seconds() * 1000
+
+                return AssetExecutionResult(
+                    key=key,
+                    status=AssetStatus.COMPLETED,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    duration_ms=duration_ms,
+                )
+
+            except Exception as e:
+                completed_at = datetime.now()
+                duration_ms = (completed_at - started_at).total_seconds() * 1000
+
+                return AssetExecutionResult(
+                    key=key,
+                    status=AssetStatus.FAILED,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    error=str(e),
+                    duration_ms=duration_ms,
+                )
+
+    def cancel(self) -> None:
+        """
+        Request cancellation of the current execution.
+
+        Running assets will complete, but no new assets will start.
+        """
+        self._cancelled = True
+
+
 def materialize(
     registry: AssetRegistry | None = None,
     target: AssetKey | str | None = None,
@@ -370,3 +650,45 @@ def materialize(
     plan = ExecutionPlan.resolve(registry, target=target)
     executor = Executor(io_manager=io_manager)
     return executor.execute(plan)
+
+
+async def materialize_async(
+    registry: AssetRegistry | None = None,
+    target: AssetKey | str | None = None,
+    io_manager: IOManager | None = None,
+    max_concurrency: int = 4,
+) -> ExecutionResult:
+    """
+    Async convenience function to materialize assets with parallel execution.
+
+    Creates an ExecutionPlan and executes it with the AsyncExecutor,
+    running independent assets concurrently.
+
+    Parameters
+    ----------
+    registry : AssetRegistry, optional
+        Registry containing asset definitions.
+        Defaults to the global registry.
+    target : AssetKey or str, optional
+        Target asset to materialize (with dependencies).
+        If None, materializes all assets.
+    io_manager : IOManager, optional
+        Storage backend.
+        Defaults to MemoryIOManager.
+    max_concurrency : int, optional
+        Maximum number of assets to execute in parallel.
+        Defaults to 4.
+
+    Returns
+    -------
+    ExecutionResult
+        Summary of the materialization run.
+    """
+    from lattice.registry import get_global_registry
+
+    if registry is None:
+        registry = get_global_registry()
+
+    plan = ExecutionPlan.resolve(registry, target=target)
+    executor = AsyncExecutor(io_manager=io_manager, max_concurrency=max_concurrency)
+    return await executor.execute(plan)

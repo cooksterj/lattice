@@ -242,3 +242,55 @@ class DependencyGraph(BaseModel):
             stack.extend(self.reverse_adjacency.get(current, ()))
 
         return visited
+
+    def get_execution_levels(self, keys: list[AssetKey] | None = None) -> list[list[AssetKey]]:
+        """
+        Group assets into execution levels for parallel execution.
+
+        Assets within the same level have no dependencies on each other
+        and can be executed in parallel. Level 0 contains source assets
+        (no dependencies), level 1 contains assets that only depend on
+        level 0, and so on.
+
+        Parameters
+        ----------
+        keys : list of AssetKey, optional
+            Subset of keys to include. If None, includes all assets.
+
+        Returns
+        -------
+        list of list of AssetKey
+            Assets grouped by execution level. Each inner list can be
+            executed in parallel.
+        """
+        if keys is None:
+            keys = list(self.adjacency.keys())
+
+        key_set = set(keys)
+
+        # Compute the level of each node (longest path from any source)
+        levels: dict[AssetKey, int] = {}
+
+        def compute_level(key: AssetKey) -> int:
+            if key in levels:
+                return levels[key]
+
+            deps_in_subset = [d for d in self.adjacency.get(key, ()) if d in key_set]
+            if not deps_in_subset:
+                levels[key] = 0
+            else:
+                levels[key] = max(compute_level(d) for d in deps_in_subset) + 1
+
+            return levels[key]
+
+        for key in keys:
+            compute_level(key)
+
+        # Group keys by level
+        max_level = max(levels.values()) if levels else 0
+        result: list[list[AssetKey]] = [[] for _ in range(max_level + 1)]
+
+        for key in keys:
+            result[levels[key]].append(key)
+
+        return result

@@ -1,5 +1,8 @@
 """Tests for Executor."""
 
+import asyncio
+import time
+
 import pytest
 from pydantic import ValidationError
 
@@ -7,8 +10,10 @@ from lattice import AssetKey, AssetRegistry, ExecutionPlan, asset
 from lattice.executor import (
     AssetExecutionResult,
     AssetStatus,
+    AsyncExecutor,
     Executor,
     materialize,
+    materialize_async,
 )
 from lattice.io import MemoryIOManager
 
@@ -411,3 +416,426 @@ class TestAssetStatus:
         assert AssetStatus.COMPLETED.value == "completed"
         # String enum also works for comparison
         assert AssetStatus.COMPLETED == "completed"
+
+
+class TestAsyncExecutorBasics:
+    """Basic async executor tests."""
+
+    @pytest.mark.asyncio
+    async def test_execute_single_asset(self, registry: AssetRegistry) -> None:
+        """Execute a single async asset."""
+
+        @asset(registry=registry)
+        async def source() -> int:
+            return 42
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = AsyncExecutor(io_manager=io)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 1
+        assert result.failed_count == 0
+        assert io.load(AssetKey(name="source")) == 42
+
+    @pytest.mark.asyncio
+    async def test_execute_sync_asset(self, registry: AssetRegistry) -> None:
+        """Execute a sync asset with async executor."""
+
+        @asset(registry=registry)
+        def sync_source() -> int:
+            return 99
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = AsyncExecutor(io_manager=io)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="sync_source")) == 99
+
+    @pytest.mark.asyncio
+    async def test_execute_mixed_sync_async(self, registry: AssetRegistry) -> None:
+        """Execute a mix of sync and async assets."""
+
+        @asset(registry=registry)
+        def sync_a() -> int:
+            return 1
+
+        @asset(registry=registry)
+        async def async_b(sync_a: int) -> int:
+            return sync_a + 10
+
+        @asset(registry=registry)
+        def sync_c(async_b: int) -> int:
+            return async_b + 100
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 3
+        assert io.load(AssetKey(name="sync_c")) == 111
+
+    @pytest.mark.asyncio
+    async def test_execute_diamond(self, registry: AssetRegistry) -> None:
+        """Execute diamond dependency pattern with parallel execution."""
+
+        @asset(registry=registry)
+        async def root() -> int:
+            return 1
+
+        @asset(registry=registry)
+        async def left(root: int) -> int:
+            return root * 2
+
+        @asset(registry=registry)
+        async def right(root: int) -> int:
+            return root * 3
+
+        @asset(registry=registry)
+        async def sink(left: int, right: int) -> int:
+            return left + right
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="sink")) == 5  # (1*2) + (1*3)
+
+
+class TestAsyncExecutorParallel:
+    """Tests for parallel execution."""
+
+    @pytest.mark.asyncio
+    async def test_parallel_independent_assets(self, registry: AssetRegistry) -> None:
+        """Independent assets execute in parallel."""
+        execution_order: list[str] = []
+        execution_times: dict[str, float] = {}
+
+        @asset(registry=registry)
+        async def a() -> int:
+            start = time.time()
+            execution_order.append("a_start")
+            await asyncio.sleep(0.05)
+            execution_order.append("a_end")
+            execution_times["a"] = time.time() - start
+            return 1
+
+        @asset(registry=registry)
+        async def b() -> int:
+            start = time.time()
+            execution_order.append("b_start")
+            await asyncio.sleep(0.05)
+            execution_order.append("b_end")
+            execution_times["b"] = time.time() - start
+            return 2
+
+        @asset(registry=registry)
+        async def c() -> int:
+            start = time.time()
+            execution_order.append("c_start")
+            await asyncio.sleep(0.05)
+            execution_order.append("c_end")
+            execution_times["c"] = time.time() - start
+            return 3
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = AsyncExecutor(io_manager=io, max_concurrency=3)
+
+        start = time.time()
+        result = await executor.execute(plan)
+        total_time = time.time() - start
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 3
+        # With parallel execution, all 3 should start before any ends
+        # (if truly parallel, total time should be ~0.05s, not ~0.15s)
+        assert total_time < 0.12  # Should be much less than sequential time
+
+    @pytest.mark.asyncio
+    async def test_concurrency_limit_respected(self, registry: AssetRegistry) -> None:
+        """Max concurrency limit is respected."""
+        concurrent_count = 0
+        max_concurrent = 0
+
+        @asset(registry=registry)
+        async def a() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.02)
+            concurrent_count -= 1
+            return 1
+
+        @asset(registry=registry)
+        async def b() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.02)
+            concurrent_count -= 1
+            return 2
+
+        @asset(registry=registry)
+        async def c() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.02)
+            concurrent_count -= 1
+            return 3
+
+        @asset(registry=registry)
+        async def d() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.02)
+            concurrent_count -= 1
+            return 4
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        # Set max_concurrency to 2
+        executor = AsyncExecutor(io_manager=io, max_concurrency=2)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 4
+        assert max_concurrent <= 2  # Should never exceed concurrency limit
+
+
+class TestAsyncExecutorFailures:
+    """Tests for failure handling in async executor."""
+
+    @pytest.mark.asyncio
+    async def test_failure_skips_downstream(self, registry: AssetRegistry) -> None:
+        """Failed asset causes downstream assets to be skipped."""
+
+        @asset(registry=registry)
+        async def works() -> int:
+            return 1
+
+        @asset(registry=registry)
+        async def fails(works: int) -> int:
+            raise ValueError("Intentional failure")
+
+        @asset(registry=registry)
+        async def downstream(fails: int) -> int:
+            return fails + 1
+
+        plan = ExecutionPlan.resolve(registry)
+        result = await AsyncExecutor(io_manager=MemoryIOManager()).execute(plan)
+
+        assert result.status == AssetStatus.FAILED
+        assert result.failed_count == 1
+        results_by_key = {str(r.key): r for r in result.asset_results}
+        assert results_by_key["downstream"].status == AssetStatus.SKIPPED
+
+    @pytest.mark.asyncio
+    async def test_failure_records_error(self, registry: AssetRegistry) -> None:
+        """Failed asset records error message."""
+
+        @asset(registry=registry)
+        async def bad() -> int:
+            raise RuntimeError("Something went wrong")
+
+        plan = ExecutionPlan.resolve(registry)
+        result = await AsyncExecutor(io_manager=MemoryIOManager()).execute(plan)
+
+        assert result.asset_results[0].error is not None
+        assert "Something went wrong" in result.asset_results[0].error
+
+    @pytest.mark.asyncio
+    async def test_independent_branch_continues_on_failure(self, registry: AssetRegistry) -> None:
+        """Independent branches can complete even when another fails."""
+
+        @asset(registry=registry)
+        async def fails() -> int:
+            raise ValueError("fail")
+
+        @asset(registry=registry)
+        async def independent() -> int:
+            return 42
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        # Overall status is failed, but independent asset should complete
+        assert result.status == AssetStatus.FAILED
+        results_by_key = {str(r.key): r for r in result.asset_results}
+        # Independent asset should be completed (not skipped)
+        assert results_by_key["independent"].status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="independent")) == 42
+
+
+class TestAsyncExecutorCallbacks:
+    """Tests for async execution callbacks."""
+
+    @pytest.mark.asyncio
+    async def test_on_asset_start_callback(self, registry: AssetRegistry) -> None:
+        """on_asset_start is called for each asset."""
+        started: list[str] = []
+
+        @asset(registry=registry)
+        async def a() -> int:
+            return 1
+
+        @asset(registry=registry)
+        async def b(a: int) -> int:
+            return a + 1
+
+        plan = ExecutionPlan.resolve(registry)
+        executor = AsyncExecutor(
+            io_manager=MemoryIOManager(),
+            on_asset_start=lambda k: started.append(str(k)),
+        )
+        await executor.execute(plan)
+
+        assert "a" in started
+        assert "b" in started
+        assert len(started) == 2
+
+    @pytest.mark.asyncio
+    async def test_on_asset_complete_callback(self, registry: AssetRegistry) -> None:
+        """on_asset_complete is called with results."""
+        completed: list[AssetExecutionResult] = []
+
+        @asset(registry=registry)
+        async def x() -> int:
+            return 42
+
+        plan = ExecutionPlan.resolve(registry)
+        executor = AsyncExecutor(
+            io_manager=MemoryIOManager(),
+            on_asset_complete=lambda r: completed.append(r),
+        )
+        await executor.execute(plan)
+
+        assert len(completed) == 1
+        assert completed[0].status == AssetStatus.COMPLETED
+
+
+class TestAsyncExecutorCancellation:
+    """Tests for cancellation handling."""
+
+    @pytest.mark.asyncio
+    async def test_cancel_stops_new_assets(self, registry: AssetRegistry) -> None:
+        """Calling cancel() prevents new assets from starting."""
+        started: list[str] = []
+
+        @asset(registry=registry)
+        async def a() -> int:
+            started.append("a")
+            await asyncio.sleep(0.05)
+            return 1
+
+        @asset(registry=registry)
+        async def b(a: int) -> int:
+            started.append("b")
+            return a + 1
+
+        @asset(registry=registry)
+        async def c(b: int) -> int:
+            started.append("c")
+            return b + 1
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = AsyncExecutor(io_manager=io, max_concurrency=1)
+
+        # Cancel after a very short delay
+        async def cancel_soon() -> None:
+            await asyncio.sleep(0.01)
+            executor.cancel()
+
+        asyncio.create_task(cancel_soon())
+        result = await executor.execute(plan)
+
+        # a should have started and completed
+        assert "a" in started
+        # At least one asset should be completed (a)
+        assert any(r.status == AssetStatus.COMPLETED for r in result.asset_results)
+
+
+class TestMaterializeAsyncFunction:
+    """Tests for materialize_async() convenience function."""
+
+    @pytest.mark.asyncio
+    async def test_materialize_async_with_registry(self, registry: AssetRegistry) -> None:
+        """materialize_async() accepts custom registry."""
+
+        @asset(registry=registry)
+        async def custom() -> int:
+            return 123
+
+        result = await materialize_async(registry=registry)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 1
+
+    @pytest.mark.asyncio
+    async def test_materialize_async_with_target(self, registry: AssetRegistry) -> None:
+        """materialize_async() respects target parameter."""
+
+        @asset(registry=registry)
+        async def included() -> int:
+            return 1
+
+        @asset(registry=registry)
+        async def excluded() -> int:
+            return 2
+
+        io = MemoryIOManager()
+        result = await materialize_async(registry=registry, target="included", io_manager=io)
+
+        assert result.completed_count == 1
+        assert io.has(AssetKey(name="included"))
+        assert not io.has(AssetKey(name="excluded"))
+
+    @pytest.mark.asyncio
+    async def test_materialize_async_with_concurrency(self, registry: AssetRegistry) -> None:
+        """materialize_async() respects max_concurrency parameter."""
+        concurrent_count = 0
+        max_concurrent = 0
+
+        @asset(registry=registry)
+        async def a() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.01)
+            concurrent_count -= 1
+            return 1
+
+        @asset(registry=registry)
+        async def b() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.01)
+            concurrent_count -= 1
+            return 2
+
+        @asset(registry=registry)
+        async def c() -> int:
+            nonlocal concurrent_count, max_concurrent
+            concurrent_count += 1
+            max_concurrent = max(max_concurrent, concurrent_count)
+            await asyncio.sleep(0.01)
+            concurrent_count -= 1
+            return 3
+
+        result = await materialize_async(registry=registry, max_concurrency=1)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert max_concurrent <= 1  # With max_concurrency=1, only 1 at a time

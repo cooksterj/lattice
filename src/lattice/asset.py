@@ -158,13 +158,28 @@ def asset(
         dependencies, dependency_params = _extract_dependencies(func, deps)
         return_type = _extract_return_type(func)
 
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> R:
-            return func(*args, **kwargs)
+        # Preserve the async nature of the wrapped function.
+        # We use Callable[..., Any] for the wrapped function since we can't
+        # easily express the dual sync/async nature in the type system.
+        wrapped_fn: Callable[..., Any]
+        if inspect.iscoroutinefunction(func):
+
+            @wraps(func)
+            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return await func(*args, **kwargs)
+
+            wrapped_fn = async_wrapper
+        else:
+
+            @wraps(func)
+            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+                return func(*args, **kwargs)
+
+            wrapped_fn = sync_wrapper
 
         asset_def = AssetDefinition(
             key=asset_key,
-            fn=wrapper,
+            fn=wrapped_fn,
             dependencies=dependencies,
             dependency_params=dependency_params,
             return_type=return_type,
