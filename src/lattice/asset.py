@@ -21,33 +21,47 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-def _extract_dependencies(fn: Callable[..., Any]) -> tuple[AssetKey, ...]:
+def _extract_dependencies(
+    fn: Callable[..., Any],
+    explicit_deps: dict[str, AssetKey] | None = None,
+) -> tuple[tuple[AssetKey, ...], tuple[str, ...]]:
     """
     Extract asset dependencies from the function signature.
 
-    Each parameter name is treated as a dependency on an asset with that name.
+    Each parameter name is treated as a dependency on an asset with that name,
+    unless an explicit mapping is provided in explicit_deps.
     Special parameters (self, cls, context, partition_key) are excluded.
 
     Parameters
     ----------
     fn : Callable[..., Any]
         The function to extract dependencies from.
+    explicit_deps : dict[str, AssetKey] or None
+        Optional mapping of parameter names to asset keys. Use this for
+        dependencies on assets in non-default groups.
 
     Returns
     -------
-    tuple of AssetKey
-        Asset keys derived from parameter names.
+    tuple of (tuple of AssetKey, tuple of str)
+        Asset keys for dependencies and their corresponding parameter names.
     """
     sig = inspect.signature(fn)
     deps: list[AssetKey] = []
+    params: list[str] = []
+    explicit_deps = explicit_deps or {}
 
     for param_name in sig.parameters:
         # Skip special parameters that aren't asset dependencies
         if param_name in ("self", "cls", "context", "partition_key"):
             continue
-        deps.append(AssetKey(name=param_name))
+        # Use the explicit mapping if provided, otherwise derive from the parameter name
+        if param_name in explicit_deps:
+            deps.append(explicit_deps[param_name])
+        else:
+            deps.append(AssetKey(name=param_name))
+        params.append(param_name)
 
-    return tuple(deps)
+    return tuple(deps), tuple(params)
 
 
 def _extract_return_type(fn: Callable[..., Any]) -> type | None:
@@ -79,6 +93,7 @@ def asset(fn: Callable[P, R]) -> AssetDefinition: ...
 def asset(
     *,
     key: AssetKey | None = None,
+    deps: dict[str, AssetKey] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
 ) -> Callable[[Callable[P, R]], AssetDefinition]: ...
@@ -88,6 +103,7 @@ def asset(
     fn: Callable[P, R] | None = None,
     *,
     key: AssetKey | None = None,
+    deps: dict[str, AssetKey] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
 ) -> AssetDefinition | Callable[[Callable[P, R]], AssetDefinition]:
@@ -104,12 +120,26 @@ def asset(
         def my_stats() -> dict:
             ...
 
+    For dependencies on grouped assets, use the 'deps' parameter to map
+    parameter names to asset keys::
+
+        @asset(deps={
+            "revenue": AssetKey(name="daily_revenue", group="analytics"),
+            "stats": AssetKey(name="user_stats", group="analytics"),
+        })
+        def dashboard (revenue: dict, stats: dict) -> dict:
+            ...
+
     Parameters
     ----------
     fn : Callable[P, R] or None
         The asset function (when used without parentheses).
     key : AssetKey or None
         Optional explicit asset key. Defaults to function name.
+    deps : dict[str, AssetKey] or None
+        Optional mapping of parameter names to asset keys. Use this when
+        depending on assets in non-default groups. Parameters not in this
+        dict are resolved by name in the default group.
     registry : AssetRegistry or None
         Optional registry to use. Defaults to global registry.
     description : str or None
@@ -125,7 +155,7 @@ def asset(
 
     def decorator(func: Callable[P, R]) -> AssetDefinition:
         asset_key = key or AssetKey(name=func.__name__)
-        dependencies = _extract_dependencies(func)
+        dependencies, dependency_params = _extract_dependencies(func, deps)
         return_type = _extract_return_type(func)
 
         @wraps(func)
@@ -136,6 +166,7 @@ def asset(
             key=asset_key,
             fn=wrapper,
             dependencies=dependencies,
+            dependency_params=dependency_params,
             return_type=return_type,
             description=description or func.__doc__,
         )

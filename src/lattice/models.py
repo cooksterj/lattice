@@ -39,7 +39,7 @@ class AssetKey(BaseModel):
         Returns
         -------
         str
-            Format "group/name" if group is not default, otherwise just "name".
+            Format "group/name" if the group is not default, otherwise just "name".
         """
         return f"{self.group}/{self.name}" if self.group != "default" else self.name
 
@@ -67,6 +67,8 @@ class AssetDefinition(BaseModel):
         The underlying asset function.
     dependencies : tuple of AssetKey
         Other assets this asset depends on.
+    dependency_params : tuple of str
+        Parameter names corresponding to each dependency (same order).
     return_type : Any
         The return type annotation. Can be type, GenericAlias, or None.
     description : str or None
@@ -78,6 +80,7 @@ class AssetDefinition(BaseModel):
     key: AssetKey
     fn: Callable[..., Any]
     dependencies: tuple[AssetKey, ...] = Field(default_factory=tuple)
+    dependency_params: tuple[str, ...] = Field(default_factory=tuple)
     return_type: Any = None  # Can be type, GenericAlias, or None
     description: str | None = None
 
