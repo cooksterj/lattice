@@ -1,9 +1,12 @@
 """In-memory IO manager for testing and ephemeral pipelines."""
 
+import logging
 from typing import Any, TypeVar
 
 from lattice.io.base import IOManager
 from lattice.models import AssetKey
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -43,7 +46,9 @@ class MemoryIOManager(IOManager):
             If the asset has not been stored.
         """
         if key not in self._storage:
+            logger.debug("Asset %s not found in memory storage", key)
             raise KeyError(f"Asset {key} not found in memory storage")
+        logger.debug("Loading asset %s from memory", key)
         return self._storage[key]  # type: ignore[no-any-return]
 
     def store(self, key: AssetKey, value: Any) -> None:
@@ -57,6 +62,7 @@ class MemoryIOManager(IOManager):
         value : Any
             The value to store.
         """
+        logger.debug("Storing asset %s to memory", key)
         self._storage[key] = value
 
     def has(self, key: AssetKey) -> bool:

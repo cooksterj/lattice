@@ -3,11 +3,14 @@
 This module provides storage for polars DataFrames using the Parquet format.
 """
 
+import logging
 from pathlib import Path
 from typing import Any, TypeVar
 
 from lattice.io.base import IOManager
 from lattice.models import AssetKey
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -84,7 +87,9 @@ class ParquetIOManager(IOManager):
 
         path = self._key_to_path(key)
         if not path.exists():
+            logger.debug("Asset %s not found at %s", key, path)
             raise KeyError(f"Asset {key} not found at {path}")
+        logger.debug("Loading asset %s from %s", key, path)
         return pl.read_parquet(path)  # type: ignore[return-value]
 
     def store(self, key: AssetKey, value: Any) -> None:
@@ -110,6 +115,7 @@ class ParquetIOManager(IOManager):
                 f"ParquetIOManager can only store DataFrames, got {type(value).__name__}"
             )
         path = self._key_to_path(key)
+        logger.debug("Storing asset %s to %s", key, path)
         value.write_parquet(path)
 
     def has(self, key: AssetKey) -> bool:

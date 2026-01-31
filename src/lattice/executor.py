@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import logging
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -23,6 +24,8 @@ from lattice.io.base import IOManager
 from lattice.io.memory import MemoryIOManager
 from lattice.models import AssetDefinition, AssetKey
 from lattice.plan import ExecutionPlan
+
+logger = logging.getLogger(__name__)
 
 # TYPE_CHECKING block for imports only needed by type checkers (mypy, pyright).
 # AssetRegistry is imported here to avoid circular imports at runtime:
@@ -222,6 +225,8 @@ class Executor:
         run_id = str(uuid.uuid4())[:8]
         started_at = datetime.now()
 
+        logger.info("Starting execution run %s with %d assets", run_id, len(plan))
+
         # Initialize state
         self._current_state = ExecutionState(
             run_id=run_id,
@@ -240,6 +245,7 @@ class Executor:
                         key=asset_def.key,
                         status=AssetStatus.SKIPPED,
                     )
+                    logger.debug("Skipping asset %s due to prior failure", asset_def.key)
                 else:
                     result = self._execute_asset(asset_def)
 
@@ -260,6 +266,15 @@ class Executor:
 
             self._current_state.completed_at = completed_at
             self._current_state.status = AssetStatus.FAILED if failed else AssetStatus.COMPLETED
+
+            logger.info(
+                "Execution run %s completed: status=%s, duration=%.2fms, completed=%d, failed=%d",
+                run_id,
+                self._current_state.status.value,
+                duration_ms,
+                self._current_state.completed_count,
+                self._current_state.failed_count,
+            )
 
             return ExecutionResult(
                 run_id=run_id,
@@ -293,6 +308,14 @@ class Executor:
         key = asset_def.key
         started_at = datetime.now()
 
+        logger.info("Executing asset: %s", key)
+        logger.debug(
+            "Asset %s has %d dependencies: %s",
+            key,
+            len(asset_def.dependencies),
+            [str(d) for d in asset_def.dependencies],
+        )
+
         # Update state
         if self._current_state:
             self._current_state.current_asset = key
@@ -317,6 +340,8 @@ class Executor:
             completed_at = datetime.now()
             duration_ms = (completed_at - started_at).total_seconds() * 1000
 
+            logger.info("Asset %s completed in %.2fms", key, duration_ms)
+
             return AssetExecutionResult(
                 key=key,
                 status=AssetStatus.COMPLETED,
@@ -328,6 +353,8 @@ class Executor:
         except Exception as e:
             completed_at = datetime.now()
             duration_ms = (completed_at - started_at).total_seconds() * 1000
+
+            logger.error("Asset %s failed: %s", key, e, exc_info=True)
 
             return AssetExecutionResult(
                 key=key,
@@ -414,6 +441,13 @@ class AsyncExecutor:
         started_at = datetime.now()
         self._cancelled = False
 
+        logger.info(
+            "Starting async execution run %s with %d assets (max_concurrency=%d)",
+            run_id,
+            len(plan),
+            self.max_concurrency,
+        )
+
         # Initialize state
         self._current_state = ExecutionState(
             run_id=run_id,
@@ -439,6 +473,7 @@ class AsyncExecutor:
 
         graph = DependencyGraph.from_registry(temp_registry)
         levels = graph.get_execution_levels(list(asset_map.keys()))
+        logger.debug("Execution plan has %d levels", len(levels))
 
         try:
             for level in levels:
@@ -494,6 +529,16 @@ class AsyncExecutor:
                 AssetStatus.FAILED if failed_keys else AssetStatus.COMPLETED
             )
 
+            logger.info(
+                "Async execution run %s completed: status=%s, "
+                "duration=%.2fms, completed=%d, failed=%d",
+                run_id,
+                self._current_state.status.value,
+                duration_ms,
+                self._current_state.completed_count,
+                self._current_state.failed_count,
+            )
+
             return ExecutionResult(
                 run_id=run_id,
                 started_at=started_at,
@@ -547,6 +592,7 @@ class AsyncExecutor:
 
         async with self._semaphore:
             if self._cancelled:
+                logger.debug("Asset %s skipped due to cancellation", asset_def.key)
                 return AssetExecutionResult(
                     key=asset_def.key,
                     status=AssetStatus.SKIPPED,
@@ -554,6 +600,14 @@ class AsyncExecutor:
 
             key = asset_def.key
             started_at = datetime.now()
+
+            logger.info("Executing asset: %s", key)
+            logger.debug(
+                "Asset %s has %d dependencies: %s",
+                key,
+                len(asset_def.dependencies),
+                [str(d) for d in asset_def.dependencies],
+            )
 
             # Update state
             if self._current_state:
@@ -585,6 +639,8 @@ class AsyncExecutor:
                 completed_at = datetime.now()
                 duration_ms = (completed_at - started_at).total_seconds() * 1000
 
+                logger.info("Asset %s completed in %.2fms", key, duration_ms)
+
                 return AssetExecutionResult(
                     key=key,
                     status=AssetStatus.COMPLETED,
@@ -596,6 +652,8 @@ class AsyncExecutor:
             except Exception as e:
                 completed_at = datetime.now()
                 duration_ms = (completed_at - started_at).total_seconds() * 1000
+
+                logger.error("Asset %s failed: %s", key, e, exc_info=True)
 
                 return AssetExecutionResult(
                     key=key,

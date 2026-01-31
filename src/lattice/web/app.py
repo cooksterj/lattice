@@ -1,5 +1,6 @@
 """FastAPI application factory for Lattice web visualization."""
 
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -13,6 +14,8 @@ from lattice.web.execution import (
     create_websocket_router,
 )
 from lattice.web.routes import create_router
+
+logger = logging.getLogger(__name__)
 
 # Paths relative to this file
 WEB_DIR = Path(__file__).parent
@@ -36,6 +39,8 @@ def create_app(registry: AssetRegistry | None = None) -> FastAPI:
     """
     if registry is None:
         registry = get_global_registry()
+
+    logger.info("Creating Lattice web application")
 
     app = FastAPI(
         title="Lattice",
@@ -85,6 +90,8 @@ def serve(
         Port to listen on. Defaults to 8000.
     """
     import uvicorn
+
+    logger.info("Starting Lattice web server on %s:%d", host, port)
 
     app = create_app(registry)
     uvicorn.run(app, host=host, port=port)

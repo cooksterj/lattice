@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,8 @@ from lattice.web.schemas_execution import (
     ExecutionStatusSchema,
     MemorySnapshotSchema,
 )
+
+logger = logging.getLogger(__name__)
 
 # TYPE_CHECKING is False at runtime but True during static analysis.
 # These imports are deferred to avoid circular dependencies between the web
@@ -96,10 +99,12 @@ class ExecutionManager:
     def add_websocket(self, ws: WebSocket) -> None:
         """Register a WebSocket client."""
         self._websockets.add(ws)
+        logger.debug("WebSocket client connected, total: %d", len(self._websockets))
 
     def remove_websocket(self, ws: WebSocket) -> None:
         """Unregister a WebSocket client."""
         self._websockets.discard(ws)
+        logger.debug("WebSocket client disconnected, total: %d", len(self._websockets))
 
     def record_memory_snapshot(self, snapshot: MemorySnapshotSchema) -> None:
         """Record a memory snapshot and update the peak if needed."""
@@ -109,12 +114,17 @@ class ExecutionManager:
 
     async def broadcast(self, message: dict[str, Any]) -> None:
         """Broadcast a message to all connected WebSocket clients."""
+        logger.debug(
+            "Broadcasting message type=%s to %d clients", message.get("type"), len(self._websockets)
+        )
         dead_sockets: set[WebSocket] = set()
         for ws in self._websockets:
             try:
                 await ws.send_json(message)
             except Exception:
                 dead_sockets.add(ws)
+        if dead_sockets:
+            logger.debug("Removed %d dead WebSocket connections", len(dead_sockets))
         self._websockets -= dead_sockets
 
     async def _broadcast_asset_start(self, key: AssetKey) -> None:
@@ -156,6 +166,12 @@ class ExecutionManager:
         from lattice.executor import AsyncExecutor
         from lattice.io.memory import MemoryIOManager
 
+        logger.info(
+            "Web execution starting: target=%s, include_downstream=%s",
+            target or "all",
+            include_downstream,
+        )
+
         try:
             plan = ExecutionPlan.resolve(
                 registry, target=target, include_downstream=include_downstream
@@ -175,6 +191,13 @@ class ExecutionManager:
             self._executor = executor
 
             result = await executor.execute(plan)
+
+            logger.info(
+                "Web execution completed: run_id=%s, status=%s, duration=%.2fms",
+                result.run_id,
+                result.status.value,
+                result.duration_ms,
+            )
 
             await self.broadcast(
                 {

@@ -7,6 +7,7 @@ target a specific asset (including only required upstream assets) or
 include all registered assets.
 """
 
+import logging
 from collections.abc import Iterator
 
 from pydantic import BaseModel, ConfigDict
@@ -14,6 +15,8 @@ from pydantic import BaseModel, ConfigDict
 from lattice.graph import DependencyGraph
 from lattice.models import AssetDefinition, AssetKey
 from lattice.registry import AssetRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class ExecutionPlan(BaseModel):
@@ -110,6 +113,12 @@ class ExecutionPlan(BaseModel):
 
         # Convert keys to asset definitions
         assets = tuple(registry.get(key) for key in sorted_keys)
+
+        logger.debug(
+            "Resolved execution plan: target=%s, assets=%d",
+            target_key or "all",
+            len(assets),
+        )
 
         return cls(assets=assets, target=target_key)
 

@@ -7,9 +7,12 @@ get_global_registry(), or isolated registries can be instantiated for
 testing and modular configurations.
 """
 
+import logging
 from collections.abc import Iterator
 
 from lattice.models import AssetDefinition, AssetKey
+
+logger = logging.getLogger(__name__)
 
 
 class AssetRegistry:
@@ -40,6 +43,7 @@ class AssetRegistry:
         if asset.key in self._assets:
             raise ValueError(f"Asset {asset.key} is already registered")
         self._assets[asset.key] = asset
+        logger.debug("Registered asset %s to registry", asset.key)
 
     def get(self, key: AssetKey | str) -> AssetDefinition:
         """

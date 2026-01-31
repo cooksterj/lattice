@@ -16,6 +16,7 @@ from lattice.executor import (
 )
 from lattice.graph import DependencyGraph
 from lattice.io import FileIOManager, IOManager, MemoryIOManager
+from lattice.logging import configure_logging, get_logger
 from lattice.models import AssetDefinition, AssetKey
 from lattice.plan import ExecutionPlan
 from lattice.registry import AssetRegistry, get_global_registry
@@ -44,6 +45,9 @@ __all__ = [
     "IOManager",
     "MemoryIOManager",
     "FileIOManager",
+    # Logging
+    "configure_logging",
+    "get_logger",
 ]
 
 # Optional ParquetIOManager

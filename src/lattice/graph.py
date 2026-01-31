@@ -6,6 +6,7 @@ asset dependency relationships. Key capabilities include topological sorting
 via Kahn's algorithm, cycle detection, and upstream/downstream traversal.
 """
 
+import logging
 from collections import deque
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,8 @@ from lattice.models import AssetKey
 
 if TYPE_CHECKING:
     from lattice.registry import AssetRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class DependencyGraph(BaseModel):
@@ -70,6 +73,8 @@ class DependencyGraph(BaseModel):
                 reverse[dep].append(asset_def.key)
 
         reverse_adjacency = {k: tuple(v) for k, v in reverse.items()}
+
+        logger.debug("Built dependency graph with %d nodes", len(adjacency))
 
         return cls(adjacency=adjacency, reverse_adjacency=reverse_adjacency)
 
@@ -130,11 +135,17 @@ class DependencyGraph(BaseModel):
         if len(result) != len(self.adjacency):
             cycles = self.detect_cycles()
             if cycles:
+                logger.warning(
+                    "Cycle detected in dependency graph: %s",
+                    " -> ".join(str(k) for k in cycles[0]),
+                )
                 raise CyclicDependencyError(cycles[0])
             # Fallback error if cycle detection fails
             remaining = [k for k in self.adjacency if k not in result]
+            logger.warning("Cycle detected among assets: %s", [str(k) for k in remaining])
             raise CyclicDependencyError(remaining + [remaining[0]])
 
+        logger.debug("Topological sort produced %d assets in order", len(result))
         return result
 
     def detect_cycles(self) -> list[list[AssetKey]] | None:

@@ -8,12 +8,15 @@ to a registry (global by default).
 """
 
 import inspect
+import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, get_type_hints, overload
 
 from lattice.models import AssetDefinition, AssetKey
 from lattice.registry import AssetRegistry, get_global_registry
+
+logger = logging.getLogger(__name__)
 
 # Type variables for preserving function signatures through the decorator.
 # P captures all parameters (names, types, defaults); R captures the return type.
@@ -187,6 +190,12 @@ def asset(
         )
 
         target_registry.register(asset_def)
+        logger.info("Asset registered: %s", asset_key)
+        logger.debug(
+            "Asset %s depends on: %s",
+            asset_key,
+            [str(d) for d in dependencies] if dependencies else "none",
+        )
         return asset_def
 
     # Handle both @asset and @asset(...) syntax

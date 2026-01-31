@@ -1,11 +1,14 @@
 """File-based IO manager using pickle serialization."""
 
+import logging
 import pickle
 from pathlib import Path
 from typing import Any, TypeVar
 
 from lattice.io.base import IOManager
 from lattice.models import AssetKey
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
@@ -76,7 +79,9 @@ class FileIOManager(IOManager):
         """
         path = self._key_to_path(key)
         if not path.exists():
+            logger.debug("Asset %s not found at %s", key, path)
             raise KeyError(f"Asset {key} not found at {path}")
+        logger.debug("Loading asset %s from %s", key, path)
         with path.open("rb") as f:
             return pickle.load(f)  # type: ignore[no-any-return]  # noqa: S301
 
@@ -92,6 +97,7 @@ class FileIOManager(IOManager):
             The value to serialize and store.
         """
         path = self._key_to_path(key)
+        logger.debug("Storing asset %s to %s", key, path)
         with path.open("wb") as f:
             pickle.dump(value, f)
 
