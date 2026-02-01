@@ -5,11 +5,11 @@
 
 // Neon Grid color palette for asset groups
 const GROUP_COLORS = {
-    default: { start: '#7b2cbf', end: '#3c096c', stroke: '#9d4edd' },    // Purple
-    analytics: { start: '#05d9e8', end: '#01949a', stroke: '#05d9e8' },  // Cyan
-    data: { start: '#ff2a6d', end: '#b5179e', stroke: '#ff2a6d' },       // Pink
-    ml: { start: '#f6ff00', end: '#d4af00', stroke: '#f6ff00' },         // Yellow
-    etl: { start: '#ff6b35', end: '#f72585', stroke: '#ff6b35' },        // Orange-Pink
+    default: {start: '#7b2cbf', end: '#3c096c', stroke: '#9d4edd'},    // Purple
+    analytics: {start: '#05d9e8', end: '#01949a', stroke: '#05d9e8'},  // Cyan
+    data: {start: '#ff2a6d', end: '#b5179e', stroke: '#ff2a6d'},       // Pink
+    ml: {start: '#f6ff00', end: '#d4af00', stroke: '#f6ff00'},         // Yellow
+    etl: {start: '#ff6b35', end: '#f72585', stroke: '#ff6b35'},        // Orange-Pink
 };
 
 class LatticeGraph {
@@ -30,6 +30,16 @@ class LatticeGraph {
             ws: null,
             memoryTimeline: [],
             peakRss: 0,
+            currentPartitionDate: null,
+            currentPartitionIndex: 0,
+            totalPartitions: 0,
+        };
+
+        // Date selection state
+        this.dateState = {
+            mode: 'single', // 'single' or 'range'
+            startDate: null,
+            endDate: null,
         };
 
         this.init();
@@ -126,8 +136,8 @@ class LatticeGraph {
             const response = await fetch('/api/graph');
             const data = await response.json();
 
-            this.nodes = data.nodes.map(n => ({ ...n }));
-            this.edges = data.edges.map(e => ({ ...e }));
+            this.nodes = data.nodes.map(n => ({...n}));
+            this.edges = data.edges.map(e => ({...e}));
 
             // Update asset count
             document.getElementById('asset-count').textContent = String(this.nodes.length).padStart(3, '0');
@@ -461,8 +471,8 @@ class LatticeGraph {
                     <div class="detail-label">Dependencies (${data.dependencies.length})</div>
                     <div class="dep-list">
                         ${data.dependencies.length > 0
-                            ? data.dependencies.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                            : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
+                ? data.dependencies.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
+                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
 
@@ -470,8 +480,8 @@ class LatticeGraph {
                     <div class="detail-label">Dependents (${data.dependents.length})</div>
                     <div class="dep-list">
                         ${data.dependents.length > 0
-                            ? data.dependents.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                            : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
+                ? data.dependents.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
+                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
 
@@ -498,10 +508,34 @@ class LatticeGraph {
     // === Execution UI Methods ===
 
     setupExecutionUI() {
-        // Create execute button
+        // Create execute button with date selection panel
         const controls = document.createElement('div');
         controls.className = 'execution-controls';
         controls.innerHTML = `
+            <div class="date-selection-panel" id="date-selection-panel">
+                <div class="date-panel-header">// PARTITION DATE</div>
+                <div class="date-mode-toggle">
+                    <button class="date-mode-btn active" data-mode="single">SINGLE</button>
+                    <button class="date-mode-btn" data-mode="range">RANGE</button>
+                </div>
+                <div class="date-single-input" id="date-single-input">
+                    <div class="date-input-group">
+                        <label class="date-input-label">EXECUTION DATE</label>
+                        <input type="date" class="date-input" id="execution-date">
+                    </div>
+                </div>
+                <div class="date-range-inputs" id="date-range-inputs">
+                    <div class="date-input-group">
+                        <label class="date-input-label">START DATE</label>
+                        <input type="date" class="date-input" id="execution-date-start">
+                    </div>
+                    <div class="date-input-group">
+                        <label class="date-input-label">END DATE</label>
+                        <input type="date" class="date-input" id="execution-date-end">
+                    </div>
+                </div>
+                <div class="date-preview" id="date-preview" style="display: none;"></div>
+            </div>
             <button id="execute-btn" class="execute-btn">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -513,6 +547,9 @@ class LatticeGraph {
             </button>
         `;
         document.body.appendChild(controls);
+
+        // Setup date selection event listeners
+        this.setupDateSelectionListeners();
 
         // Create memory panel
         const memoryPanel = document.createElement('div');
@@ -565,6 +602,84 @@ class LatticeGraph {
         document.getElementById('execute-btn').addEventListener('click', () => this.startExecution());
     }
 
+    setupDateSelectionListeners() {
+        // Mode toggle buttons
+        document.querySelectorAll('.date-mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.date-mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                const mode = btn.dataset.mode;
+                this.dateState.mode = mode;
+
+                const singleInput = document.getElementById('date-single-input');
+                const rangeInputs = document.getElementById('date-range-inputs');
+
+                if (mode === 'single') {
+                    singleInput.classList.remove('hidden');
+                    rangeInputs.classList.remove('active');
+                } else {
+                    singleInput.classList.add('hidden');
+                    rangeInputs.classList.add('active');
+                }
+
+                this.updateDatePreview();
+            });
+        });
+
+        // Date input changes
+        document.getElementById('execution-date').addEventListener('change', (e) => {
+            this.dateState.startDate = e.target.value || null;
+            this.updateDatePreview();
+        });
+
+        document.getElementById('execution-date-start').addEventListener('change', (e) => {
+            this.dateState.startDate = e.target.value || null;
+            this.updateDatePreview();
+        });
+
+        document.getElementById('execution-date-end').addEventListener('change', (e) => {
+            this.dateState.endDate = e.target.value || null;
+            this.updateDatePreview();
+        });
+    }
+
+    updateDatePreview() {
+        const preview = document.getElementById('date-preview');
+
+        if (this.dateState.mode === 'single') {
+            if (this.dateState.startDate) {
+                preview.style.display = 'block';
+                preview.classList.remove('range');
+                preview.textContent = `> ${this.dateState.startDate}`;
+            } else {
+                preview.style.display = 'none';
+            }
+        } else {
+            if (this.dateState.startDate && this.dateState.endDate) {
+                const start = new Date(this.dateState.startDate);
+                const end = new Date(this.dateState.endDate);
+                const dayCount = Math.floor((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+                if (dayCount > 0) {
+                    preview.style.display = 'block';
+                    preview.classList.add('range');
+                    preview.textContent = `> ${this.dateState.startDate} to ${this.dateState.endDate} (${dayCount} day${dayCount !== 1 ? 's' : ''})`;
+                } else {
+                    preview.style.display = 'block';
+                    preview.classList.add('range');
+                    preview.textContent = `> Invalid range`;
+                }
+            } else if (this.dateState.startDate || this.dateState.endDate) {
+                preview.style.display = 'block';
+                preview.classList.add('range');
+                preview.textContent = `> Select both dates`;
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+    }
+
     async startExecution() {
         if (this.executionState.isRunning) return;
 
@@ -582,6 +697,9 @@ class LatticeGraph {
         this.executionState.assetStatuses.clear();
         this.executionState.memoryTimeline = [];
         this.executionState.peakRss = 0;
+        this.executionState.currentPartitionDate = null;
+        this.executionState.currentPartitionIndex = 0;
+        this.executionState.totalPartitions = 0;
 
         // Reset node visual states
         this.nodeElements.attr('class', 'node');
@@ -602,11 +720,21 @@ class LatticeGraph {
             await this.connectExecutionWebSocket();
             btn.querySelector('span').textContent = 'RUNNING...';
 
+            // Build request body with date parameters
+            const requestBody = {};
+
+            if (this.dateState.mode === 'single' && this.dateState.startDate) {
+                requestBody.execution_date = this.dateState.startDate;
+            } else if (this.dateState.mode === 'range' && this.dateState.startDate && this.dateState.endDate) {
+                requestBody.execution_date = this.dateState.startDate;
+                requestBody.execution_date_end = this.dateState.endDate;
+            }
+
             // Start execution after WebSocket is connected
             const response = await fetch('/api/execution/start', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({}),
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(requestBody),
             });
 
             if (!response.ok) {
@@ -667,11 +795,44 @@ class LatticeGraph {
                 this.updateMemoryDisplay(message.data);
                 break;
 
+            case 'partition_start':
+                this.handlePartitionStart(message.data);
+                break;
+
+            case 'partition_complete':
+                this.handlePartitionComplete(message.data);
+                break;
+
             case 'execution_complete':
                 this.showExecutionComplete(message.data);
                 this.stopExecution();
                 break;
         }
+    }
+
+    handlePartitionStart(data) {
+        this.executionState.currentPartitionDate = data.current_date;
+        this.executionState.currentPartitionIndex = data.current_date_index;
+        this.executionState.totalPartitions = data.total_dates;
+
+        // Reset node visual states for new partition
+        this.nodeElements.attr('class', 'node');
+        this.executionState.assetStatuses.clear();
+
+        // Update progress display with partition info
+        const currentAssetEl = document.getElementById('progress-current-asset');
+        if (currentAssetEl) {
+            currentAssetEl.textContent = `[${data.current_date_index}/${data.total_dates}] ${data.current_date}`;
+            currentAssetEl.style.color = '';
+        }
+
+        // Reset progress counter for this partition
+        document.getElementById('progress-current').textContent = '0';
+    }
+
+    handlePartitionComplete(data) {
+        console.log('Partition complete:', data);
+        // Partition completion is logged, the UI will show the next partition_start or execution_complete
     }
 
     showExecutionComplete(data) {

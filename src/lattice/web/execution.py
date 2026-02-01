@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+)
 
 from lattice.models import AssetKey
 from lattice.plan import ExecutionPlan
@@ -115,7 +121,9 @@ class ExecutionManager:
     async def broadcast(self, message: dict[str, Any]) -> None:
         """Broadcast a message to all connected WebSocket clients."""
         logger.debug(
-            "Broadcasting message type=%s to %d clients", message.get("type"), len(self._websockets)
+            "Broadcasting message type=%s to %d clients",
+            message.get("type"),
+            len(self._websockets),
         )
         dead_sockets: set[WebSocket] = set()
         for ws in self._websockets:
@@ -149,6 +157,8 @@ class ExecutionManager:
         registry: AssetRegistry,
         target: str | None,
         include_downstream: bool = False,
+        execution_date: date | None = None,
+        execution_date_end: date | None = None,
     ) -> None:
         """
         Run the asset materialization with parallel execution.
@@ -162,52 +172,127 @@ class ExecutionManager:
         include_downstream : bool
             If True, execute target and downstream dependents instead of
             target and upstream dependencies.
+        execution_date : date or None
+            Optional start date for partition key. If provided, assets that
+            accept a partition_key parameter will receive this date.
+        execution_date_end : date or None
+            Optional end date for date range execution. If provided along with
+            execution_date, the pipeline will be executed sequentially for each
+            date in the range.
         """
         from lattice.executor import AsyncExecutor
         from lattice.io.memory import MemoryIOManager
 
+        # Build list of dates to execute
+        dates_to_execute: list[date] = []
+        if execution_date is not None:
+            if execution_date_end is not None and execution_date_end > execution_date:
+                # Generate date range
+                current = execution_date
+                while current <= execution_date_end:
+                    dates_to_execute.append(current)
+                    current += timedelta(days=1)
+            else:
+                # Single date
+                dates_to_execute.append(execution_date)
+
         logger.info(
-            "Web execution starting: target=%s, include_downstream=%s",
+            "Web execution starting: target=%s, include_downstream=%s, dates=%s",
             target or "all",
             include_downstream,
+            [str(d) for d in dates_to_execute] if dates_to_execute else "none",
         )
 
         try:
             plan = ExecutionPlan.resolve(
                 registry, target=target, include_downstream=include_downstream
             )
-            io_manager = MemoryIOManager()
 
             self._memory_timeline = []
             self._peak_rss_mb = 0.0
             self._is_running = True
 
-            executor = AsyncExecutor(
-                io_manager=io_manager,
-                max_concurrency=self._max_concurrency,
-                on_asset_start=self._broadcast_asset_start,
-                on_asset_complete=self._broadcast_asset_complete,
-            )
-            self._executor = executor
+            total_dates = len(dates_to_execute) if dates_to_execute else 1
+            total_completed = 0
+            total_failed = 0
+            overall_start = datetime.now()
 
-            result = await executor.execute(plan)
+            # Execute for each date (or once if no dates specified)
+            execution_dates = dates_to_execute if dates_to_execute else [None]
+
+            for date_index, partition_date in enumerate(execution_dates):
+                if partition_date is not None:
+                    # Broadcast partition start
+                    await self.broadcast(
+                        {
+                            "type": "partition_start",
+                            "data": {
+                                "current_date": partition_date.isoformat(),
+                                "current_date_index": date_index + 1,
+                                "total_dates": total_dates,
+                            },
+                        }
+                    )
+
+                io_manager = MemoryIOManager()
+                executor = AsyncExecutor(
+                    io_manager=io_manager,
+                    max_concurrency=self._max_concurrency,
+                    on_asset_start=self._broadcast_asset_start,
+                    on_asset_complete=self._broadcast_asset_complete,
+                    partition_key=partition_date,
+                )
+                self._executor = executor
+
+                partition_start = datetime.now()
+                result = await executor.execute(plan)
+                partition_duration = (datetime.now() - partition_start).total_seconds() * 1000
+
+                total_completed += result.completed_count
+                total_failed += result.failed_count
+
+                if partition_date is not None:
+                    # Broadcast partition complete
+                    await self.broadcast(
+                        {
+                            "type": "partition_complete",
+                            "data": {
+                                "date": partition_date.isoformat(),
+                                "status": result.status.value,
+                                "duration_ms": partition_duration,
+                                "completed_count": result.completed_count,
+                                "failed_count": result.failed_count,
+                            },
+                        }
+                    )
+
+                logger.info(
+                    "Partition execution completed: date=%s, status=%s, duration=%.2fms",
+                    partition_date.isoformat() if partition_date else "none",
+                    result.status.value,
+                    partition_duration,
+                )
+
+            overall_duration = (datetime.now() - overall_start).total_seconds() * 1000
 
             logger.info(
-                "Web execution completed: run_id=%s, status=%s, duration=%.2fms",
-                result.run_id,
-                result.status.value,
-                result.duration_ms,
+                "Web execution completed: total_dates=%d, duration=%.2fms, completed=%d, failed=%d",
+                total_dates,
+                overall_duration,
+                total_completed,
+                total_failed,
             )
 
             await self.broadcast(
                 {
                     "type": "execution_complete",
                     "data": {
-                        "run_id": result.run_id,
-                        "status": result.status.value,
-                        "duration_ms": result.duration_ms,
-                        "completed_count": result.completed_count,
-                        "failed_count": result.failed_count,
+                        "run_id": result.run_id if dates_to_execute else result.run_id,
+                        "status": "failed" if total_failed > 0 else "completed",
+                        "duration_ms": overall_duration,
+                        "completed_count": total_completed,
+                        "failed_count": total_failed,
+                        "total_dates": total_dates,
                     },
                 }
             )
@@ -252,7 +337,7 @@ def create_execution_router(
                 id=str(key),
                 status=result.status.value,
                 started_at=result.started_at.isoformat() if result.started_at else None,
-                completed_at=result.completed_at.isoformat() if result.completed_at else None,
+                completed_at=(result.completed_at.isoformat() if result.completed_at else None),
                 duration_ms=result.duration_ms,
                 error=result.error,
             )
@@ -292,7 +377,12 @@ def create_execution_router(
             raise HTTPException(status_code=409, detail="Execution already in progress")
 
         background_tasks.add_task(
-            manager.run_execution, registry, request.target, request.include_downstream
+            manager.run_execution,
+            registry,
+            request.target,
+            request.include_downstream,
+            request.execution_date,
+            request.execution_date_end,
         )
 
         return ExecutionStartResponse(

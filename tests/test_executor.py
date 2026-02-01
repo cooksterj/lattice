@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from datetime import date
 
 import pytest
 from pydantic import ValidationError
@@ -839,3 +840,192 @@ class TestMaterializeAsyncFunction:
 
         assert result.status == AssetStatus.COMPLETED
         assert max_concurrent <= 1  # With max_concurrency=1, only 1 at a time
+
+
+class TestExecutorPartitionKey:
+    """Tests for partition_key injection in Executor."""
+
+    def test_partition_key_injected_when_accepted(self, registry: AssetRegistry) -> None:
+        """partition_key is injected into assets that accept it."""
+        received_date: list[date | None] = []
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date) -> str:
+            received_date.append(partition_key)
+            return f"processed_{partition_key}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        test_date = date(2024, 1, 15)
+        executor = Executor(io_manager=io, partition_key=test_date)
+
+        result = executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert len(received_date) == 1
+        assert received_date[0] == test_date
+        assert io.load(AssetKey(name="date_aware")) == "processed_2024-01-15"
+
+    def test_partition_key_not_injected_when_not_accepted(self, registry: AssetRegistry) -> None:
+        """partition_key is not injected into assets that don't accept it."""
+
+        @asset(registry=registry)
+        def no_date() -> str:
+            return "no_date_needed"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = Executor(io_manager=io, partition_key=date(2024, 1, 15))
+
+        result = executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="no_date")) == "no_date_needed"
+
+    def test_partition_key_mixed_assets(self, registry: AssetRegistry) -> None:
+        """partition_key is correctly injected in mixed asset pipelines."""
+        received_dates: dict[str, date | None] = {}
+
+        @asset(registry=registry)
+        def source() -> int:
+            return 100
+
+        @asset(registry=registry)
+        def date_processor(source: int, partition_key: date) -> str:
+            received_dates["date_processor"] = partition_key
+            return f"{source}_{partition_key}"
+
+        @asset(registry=registry)
+        def final(date_processor: str) -> str:
+            return f"final_{date_processor}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        test_date = date(2024, 3, 20)
+        executor = Executor(io_manager=io, partition_key=test_date)
+
+        result = executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert received_dates["date_processor"] == test_date
+        assert io.load(AssetKey(name="final")) == "final_100_2024-03-20"
+
+    def test_no_partition_key_when_none(self, registry: AssetRegistry) -> None:
+        """partition_key is not injected when executor has no partition_key."""
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date | None = None) -> str:
+            return f"date={partition_key}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = Executor(io_manager=io)  # No partition_key
+
+        result = executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        # Should use the default value (None)
+        assert io.load(AssetKey(name="date_aware")) == "date=None"
+
+
+class TestAsyncExecutorPartitionKey:
+    """Tests for partition_key injection in AsyncExecutor."""
+
+    @pytest.mark.asyncio
+    async def test_partition_key_injected_when_accepted(self, registry: AssetRegistry) -> None:
+        """partition_key is injected into async assets that accept it."""
+        received_date: list[date | None] = []
+
+        @asset(registry=registry)
+        async def date_aware(partition_key: date) -> str:
+            received_date.append(partition_key)
+            return f"processed_{partition_key}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        test_date = date(2024, 6, 1)
+        executor = AsyncExecutor(io_manager=io, partition_key=test_date)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert len(received_date) == 1
+        assert received_date[0] == test_date
+        assert io.load(AssetKey(name="date_aware")) == "processed_2024-06-01"
+
+    @pytest.mark.asyncio
+    async def test_partition_key_not_injected_when_not_accepted(
+        self, registry: AssetRegistry
+    ) -> None:
+        """partition_key is not injected into async assets that don't accept it."""
+
+        @asset(registry=registry)
+        async def no_date() -> str:
+            return "no_date_needed"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        executor = AsyncExecutor(io_manager=io, partition_key=date(2024, 1, 15))
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="no_date")) == "no_date_needed"
+
+    @pytest.mark.asyncio
+    async def test_partition_key_with_sync_asset(self, registry: AssetRegistry) -> None:
+        """partition_key is injected into sync assets run by AsyncExecutor."""
+        received_date: list[date | None] = []
+
+        @asset(registry=registry)
+        def sync_date_aware(partition_key: date) -> str:
+            received_date.append(partition_key)
+            return f"sync_{partition_key}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        test_date = date(2024, 12, 25)
+        executor = AsyncExecutor(io_manager=io, partition_key=test_date)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert received_date[0] == test_date
+        assert io.load(AssetKey(name="sync_date_aware")) == "sync_2024-12-25"
+
+    @pytest.mark.asyncio
+    async def test_partition_key_parallel_assets(self, registry: AssetRegistry) -> None:
+        """partition_key is correctly injected into parallel assets."""
+        received_dates: dict[str, date] = {}
+
+        @asset(registry=registry)
+        async def parallel_a(partition_key: date) -> str:
+            received_dates["a"] = partition_key
+            await asyncio.sleep(0.01)
+            return f"a_{partition_key}"
+
+        @asset(registry=registry)
+        async def parallel_b(partition_key: date) -> str:
+            received_dates["b"] = partition_key
+            await asyncio.sleep(0.01)
+            return f"b_{partition_key}"
+
+        @asset(registry=registry)
+        async def parallel_c(partition_key: date) -> str:
+            received_dates["c"] = partition_key
+            await asyncio.sleep(0.01)
+            return f"c_{partition_key}"
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        test_date = date(2024, 7, 4)
+        executor = AsyncExecutor(io_manager=io, max_concurrency=3, partition_key=test_date)
+
+        result = await executor.execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert result.completed_count == 3
+        # All assets should receive the same partition_key
+        assert received_dates["a"] == test_date
+        assert received_dates["b"] == test_date
+        assert received_dates["c"] == test_date

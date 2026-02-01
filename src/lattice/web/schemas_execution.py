@@ -1,5 +1,6 @@
 """Pydantic schemas for execution API responses."""
 
+from datetime import date
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -61,6 +62,8 @@ class ExecutionStartRequest(BaseModel):
 
     target: str | None = None
     include_downstream: bool = False
+    execution_date: date | None = None
+    execution_date_end: date | None = None
 
 
 class ExecutionStartResponse(BaseModel):

@@ -13,7 +13,7 @@ import inspect
 import logging
 import uuid
 from collections.abc import Callable
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any
 
@@ -176,6 +176,8 @@ class Executor:
     on_asset_complete : callable, optional
         Callback when asset execution completes.
         Signature: fn(result: AssetExecutionResult) -> None
+    partition_key : date, optional
+        Date partition key to inject into asset functions that accept it.
     """
 
     def __init__(
@@ -183,11 +185,13 @@ class Executor:
         io_manager: IOManager | None = None,
         on_asset_start: Callable[[AssetKey], None] | None = None,
         on_asset_complete: Callable[[AssetExecutionResult], None] | None = None,
+        partition_key: date | None = None,
     ) -> None:
         """Initialize executor with IO manager and optional callbacks."""
         self.io_manager = io_manager if io_manager is not None else MemoryIOManager()
         self.on_asset_start = on_asset_start
         self.on_asset_complete = on_asset_complete
+        self._partition_key = partition_key
         self._current_state: ExecutionState | None = None
 
     @property
@@ -331,6 +335,12 @@ class Executor:
             ):
                 kwargs[param_name] = self.io_manager.load(dep_key)
 
+            # Inject partition_key if asset accepts it
+            if self._partition_key is not None:
+                sig = inspect.signature(asset_def.fn)
+                if "partition_key" in sig.parameters:
+                    kwargs["partition_key"] = self._partition_key
+
             # Execute asset function
             result_value = asset_def.fn(**kwargs)
 
@@ -387,6 +397,8 @@ class AsyncExecutor:
     on_asset_complete : callable, optional
         Callback when asset execution completes. Can be sync or async.
         Signature: fn(result: AssetExecutionResult) -> None or Coroutine
+    partition_key : date, optional
+        Date partition key to inject into asset functions that accept it.
     """
 
     def __init__(
@@ -395,12 +407,14 @@ class AsyncExecutor:
         max_concurrency: int = 4,
         on_asset_start: Callable[[AssetKey], Any] | None = None,
         on_asset_complete: Callable[[AssetExecutionResult], Any] | None = None,
+        partition_key: date | None = None,
     ) -> None:
         """Initialize async executor with IO manager and concurrency settings."""
         self.io_manager = io_manager if io_manager is not None else MemoryIOManager()
         self.max_concurrency = max_concurrency
         self.on_asset_start = on_asset_start
         self.on_asset_complete = on_asset_complete
+        self._partition_key = partition_key
         self._current_state: ExecutionState | None = None
         self._semaphore: asyncio.Semaphore | None = None
         self._cancelled = False
@@ -625,6 +639,12 @@ class AsyncExecutor:
                     asset_def.dependency_params, asset_def.dependencies, strict=True
                 ):
                     kwargs[param_name] = self.io_manager.load(dep_key)
+
+                # Inject partition_key if asset accepts it
+                if self._partition_key is not None:
+                    sig = inspect.signature(asset_def.fn)
+                    if "partition_key" in sig.parameters:
+                        kwargs["partition_key"] = self._partition_key
 
                 # Execute asset function (handle both sync and async)
                 if inspect.iscoroutinefunction(asset_def.fn):

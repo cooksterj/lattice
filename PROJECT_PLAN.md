@@ -264,34 +264,86 @@ await materialize_async(assets=[combined], max_concurrency=4)
 
 ## Phase 5: Partitions & Incremental Materialization
 
-**Goal:** Time-partitioned assets, backfills.
+**Goal:** Time-partitioned assets, backfills, and web UI date selection.
 
 ```python
-from lattice import asset, DailyPartition
+from lattice import asset
 from datetime import date
 
-@asset(partitions=DailyPartition(start="2024-01-01"))
+@asset
 def daily_events(partition_key: date) -> pd.DataFrame:
+    """Asset receives partition_key when executed with a date."""
     return fetch_events_for_date(partition_key)
 
-@asset(partitions=DailyPartition(start="2024-01-01"))
+@asset
 def daily_summary(daily_events: pd.DataFrame, partition_key: date) -> dict:
+    """Downstream assets also receive the partition_key."""
     return {"date": partition_key, "count": len(daily_events)}
 
-# Materialize specific partitions
-materialize(assets=[daily_summary], partitions=["2024-01-15", "2024-01-16"])
+# Materialize with a specific date (partition_key injected automatically)
+materialize(assets=[daily_summary], execution_date=date(2024, 1, 15))
 
-# Backfill a range
-materialize(assets=[daily_summary], partition_range=("2024-01-01", "2024-01-31"))
+# Backfill a range (executes sequentially for each date)
+materialize(
+    assets=[daily_summary],
+    execution_date=date(2024, 1, 1),
+    execution_date_end=date(2024, 1, 31),
+)
 ```
 
 **Python patterns:**
-- Generics for partition types (`Partition[K]`)
+- `inspect.signature` to detect if asset accepts `partition_key` parameter
 - Iterator protocol for partition ranges
-- Metadata storage (what's been materialized)
-- Property-based testing for partition logic
+- Sequential execution loop for date ranges
+- WebSocket messages for partition progress
 
 **Deliverables:**
+- `partition_key` parameter injection in `Executor` and `AsyncExecutor`
+- `execution_date` and `execution_date_end` fields in `ExecutionStartRequest`
+- Date range iteration in `ExecutionManager.run_execution()`
+- New WebSocket message types: `partition_start`, `partition_complete`
+
+**Web UI Enhancements:**
+
+| Feature | Description |
+|---------|-------------|
+| **Date Picker Panel** | Select single date or date range before execution |
+| **Mode Toggle** | Switch between SINGLE and RANGE date modes |
+| **Date Preview** | Shows selected date(s) and day count for ranges |
+| **Partition Progress** | Real-time indicator showing current date being executed |
+
+Date selection panel (above Execute button):
+```
++---------------------------------------+
+|  // PARTITION DATE                    |
++---------------------------------------+
+|  [SINGLE]  [RANGE]                    |
+|                                       |
+|  EXECUTION DATE                       |
+|  [____2024-01-15____]                 |
+|                                       |
+|  > 2024-01-15                         |
++---------------------------------------+
+|  [>  EXECUTE  ]                       |
++---------------------------------------+
+```
+
+**Execution Flow (Date Range):**
+
+1. User selects date range (e.g., 2024-01-01 to 2024-01-03)
+2. Backend generates date list and executes sequentially
+3. For each date:
+   - Broadcast `partition_start` with current date info
+   - Execute full pipeline with `partition_key` injected
+   - Broadcast `partition_complete` with results
+4. Frontend resets node states between partitions
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/execution/start` | POST | Now accepts `execution_date` and `execution_date_end` |
+| WebSocket `/ws/execution` | WS | New message types: `partition_start`, `partition_complete` |
+
+**Future Deliverables (not in initial implementation):**
 - `PartitionDefinition` ABC
 - `DailyPartition`, `MonthlyPartition`, `StaticPartition`
 - Partition-aware IO managers (subdirectories/prefixes)
@@ -315,15 +367,15 @@ def no_null_emails(df: pd.DataFrame) -> CheckResult:
 
 # After materialization
 run = materialize(assets=[validated_users])
-print(run.logs)          # Structured logs
+print(run.logs)          # Captured logs from execution
 print(run.lineage)       # What was read/written
 print(run.check_results) # Data quality results
 ```
 
 **Python patterns:**
-- Structured logging with context (structlog)
 - Event sourcing pattern for run history
 - Decorator chaining (`.check` as method on wrapped asset)
+- In-memory log capture during execution
 
 **Deliverables:**
 - `RunResult` with timing, logs, lineage
@@ -551,5 +603,5 @@ lattice/
 - **Testing**: pytest fixtures, mocking, property-based (Hypothesis)
 - **Graph algorithms**: topological sort, cycle detection
 - **Dependency injection**: resources, context managers
-- **Structured logging**: structlog, context propagation
+- **Logging**: INI-based configuration, in-memory log capture
 - **External integrations**: JSON manifest parsing, factory patterns, selector DSLs

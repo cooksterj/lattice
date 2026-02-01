@@ -1,10 +1,15 @@
 """Tests for the web visualization API."""
 
+from datetime import date
+from unittest.mock import AsyncMock
+
 import pytest
 from fastapi.testclient import TestClient
 
 from lattice import AssetKey, AssetRegistry, asset
 from lattice.web.app import create_app
+from lattice.web.execution import ExecutionManager
+from lattice.web.schemas_execution import ExecutionStartRequest
 
 
 @pytest.fixture
@@ -227,3 +232,203 @@ class TestIndexPage:
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "LATTICE" in response.text
+
+
+class TestExecutionStartRequest:
+    """Tests for ExecutionStartRequest schema."""
+
+    def test_default_values(self) -> None:
+        """Request has expected default values."""
+        request = ExecutionStartRequest()
+        assert request.target is None
+        assert request.include_downstream is False
+        assert request.execution_date is None
+        assert request.execution_date_end is None
+
+    def test_with_single_date(self) -> None:
+        """Request accepts single execution date."""
+        request = ExecutionStartRequest(execution_date=date(2024, 1, 15))
+        assert request.execution_date == date(2024, 1, 15)
+        assert request.execution_date_end is None
+
+    def test_with_date_range(self) -> None:
+        """Request accepts date range."""
+        request = ExecutionStartRequest(
+            execution_date=date(2024, 1, 1),
+            execution_date_end=date(2024, 1, 31),
+        )
+        assert request.execution_date == date(2024, 1, 1)
+        assert request.execution_date_end == date(2024, 1, 31)
+
+    def test_with_all_fields(self) -> None:
+        """Request accepts all fields."""
+        request = ExecutionStartRequest(
+            target="my_asset",
+            include_downstream=True,
+            execution_date=date(2024, 6, 15),
+            execution_date_end=date(2024, 6, 20),
+        )
+        assert request.target == "my_asset"
+        assert request.include_downstream is True
+        assert request.execution_date == date(2024, 6, 15)
+        assert request.execution_date_end == date(2024, 6, 20)
+
+    def test_from_json_string_dates(self) -> None:
+        """Request parses dates from JSON strings."""
+        request = ExecutionStartRequest.model_validate(
+            {
+                "execution_date": "2024-03-15",
+                "execution_date_end": "2024-03-20",
+            }
+        )
+        assert request.execution_date == date(2024, 3, 15)
+        assert request.execution_date_end == date(2024, 3, 20)
+
+
+class TestExecutionManager:
+    """Tests for ExecutionManager date range functionality."""
+
+    @pytest.mark.asyncio
+    async def test_run_execution_no_dates(self, registry: AssetRegistry) -> None:
+        """Execution without dates runs once with no partition_key."""
+        executed_dates: list[date | None] = []
+
+        @asset(registry=registry)
+        def simple(partition_key: date | None = None) -> str:
+            executed_dates.append(partition_key)
+            return "done"
+
+        manager = ExecutionManager()
+        await manager.run_execution(registry, target=None)
+
+        assert len(executed_dates) == 1
+        assert executed_dates[0] is None
+
+    @pytest.mark.asyncio
+    async def test_run_execution_single_date(self, registry: AssetRegistry) -> None:
+        """Execution with single date passes partition_key to assets."""
+        executed_dates: list[date] = []
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date) -> str:
+            executed_dates.append(partition_key)
+            return f"processed_{partition_key}"
+
+        manager = ExecutionManager()
+        test_date = date(2024, 5, 15)
+        await manager.run_execution(registry, target=None, execution_date=test_date)
+
+        assert len(executed_dates) == 1
+        assert executed_dates[0] == test_date
+
+    @pytest.mark.asyncio
+    async def test_run_execution_date_range(self, registry: AssetRegistry) -> None:
+        """Execution with date range runs once per date."""
+        executed_dates: list[date] = []
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date) -> str:
+            executed_dates.append(partition_key)
+            return f"processed_{partition_key}"
+
+        manager = ExecutionManager()
+        start = date(2024, 1, 1)
+        end = date(2024, 1, 3)
+        await manager.run_execution(
+            registry,
+            target=None,
+            execution_date=start,
+            execution_date_end=end,
+        )
+
+        assert len(executed_dates) == 3
+        assert executed_dates[0] == date(2024, 1, 1)
+        assert executed_dates[1] == date(2024, 1, 2)
+        assert executed_dates[2] == date(2024, 1, 3)
+
+    @pytest.mark.asyncio
+    async def test_run_execution_broadcasts_partition_messages(
+        self, registry: AssetRegistry
+    ) -> None:
+        """Execution broadcasts partition_start and partition_complete messages."""
+        messages: list[dict] = []
+
+        @asset(registry=registry)
+        def simple() -> str:
+            return "done"
+
+        manager = ExecutionManager()
+        # Mock the broadcast method to capture messages
+        manager.broadcast = AsyncMock(side_effect=lambda msg: messages.append(msg))
+
+        start = date(2024, 2, 1)
+        end = date(2024, 2, 2)
+        await manager.run_execution(
+            registry,
+            target=None,
+            execution_date=start,
+            execution_date_end=end,
+        )
+
+        # Filter for partition messages
+        partition_starts = [m for m in messages if m.get("type") == "partition_start"]
+        partition_completes = [m for m in messages if m.get("type") == "partition_complete"]
+
+        assert len(partition_starts) == 2
+        assert partition_starts[0]["data"]["current_date"] == "2024-02-01"
+        assert partition_starts[0]["data"]["current_date_index"] == 1
+        assert partition_starts[0]["data"]["total_dates"] == 2
+        assert partition_starts[1]["data"]["current_date"] == "2024-02-02"
+        assert partition_starts[1]["data"]["current_date_index"] == 2
+
+        assert len(partition_completes) == 2
+        assert partition_completes[0]["data"]["date"] == "2024-02-01"
+        assert partition_completes[1]["data"]["date"] == "2024-02-02"
+
+    @pytest.mark.asyncio
+    async def test_run_execution_end_before_start_single_date(
+        self, registry: AssetRegistry
+    ) -> None:
+        """When end date is before start date, only start date is used."""
+        executed_dates: list[date] = []
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date) -> str:
+            executed_dates.append(partition_key)
+            return "done"
+
+        manager = ExecutionManager()
+        await manager.run_execution(
+            registry,
+            target=None,
+            execution_date=date(2024, 1, 15),
+            execution_date_end=date(2024, 1, 10),  # Before start
+        )
+
+        # Should only execute for the start date
+        assert len(executed_dates) == 1
+        assert executed_dates[0] == date(2024, 1, 15)
+
+    @pytest.mark.asyncio
+    async def test_run_execution_same_start_end_single_execution(
+        self, registry: AssetRegistry
+    ) -> None:
+        """When start and end are the same date, executes once."""
+        executed_dates: list[date] = []
+
+        @asset(registry=registry)
+        def date_aware(partition_key: date) -> str:
+            executed_dates.append(partition_key)
+            return "done"
+
+        manager = ExecutionManager()
+        test_date = date(2024, 3, 20)
+        await manager.run_execution(
+            registry,
+            target=None,
+            execution_date=test_date,
+            execution_date_end=test_date,
+        )
+
+        assert len(executed_dates) == 1
+        assert executed_dates[0] == test_date

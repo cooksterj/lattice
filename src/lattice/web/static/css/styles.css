@@ -105,12 +105,14 @@ body {
     top: 10px;
     left: 10px;
 }
+
 .corner-decor.top-left::before {
     width: 30px;
     height: 2px;
     top: 0;
     left: 0;
 }
+
 .corner-decor.top-left::after {
     width: 2px;
     height: 30px;
@@ -122,12 +124,14 @@ body {
     top: 10px;
     right: 10px;
 }
+
 .corner-decor.top-right::before {
     width: 30px;
     height: 2px;
     top: 0;
     right: 0;
 }
+
 .corner-decor.top-right::after {
     width: 2px;
     height: 30px;
@@ -139,12 +143,14 @@ body {
     bottom: 10px;
     left: 10px;
 }
+
 .corner-decor.bottom-left::before {
     width: 30px;
     height: 2px;
     bottom: 0;
     left: 0;
 }
+
 .corner-decor.bottom-left::after {
     width: 2px;
     height: 30px;
@@ -156,12 +162,14 @@ body {
     bottom: 10px;
     right: 10px;
 }
+
 .corner-decor.bottom-right::before {
     width: 30px;
     height: 2px;
     bottom: 0;
     right: 0;
 }
+
 .corner-decor.bottom-right::after {
     width: 2px;
     height: 30px;
@@ -175,19 +183,19 @@ body {
 
 .header {
     background: linear-gradient(
-        to bottom,
-        var(--bg-void) 0%,
-        rgba(10, 10, 15, 0.9) 70%,
-        transparent 100%
+            to bottom,
+            var(--bg-void) 0%,
+            rgba(10, 10, 15, 0.9) 70%,
+            transparent 100%
     );
 }
 
 .light .header {
     background: linear-gradient(
-        to bottom,
-        var(--bg-void) 0%,
-        rgba(240, 240, 248, 0.9) 70%,
-        transparent 100%
+            to bottom,
+            var(--bg-void) 0%,
+            rgba(240, 240, 248, 0.9) 70%,
+            transparent 100%
     );
 }
 
@@ -208,8 +216,14 @@ body {
 }
 
 @keyframes logoGlow {
-    0%, 100% { opacity: 0.5; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.1); }
+    0%, 100% {
+        opacity: 0.5;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
 }
 
 .logo-icon {
@@ -233,10 +247,9 @@ body {
     font-weight: 700;
     letter-spacing: 0.2em;
     color: var(--text-glow);
-    text-shadow:
-        0 0 10px var(--neon-cyan-glow),
-        0 0 20px var(--neon-cyan-glow),
-        0 0 40px rgba(5, 217, 232, 0.3);
+    text-shadow: 0 0 10px var(--neon-cyan-glow),
+    0 0 20px var(--neon-cyan-glow),
+    0 0 40px rgba(5, 217, 232, 0.3);
     margin: 0;
 }
 
@@ -327,9 +340,8 @@ body {
     border-top-color: var(--neon-pink);
     border-radius: 50%;
     animation: loaderSpin 1.5s linear infinite;
-    box-shadow:
-        0 0 15px var(--neon-pink-glow),
-        inset 0 0 15px rgba(255, 42, 109, 0.1);
+    box-shadow: 0 0 15px var(--neon-pink-glow),
+    inset 0 0 15px rgba(255, 42, 109, 0.1);
 }
 
 .loader-ring.delay-1 {
@@ -338,9 +350,8 @@ body {
     border-top-color: var(--neon-cyan);
     animation-delay: -0.5s;
     animation-direction: reverse;
-    box-shadow:
-        0 0 15px var(--neon-cyan-glow),
-        inset 0 0 15px rgba(5, 217, 232, 0.1);
+    box-shadow: 0 0 15px var(--neon-cyan-glow),
+    inset 0 0 15px rgba(5, 217, 232, 0.1);
 }
 
 .loader-ring.delay-2 {
@@ -352,7 +363,9 @@ body {
 }
 
 @keyframes loaderSpin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .loader-text {
@@ -364,10 +377,18 @@ body {
 }
 
 @keyframes textFlicker {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
-    52% { opacity: 1; }
-    54% { opacity: 0.7; }
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    52% {
+        opacity: 1;
+    }
+    54% {
+        opacity: 0.7;
+    }
 }
 
 /* ============================================
@@ -378,17 +399,15 @@ body {
     background: rgba(18, 18, 26, 0.95);
     backdrop-filter: blur(20px);
     border-left: 1px solid var(--border-glow);
-    box-shadow:
-        -20px 0 60px rgba(5, 217, 232, 0.1),
-        inset 1px 0 0 rgba(5, 217, 232, 0.2);
+    box-shadow: -20px 0 60px rgba(5, 217, 232, 0.1),
+    inset 1px 0 0 rgba(5, 217, 232, 0.2);
     z-index: 50;
 }
 
 .light .sidebar {
     background: rgba(250, 250, 252, 0.95);
-    box-shadow:
-        -10px 0 30px rgba(0, 0, 0, 0.05),
-        inset 1px 0 0 rgba(123, 94, 167, 0.1);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.05),
+    inset 1px 0 0 rgba(123, 94, 167, 0.1);
 }
 
 .sidebar-glow {
@@ -510,9 +529,8 @@ body {
     border: 1px solid var(--neon-cyan);
     color: var(--text-primary);
     font-size: 0.8rem;
-    box-shadow:
-        0 0 20px var(--neon-cyan-glow),
-        inset 0 0 20px rgba(5, 217, 232, 0.05);
+    box-shadow: 0 0 20px var(--neon-cyan-glow),
+    inset 0 0 20px rgba(5, 217, 232, 0.05);
     clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
 }
 
@@ -616,7 +634,7 @@ body {
 
 @keyframes borderRotate {
     to {
-        stroke-dashoffset: -54;  /* Total of one dash+gap cycle (12+6) * 3 */
+        stroke-dashoffset: -54; /* Total of one dash+gap cycle (12+6) * 3 */
     }
 }
 
@@ -634,8 +652,12 @@ body {
 }
 
 @keyframes nodeFailed {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .node.status-skipped rect {
@@ -660,9 +682,8 @@ body {
     z-index: 40;
     transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
     clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-    box-shadow:
-        0 0 30px rgba(5, 217, 232, 0.15),
-        inset 0 0 20px rgba(5, 217, 232, 0.05);
+    box-shadow: 0 0 30px rgba(5, 217, 232, 0.15),
+    inset 0 0 20px rgba(5, 217, 232, 0.05);
 }
 
 .light .memory-panel {
@@ -762,6 +783,165 @@ body {
 }
 
 /* ============================================
+   DATE SELECTION PANEL
+   ============================================ */
+
+.date-selection-panel {
+    background: rgba(18, 18, 26, 0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-glow);
+    padding: 0.875rem;
+    margin-bottom: 0.75rem;
+    clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    box-shadow: 0 0 20px rgba(5, 217, 232, 0.1),
+    inset 0 0 15px rgba(5, 217, 232, 0.03);
+    min-width: 220px;
+}
+
+.light .date-selection-panel {
+    background: rgba(250, 250, 252, 0.95);
+    border-color: var(--border-glow);
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+}
+
+.date-selection-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 16px;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right, var(--neon-pink), var(--neon-cyan));
+}
+
+.date-panel-header {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    color: var(--neon-cyan);
+    margin-bottom: 0.75rem;
+    text-shadow: 0 0 10px var(--neon-cyan-glow);
+}
+
+.date-mode-toggle {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 0.75rem;
+}
+
+.date-mode-btn {
+    flex: 1;
+    padding: 6px 10px;
+    background: rgba(5, 217, 232, 0.05);
+    border: 1px solid var(--border-dim);
+    color: var(--text-secondary);
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.date-mode-btn:first-child {
+    clip-path: polygon(6px 0, 100% 0, 100% 100%, 0 100%, 0 6px);
+}
+
+.date-mode-btn:last-child {
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+}
+
+.date-mode-btn:hover:not(.active) {
+    background: rgba(5, 217, 232, 0.1);
+    border-color: var(--neon-cyan);
+}
+
+.date-mode-btn.active {
+    background: linear-gradient(135deg, var(--neon-cyan), var(--neon-purple));
+    border-color: var(--neon-cyan);
+    color: white;
+    box-shadow: 0 0 15px var(--neon-cyan-glow);
+}
+
+.date-input-group {
+    margin-bottom: 0.5rem;
+}
+
+.date-input-label {
+    font-size: 0.6rem;
+    color: var(--text-secondary);
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+    display: block;
+}
+
+.date-input {
+    width: 100%;
+    padding: 8px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--border-dim);
+    color: var(--text-primary);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    transition: all 0.2s ease;
+}
+
+.light .date-input {
+    background: rgba(123, 94, 167, 0.05);
+    border-color: rgba(123, 94, 167, 0.2);
+}
+
+.date-input:focus {
+    outline: none;
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 10px var(--neon-cyan-glow);
+}
+
+.date-input::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+    cursor: pointer;
+}
+
+.light .date-input::-webkit-calendar-picker-indicator {
+    filter: none;
+}
+
+.date-preview {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--neon-yellow);
+    text-shadow: 0 0 8px rgba(246, 255, 0, 0.4);
+    padding: 6px 8px;
+    background: rgba(246, 255, 0, 0.05);
+    border-left: 2px solid var(--neon-yellow);
+    margin-top: 0.5rem;
+}
+
+.date-preview.range {
+    color: var(--neon-pink);
+    text-shadow: 0 0 8px var(--neon-pink-glow);
+    border-left-color: var(--neon-pink);
+    background: rgba(255, 42, 109, 0.05);
+}
+
+.date-range-inputs {
+    display: none;
+}
+
+.date-range-inputs.active {
+    display: block;
+}
+
+.date-single-input {
+    display: block;
+}
+
+.date-single-input.hidden {
+    display: none;
+}
+
+/* ============================================
    EXECUTION CONTROLS
    ============================================ */
 
@@ -771,6 +951,9 @@ body {
     right: 1.5rem;
     z-index: 40;
     pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
 }
 
 .execution-controls > * {
@@ -792,17 +975,15 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-    box-shadow:
-        0 0 25px var(--neon-pink-glow),
-        inset 0 0 15px rgba(255, 255, 255, 0.1);
+    box-shadow: 0 0 25px var(--neon-pink-glow),
+    inset 0 0 15px rgba(255, 255, 255, 0.1);
     text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
 }
 
 .execute-btn:hover:not(:disabled) {
     transform: translateY(-2px) scale(1.02);
-    box-shadow:
-        0 0 50px var(--neon-pink-glow),
-        inset 0 0 30px rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 50px var(--neon-pink-glow),
+    inset 0 0 30px rgba(255, 255, 255, 0.2);
 }
 
 .execute-btn:active:not(:disabled) {
@@ -820,8 +1001,12 @@ body {
 }
 
 @keyframes btnPulse {
-    0%, 100% { box-shadow: 0 0 30px rgba(246, 255, 0, 0.4); }
-    50% { box-shadow: 0 0 50px rgba(246, 255, 0, 0.7); }
+    0%, 100% {
+        box-shadow: 0 0 30px rgba(246, 255, 0, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 50px rgba(246, 255, 0, 0.7);
+    }
 }
 
 .execute-btn svg {
