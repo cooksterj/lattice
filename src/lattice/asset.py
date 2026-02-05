@@ -5,16 +5,28 @@ This module provides the primary API for declaring assets in Lattice.
 The decorator automatically extracts dependencies from function parameter
 names, captures return type annotations, and registers the asset definition
 to a registry (global by default).
+
+The decorator returns an AssetWithChecks wrapper that enables the .check()
+decorator for attaching data quality checks to assets.
 """
+
+from __future__ import annotations
 
 import inspect
 import logging
 from collections.abc import Callable
 from functools import wraps
-from typing import Any, ParamSpec, TypeVar, get_type_hints, overload
+from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, get_type_hints, overload
 
 from lattice.models import AssetDefinition, AssetKey
 from lattice.registry import AssetRegistry, get_global_registry
+
+# TYPE_CHECKING block for imports only needed by type checkers (mypy, pyright).
+# AssetWithChecks is imported here to avoid circular imports at runtime:
+# observability/checks.py imports from this module, and this module uses
+# AssetWithChecks only in type annotations (not at runtime), so we defer the import.
+if TYPE_CHECKING:
+    from lattice.observability.checks import AssetWithChecks
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +101,7 @@ def _extract_return_type(fn: Callable[..., Any]) -> type | None:
 
 
 @overload
-def asset(fn: Callable[P, R]) -> AssetDefinition: ...
+def asset(fn: Callable[P, R]) -> AssetWithChecks: ...
 
 
 @overload
@@ -99,7 +111,7 @@ def asset(
     deps: dict[str, AssetKey] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
-) -> Callable[[Callable[P, R]], AssetDefinition]: ...
+) -> Callable[[Callable[P, R]], AssetWithChecks]: ...
 
 
 def asset(
@@ -109,7 +121,7 @@ def asset(
     deps: dict[str, AssetKey] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
-) -> AssetDefinition | Callable[[Callable[P, R]], AssetDefinition]:
+) -> AssetWithChecks | Callable[[Callable[P, R]], AssetWithChecks]:
     """
     Decorator to define a data asset.
 
@@ -150,13 +162,16 @@ def asset(
 
     Returns
     -------
-    AssetDefinition or Callable[[Callable[P, R]], AssetDefinition]
-        An AssetDefinition wrapping the function, or a decorator if called
-        with arguments.
+    AssetWithChecks or Callable[[Callable[P, R]], AssetWithChecks]
+        An AssetWithChecks wrapper (delegating to AssetDefinition) that
+        enables the .check() decorator, or a decorator if called with arguments.
     """
+    # Import here to avoid circular imports
+    from lattice.observability.checks import AssetWithChecks
+
     target_registry = get_global_registry() if registry is None else registry
 
-    def decorator(func: Callable[P, R]) -> AssetDefinition:
+    def decorator(func: Callable[P, R]) -> AssetWithChecks:
         asset_key = key or AssetKey(name=func.__name__)
         dependencies, dependency_params = _extract_dependencies(func, deps)
         return_type = _extract_return_type(func)
@@ -196,7 +211,7 @@ def asset(
             asset_key,
             [str(d) for d in dependencies] if dependencies else "none",
         )
-        return asset_def
+        return AssetWithChecks(asset_def)
 
     # Handle both @asset and @asset(...) syntax
     if fn is not None:
