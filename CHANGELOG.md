@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.0](https://github.com/cooksterj/lattice/compare/v0.5.0...v0.6.0) (2026-02-05)
+
+
+### Features
+
+* Added additional web functionality. ([5f864a0](https://github.com/cooksterj/lattice/commit/5f864a075a6faf2e986bfe678b3cab2b57f7da44))
+* Added and bolstered test conditions. ([cbbcb19](https://github.com/cooksterj/lattice/commit/cbbcb1916e03c4aa8d74b722e8ec884909a9ffa7))
+* Assets now support result checking - if configured. ([bcb320f](https://github.com/cooksterj/lattice/commit/bcb320f69070c32e79e6011569e1ba4d6af2c2c0))
+* Establish SQLite databases, one for primary execution, and one for the web demo. ([39b7909](https://github.com/cooksterj/lattice/commit/39b7909b66e15f19473b975dc775ac7509c0e977))
+* Implementation of phase 6. ([ed79562](https://github.com/cooksterj/lattice/commit/ed7956241a766e57c8d34bec472ddc106799e000))
+* Track asset execution lineage, logging, and establish a SQLite database for tracking purposes. ([a5f9bca](https://github.com/cooksterj/lattice/commit/a5f9bcaa37a658520720634db83b0fcae89c6519))
+* Updates the web demo to include checks. ([67c8f39](https://github.com/cooksterj/lattice/commit/67c8f39584f2e386cf924695acc9cc7a9e28dc17))
+* Visualize previous run in the web UI. ([7560a9a](https://github.com/cooksterj/lattice/commit/7560a9a6bfe04c4a8d51be8b43c217a094c0ea1a))
+
 ## [0.5.0](https://github.com/cooksterj/lattice/compare/v0.4.0...v0.5.0) (2026-01-31)
 
 
