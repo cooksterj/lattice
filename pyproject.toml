@@ -20,6 +20,9 @@ web = [
     "psutil>=5.9.0",
 ]
 
+[project.scripts]
+lattice = "lattice.cli:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
