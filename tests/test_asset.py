@@ -2,7 +2,13 @@
 
 import pytest
 
-from lattice import AssetDefinition, AssetKey, AssetRegistry, asset, get_global_registry
+from lattice import (
+    AssetKey,
+    AssetRegistry,
+    AssetWithChecks,
+    asset,
+    get_global_registry,
+)
 
 
 class TestAssetKey:
@@ -52,7 +58,8 @@ class TestAssetDecorator:
         def my_asset() -> int:
             return 42
 
-        assert isinstance(my_asset, AssetDefinition)
+        # @asset returns AssetWithChecks which wraps AssetDefinition
+        assert isinstance(my_asset, AssetWithChecks)
         assert my_asset.key == AssetKey(name="my_asset")
         assert my_asset() == 42
 
@@ -145,7 +152,9 @@ class TestAssetDecorator:
 
         registry = get_global_registry()
         assert "auto_registered" in registry
-        assert registry.get("auto_registered") is auto_registered
+        # Registry stores AssetDefinition, decorator returns AssetWithChecks
+        retrieved = registry.get("auto_registered")
+        assert retrieved.key == auto_registered.key
 
     def test_registers_to_custom_registry(self, registry: AssetRegistry) -> None:
         @asset(registry=registry)
@@ -164,8 +173,9 @@ class TestAssetRegistry:
         def my_asset() -> int:
             return 42
 
+        # Registry stores AssetDefinition, decorator returns AssetWithChecks
         retrieved = registry.get("my_asset")
-        assert retrieved is my_asset
+        assert retrieved.key == my_asset.key
 
     def test_get_with_asset_key(self, registry: AssetRegistry) -> None:
         @asset(registry=registry)
@@ -174,7 +184,7 @@ class TestAssetRegistry:
 
         key = AssetKey(name="my_asset")
         retrieved = registry.get(key)
-        assert retrieved is my_asset
+        assert retrieved.key == my_asset.key
 
     def test_duplicate_registration_raises(self, registry: AssetRegistry) -> None:
         @asset(registry=registry)
