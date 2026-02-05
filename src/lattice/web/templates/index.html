@@ -10,7 +10,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
           rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="stylesheet" href="/static/css/styles.css?v=7">
 </head>
 <body class="font-mono">
 <div class="flex h-screen relative z-10">
@@ -38,6 +38,11 @@
                 </div>
             </div>
             <div class="flex items-center gap-3">
+                <nav class="flex items-center gap-1">
+                    <a href="/" class="nav-link active">GRAPH</a>
+                    <a href="/history" class="nav-link">HISTORY</a>
+                </nav>
+                <div class="header-divider"></div>
                 <div class="status-display">
                     <span class="status-label">NODES:</span>
                     <span id="asset-count" class="status-value">---</span>
@@ -110,6 +115,6 @@
 <div class="corner-decor bottom-left"></div>
 <div class="corner-decor bottom-right"></div>
 
-<script src="/static/js/graph.js"></script>
+<script src="/static/js/graph.js?v=8"></script>
 </body>
 </html>

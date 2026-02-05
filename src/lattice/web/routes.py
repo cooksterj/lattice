@@ -11,10 +11,12 @@ from fastapi.templating import Jinja2Templates
 from lattice import __version__
 from lattice.graph import DependencyGraph
 from lattice.models import AssetKey
+from lattice.observability import get_global_check_registry
 from lattice.plan import ExecutionPlan
 from lattice.registry import AssetRegistry
 from lattice.web.schemas import (
     AssetDetailSchema,
+    CheckSchema,
     EdgeSchema,
     GraphSchema,
     HealthSchema,
@@ -51,6 +53,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     async def get_graph() -> GraphSchema:
         """Get graph data for D3.js visualization."""
         graph = DependencyGraph.from_registry(registry)
+        check_registry = get_global_check_registry()
 
         nodes: list[NodeSchema] = []
         edges: list[EdgeSchema] = []
@@ -64,6 +67,13 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             if asset_def.return_type is not None:
                 return_type = getattr(asset_def.return_type, "__name__", str(asset_def.return_type))
 
+            # Get checks registered for this asset
+            asset_checks = check_registry.get_checks(key)
+            checks = [
+                CheckSchema(name=check.name, description=check.description)
+                for check in asset_checks
+            ]
+
             nodes.append(
                 NodeSchema(
                     id=node_id,
@@ -73,6 +83,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     return_type=return_type,
                     dependency_count=len(asset_def.dependencies),
                     dependent_count=len(graph.reverse_adjacency.get(key, ())),
+                    checks=checks,
                 )
             )
 
@@ -99,11 +110,18 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             raise HTTPException(status_code=404, detail=f"Asset '{key}' not found") from None
 
         graph = DependencyGraph.from_registry(registry)
+        check_registry = get_global_check_registry()
 
         # Get return type as string
         return_type = None
         if asset_def.return_type is not None:
             return_type = getattr(asset_def.return_type, "__name__", str(asset_def.return_type))
+
+        # Get checks registered for this asset
+        asset_checks = check_registry.get_checks(asset_key)
+        checks = [
+            CheckSchema(name=check.name, description=check.description) for check in asset_checks
+        ]
 
         return AssetDetailSchema(
             id=str(asset_key),
@@ -113,6 +131,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             return_type=return_type,
             dependencies=[str(dep) for dep in asset_def.dependencies],
             dependents=[str(dep) for dep in graph.reverse_adjacency.get(asset_key, ())],
+            checks=checks,
         )
 
     @router.get("/api/plan", response_model=PlanSchema)

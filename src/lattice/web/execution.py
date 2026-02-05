@@ -29,6 +29,10 @@ from lattice.web.schemas_execution import (
 
 logger = logging.getLogger(__name__)
 
+# Observability imports - for tracking lineage, logs, checks, and history
+if TYPE_CHECKING:
+    from lattice.observability import CheckRegistry, RunHistoryStore
+
 # TYPE_CHECKING is False at runtime but True during static analysis.
 # These imports are deferred to avoid circular dependencies between the web
 # module and the executor module, while still providing type hints.
@@ -68,7 +72,12 @@ class ExecutionManager:
     and memory usage metrics. Designed for single-server deployment.
     """
 
-    def __init__(self, max_concurrency: int = 4) -> None:
+    def __init__(
+        self,
+        max_concurrency: int = 4,
+        history_store: RunHistoryStore | None = None,
+        check_registry: CheckRegistry | None = None,
+    ) -> None:
         """Initialize with an empty state."""
         self._executor: AsyncExecutor | None = None
         self._is_running: bool = False
@@ -76,6 +85,8 @@ class ExecutionManager:
         self._memory_timeline: list[MemorySnapshotSchema] = []
         self._peak_rss_mb: float = 0.0
         self._max_concurrency = max_concurrency
+        self._history_store = history_store
+        self._check_registry = check_registry
 
     @property
     def is_running(self) -> bool:
@@ -182,6 +193,17 @@ class ExecutionManager:
         """
         from lattice.executor import AsyncExecutor
         from lattice.io.memory import MemoryIOManager
+        from lattice.observability import (
+            CheckResult,
+            CheckStatus,
+            LineageIOManager,
+            LineageTracker,
+            RunRecord,
+            RunResult,
+            capture_logs,
+            get_global_check_registry,
+            run_check,
+        )
 
         # Build list of dates to execute
         dates_to_execute: list[date] = []
@@ -201,6 +223,13 @@ class ExecutionManager:
             target or "all",
             include_downstream,
             [str(d) for d in dates_to_execute] if dates_to_execute else "none",
+        )
+
+        # Get check registry (use provided or global)
+        check_registry = (
+            self._check_registry
+            if self._check_registry is not None
+            else get_global_check_registry()
         )
 
         try:
@@ -234,19 +263,102 @@ class ExecutionManager:
                         }
                     )
 
-                io_manager = MemoryIOManager()
+                # Set up observability components
+                base_io_manager = MemoryIOManager()
+                lineage_tracker = LineageTracker()
+                io_manager = LineageIOManager(base_io_manager, lineage_tracker)
+
+                # Create callbacks that update observability context
+                # Use default argument to bind lineage_tracker at definition time (avoids B023)
+                async def on_asset_start_with_tracking(
+                    key: AssetKey, tracker: LineageTracker = lineage_tracker
+                ) -> None:
+                    tracker.set_current_asset(key)
+                    await self._broadcast_asset_start(key)
+
                 executor = AsyncExecutor(
                     io_manager=io_manager,
                     max_concurrency=self._max_concurrency,
-                    on_asset_start=self._broadcast_asset_start,
+                    on_asset_start=on_asset_start_with_tracking,
                     on_asset_complete=self._broadcast_asset_complete,
                     partition_key=partition_date,
                 )
                 self._executor = executor
 
                 partition_start = datetime.now()
-                result = await executor.execute(plan)
+
+                # Execute with log capture
+                with capture_logs("lattice") as log_handler:
+                    result = await executor.execute(plan)
+
                 partition_duration = (datetime.now() - partition_start).total_seconds() * 1000
+
+                # Run checks on completed assets
+                check_results: list[CheckResult] = []
+                for asset_result in result.asset_results:
+                    if asset_result.status.value == "completed":
+                        asset_key = asset_result.key
+                        checks = check_registry.get_checks(asset_key)
+                        for check_def in checks:
+                            try:
+                                value = base_io_manager.load(asset_key)
+                                check_result = run_check(check_def, value)
+                                check_results.append(check_result)
+                            except Exception as e:
+                                check_results.append(
+                                    CheckResult(
+                                        passed=False,
+                                        check_name=check_def.name,
+                                        asset_key=asset_key,
+                                        status=CheckStatus.ERROR,
+                                        error=f"Failed to load asset for check: {e}",
+                                    )
+                                )
+
+                # Broadcast check results
+                if check_results:
+                    checks_passed = sum(1 for c in check_results if c.passed)
+                    checks_failed = len(check_results) - checks_passed
+                    await self.broadcast(
+                        {
+                            "type": "checks_complete",
+                            "data": {
+                                "total": len(check_results),
+                                "passed": checks_passed,
+                                "failed": checks_failed,
+                                "results": [
+                                    {
+                                        "check_name": c.check_name,
+                                        "asset_key": str(c.asset_key),
+                                        "passed": c.passed,
+                                        "status": c.status.value,
+                                        "error": c.error,
+                                    }
+                                    for c in check_results
+                                ],
+                            },
+                        }
+                    )
+
+                # Build RunResult and save to history store
+                if self._history_store is not None:
+                    run_result = RunResult(
+                        execution_result=result,
+                        logs=tuple(log_handler.entries),
+                        lineage=tuple(lineage_tracker.events),
+                        check_results=tuple(check_results),
+                    )
+                    target_str = target if target is not None else None
+                    partition_str = (
+                        partition_date.isoformat() if partition_date is not None else None
+                    )
+                    record = RunRecord.from_run_result(
+                        run_result,
+                        target=target_str,
+                        partition_key=partition_str,
+                    )
+                    self._history_store.save(record)
+                    logger.info("Saved run record %s to history store", result.run_id)
 
                 total_completed += result.completed_count
                 total_failed += result.failed_count

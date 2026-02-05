@@ -1,7 +1,10 @@
 """FastAPI application factory for Lattice web visualization."""
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +17,10 @@ from lattice.web.execution import (
     create_websocket_router,
 )
 from lattice.web.routes import create_router
+from lattice.web.routes_history import create_history_router
+
+if TYPE_CHECKING:
+    from lattice.observability.history import RunHistoryStore
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +30,10 @@ TEMPLATES_DIR = WEB_DIR / "templates"
 STATIC_DIR = WEB_DIR / "static"
 
 
-def create_app(registry: AssetRegistry | None = None) -> FastAPI:
+def create_app(
+    registry: AssetRegistry | None = None,
+    history_store: RunHistoryStore | None = None,
+) -> FastAPI:
     """
     Create a FastAPI application for visualizing the asset graph.
 
@@ -31,6 +41,8 @@ def create_app(registry: AssetRegistry | None = None) -> FastAPI:
     ----------
     registry : AssetRegistry or None
         The asset registry to visualize. Defaults to global registry.
+    history_store : RunHistoryStore or None
+        Optional history store for run history visualization.
 
     Returns
     -------
@@ -54,8 +66,8 @@ def create_app(registry: AssetRegistry | None = None) -> FastAPI:
     # Configure templates
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-    # Create a shared execution manager
-    execution_manager = ExecutionManager()
+    # Create a shared execution manager with history store for observability
+    execution_manager = ExecutionManager(history_store=history_store)
 
     # Add graph/asset routes
     graph_router = create_router(registry, templates)
@@ -69,6 +81,10 @@ def create_app(registry: AssetRegistry | None = None) -> FastAPI:
     ws_router = create_websocket_router(execution_manager)
     app.include_router(ws_router)
 
+    # Add history routes
+    history_router = create_history_router(history_store, templates)
+    app.include_router(history_router)
+
     return app
 
 
@@ -76,6 +92,7 @@ def serve(
     registry: AssetRegistry | None = None,
     host: str = "127.0.0.1",
     port: int = 8000,
+    history_store: RunHistoryStore | None = None,
 ) -> None:
     """
     Start the visualization server.
@@ -88,10 +105,12 @@ def serve(
         Host to bind to. Defaults to localhost.
     port : int
         Port to listen on. Defaults to 8000.
+    history_store : RunHistoryStore or None
+        Optional history store for run history visualization.
     """
     import uvicorn
 
     logger.info("Starting Lattice web server on %s:%d", host, port)
 
-    app = create_app(registry)
+    app = create_app(registry, history_store=history_store)
     uvicorn.run(app, host=host, port=port)

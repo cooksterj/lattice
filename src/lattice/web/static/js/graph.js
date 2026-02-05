@@ -87,32 +87,92 @@ class LatticeGraph {
     setupDefs() {
         const defs = this.svg.append('defs');
 
-        // Arrow marker
-        defs.append('marker')
+        // === EDGE GRADIENTS ===
+        // Main edge gradient: purple to cyan (follows data flow direction)
+        const edgeGradient = defs.append('linearGradient')
+            .attr('id', 'edge-gradient')
+            .attr('gradientUnits', 'userSpaceOnUse');
+        edgeGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#7b2cbf');
+        edgeGradient.append('stop')
+            .attr('offset', '50%')
+            .attr('stop-color', '#9d4edd');
+        edgeGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#05d9e8');
+
+        // Highlighted edge gradient: pink to cyan
+        const edgeGradientHighlight = defs.append('linearGradient')
+            .attr('id', 'edge-gradient-highlight')
+            .attr('gradientUnits', 'userSpaceOnUse');
+        edgeGradientHighlight.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#ff2a6d');
+        edgeGradientHighlight.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#05d9e8');
+
+        // === GLOW FILTERS ===
+        // Edge glow filter
+        const edgeGlow = defs.append('filter')
+            .attr('id', 'edge-glow')
+            .attr('x', '-50%')
+            .attr('y', '-50%')
+            .attr('width', '200%')
+            .attr('height', '200%');
+        edgeGlow.append('feGaussianBlur')
+            .attr('in', 'SourceGraphic')
+            .attr('stdDeviation', '3')
+            .attr('result', 'blur');
+        edgeGlow.append('feMerge')
+            .html('<feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>');
+
+        // Intense glow for highlighted edges
+        const edgeGlowIntense = defs.append('filter')
+            .attr('id', 'edge-glow-intense')
+            .attr('x', '-100%')
+            .attr('y', '-100%')
+            .attr('width', '300%')
+            .attr('height', '300%');
+        edgeGlowIntense.append('feGaussianBlur')
+            .attr('in', 'SourceGraphic')
+            .attr('stdDeviation', '6')
+            .attr('result', 'blur');
+        edgeGlowIntense.append('feMerge')
+            .html('<feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>');
+
+        // === ARROW MARKERS ===
+        // Futuristic angular arrow - default
+        const arrow = defs.append('marker')
             .attr('id', 'arrow')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 20)
+            .attr('viewBox', '0 -6 14 12')
+            .attr('refX', 12)
             .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('d', 'M0,-5L10,0L0,5')
-            .attr('class', 'edge-arrow');
+            .attr('markerWidth', 10)
+            .attr('markerHeight', 10)
+            .attr('orient', 'auto');
+        // Diamond/chevron shape for futuristic feel
+        arrow.append('path')
+            .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
+            .attr('fill', '#05d9e8')
+            .attr('filter', 'drop-shadow(0 0 3px #05d9e8)');
 
-        defs.append('marker')
+        // Highlighted arrow
+        const arrowHighlight = defs.append('marker')
             .attr('id', 'arrow-highlighted')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 20)
+            .attr('viewBox', '0 -6 14 12')
+            .attr('refX', 12)
             .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('d', 'M0,-5L10,0L0,5')
-            .attr('class', 'edge-arrow highlighted');
+            .attr('markerWidth', 12)
+            .attr('markerHeight', 12)
+            .attr('orient', 'auto');
+        arrowHighlight.append('path')
+            .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
+            .attr('fill', '#05d9e8')
+            .attr('filter', 'drop-shadow(0 0 6px #05d9e8)');
 
-        // Gradients for each group
+        // === NODE GRADIENTS ===
         Object.entries(GROUP_COLORS).forEach(([group, colors]) => {
             const gradient = defs.append('linearGradient')
                 .attr('id', `gradient-${group}`)
@@ -149,14 +209,33 @@ class LatticeGraph {
     }
 
     render() {
-        // Create edges
-        this.edgeElements = this.g.append('g')
+        // Create edge groups (each edge has multiple layers for glow effect)
+        const edgeGroups = this.g.append('g')
             .attr('class', 'edges')
-            .selectAll('path')
+            .selectAll('g')
             .data(this.edges)
-            .join('path')
-            .attr('class', 'edge')
-            .attr('marker-end', 'url(#arrow)');
+            .join('g')
+            .attr('class', 'edge-group');
+
+        // Layer 1: Subtle glow layer (wider, soft)
+        edgeGroups.append('path')
+            .attr('class', 'edge-glow-layer')
+            .attr('fill', 'none')
+            .attr('stroke', 'url(#edge-gradient)')
+            .attr('stroke-width', 4)
+            .attr('opacity', 0.2)
+            .attr('filter', 'url(#edge-glow)');
+
+        // Layer 2: Main edge with gradient
+        edgeGroups.append('path')
+            .attr('class', 'edge-main')
+            .attr('fill', 'none')
+            .attr('stroke', 'url(#edge-gradient)')
+            .attr('stroke-width', 2);
+
+        // Store reference to edge groups for tick updates
+        this.edgeGroups = edgeGroups;
+        this.edgeElements = edgeGroups.selectAll('.edge-main');
 
         // Create nodes
         this.nodeElements = this.g.append('g')
@@ -186,6 +265,43 @@ class LatticeGraph {
                 const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
             });
+
+        // Check slivers on the right side of node (full height, stacked horizontally)
+        this.nodeElements.each(function(d) {
+            const node = d3.select(this);
+            const checks = d.checks || [];
+            if (checks.length === 0) return;
+
+            // Cyan color variations for multiple checks
+            const cyanShades = [
+                '#05d9e8', // Base cyan
+                '#00b4d8', // Slightly darker/bluer
+                '#0096c7', // More blue
+                '#0077b6', // Deep cyan-blue
+                '#48cae4', // Lighter cyan
+            ];
+
+            // Calculate sliver dimensions
+            const sliverWidth = 4;
+            const sliverGap = 1;
+            const sliverHeight = 44; // Full height of asset block
+            const startX = 65 + 2; // Position to right of main rect (which ends at x=65)
+
+            checks.forEach((check, i) => {
+                const color = cyanShades[i % cyanShades.length];
+                node.append('rect')
+                    .attr('class', 'check-sliver')
+                    .attr('width', sliverWidth)
+                    .attr('height', sliverHeight)
+                    .attr('x', startX + i * (sliverWidth + sliverGap))
+                    .attr('y', -22) // Same y as main rect
+                    .attr('rx', 1)
+                    .style('fill', color)
+                    .style('filter', `drop-shadow(0 0 4px ${color}cc)`)
+                    .append('title')
+                    .text(check.name);
+            });
+        });
 
         // Node labels
         this.nodeElements.append('text')
@@ -285,10 +401,59 @@ class LatticeGraph {
     }
 
     tick() {
-        this.edgeElements.attr('d', d => {
-            const dx = d.target.x - d.source.x;
-            const dy = d.target.y - d.source.y;
-            return `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`;
+        // Generate curved path for an edge
+        const generatePath = (d) => {
+            // Node dimensions
+            const nodeWidth = 130;
+            const nodeHalfWidth = nodeWidth / 2; // 65
+
+            // Calculate check sliver offset for source node (right side)
+            const sourceChecks = d.source.checks ? d.source.checks.length : 0;
+            const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
+
+            // Source: right edge (plus slivers), Target: left edge
+            const sourceX = d.source.x + nodeHalfWidth + sliverOffset;
+            const targetX = d.target.x - nodeHalfWidth;
+            const sourceY = d.source.y;
+            const targetY = d.target.y;
+
+            // Calculate control points for smooth bezier curve
+            const dx = targetX - sourceX;
+            const dy = targetY - sourceY;
+
+            // Control point offset (creates smooth S-curve or gentle arc)
+            const curvature = Math.min(Math.abs(dx) * 0.3, 60);
+
+            // Use quadratic bezier for smoother, more elegant curves
+            const midX = sourceX + dx * 0.5;
+            const midY = sourceY + dy * 0.5;
+
+            // If nodes are mostly horizontal, create gentle arc
+            // If there's vertical offset, create S-curve
+            if (Math.abs(dy) < 30) {
+                // Gentle arc
+                const controlY = midY - Math.sign(dy || 1) * curvature * 0.3;
+                return `M${sourceX},${sourceY} Q${midX},${controlY} ${targetX},${targetY}`;
+            } else {
+                // S-curve with two control points
+                const c1x = sourceX + curvature;
+                const c1y = sourceY;
+                const c2x = targetX - curvature;
+                const c2y = targetY;
+                return `M${sourceX},${sourceY} C${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
+            }
+        };
+
+        // Update gradient positions to follow edge direction
+        this.edgeGroups.each(function(d) {
+            const sourceX = d.source.x + 65;
+            const targetX = d.target.x - 65;
+            const sourceY = d.source.y;
+            const targetY = d.target.y;
+
+            // Update all path layers with the same curved path
+            const path = generatePath(d);
+            d3.select(this).selectAll('path').attr('d', path);
         });
 
         this.nodeElements.attr('transform', d => `translate(${d.x},${d.y})`);
@@ -359,6 +524,9 @@ class LatticeGraph {
             sidebar.classList.add('translate-x-full');
             this.selectedNode = null;
             this.nodeElements.classed('selected', false);
+            // Move execution controls back
+            const execControls = document.querySelector('.execution-controls');
+            if (execControls) execControls.classList.remove('sidebar-open');
         });
 
         // Click outside to deselect
@@ -366,6 +534,9 @@ class LatticeGraph {
             sidebar.classList.add('translate-x-full');
             this.selectedNode = null;
             this.nodeElements.classed('selected', false);
+            // Move execution controls back
+            const execControls = document.querySelector('.execution-controls');
+            if (execControls) execControls.classList.remove('sidebar-open');
         });
 
         // Theme toggle
@@ -407,13 +578,25 @@ class LatticeGraph {
             if (e.target.id === node.id) connectedIds.add(e.source.id);
         });
 
-        this.edgeElements
-            .classed('highlighted', e =>
-                e.source.id === node.id || e.target.id === node.id)
-            .attr('marker-end', e =>
-                (e.source.id === node.id || e.target.id === node.id)
-                    ? 'url(#arrow-highlighted)'
-                    : 'url(#arrow)');
+        // Highlight edge groups
+        this.edgeGroups.each(function(e) {
+            const isConnected = e.source.id === node.id || e.target.id === node.id;
+            const group = d3.select(this);
+
+            group.classed('highlighted', isConnected);
+
+            // Update glow layer
+            group.select('.edge-glow-layer')
+                .attr('stroke', isConnected ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
+                .attr('stroke-width', isConnected ? 8 : 4)
+                .attr('opacity', isConnected ? 0.4 : 0.2)
+                .attr('filter', isConnected ? 'url(#edge-glow-intense)' : 'url(#edge-glow)');
+
+            // Update main edge
+            group.select('.edge-main')
+                .attr('stroke', isConnected ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
+                .attr('stroke-width', isConnected ? 2.5 : 2);
+        });
 
         this.nodeElements
             .style('opacity', d =>
@@ -421,9 +604,21 @@ class LatticeGraph {
     }
 
     clearHighlights() {
-        this.edgeElements
-            .classed('highlighted', false)
-            .attr('marker-end', 'url(#arrow)');
+        this.edgeGroups.each(function() {
+            const group = d3.select(this);
+            group.classed('highlighted', false);
+
+            group.select('.edge-glow-layer')
+                .attr('stroke', 'url(#edge-gradient)')
+                .attr('stroke-width', 4)
+                .attr('opacity', 0.2)
+                .attr('filter', 'url(#edge-glow)');
+
+            group.select('.edge-main')
+                .attr('stroke', 'url(#edge-gradient)')
+                .attr('stroke-width', 2);
+        });
+
         this.nodeElements.style('opacity', 1);
     }
 
@@ -437,6 +632,10 @@ class LatticeGraph {
         // Show loading state
         content.innerHTML = '<div style="color: #05d9e8; font-family: Orbitron, sans-serif; letter-spacing: 0.2em; animation: textFlicker 1.5s ease-in-out infinite;">LOADING...</div>';
         sidebar.classList.remove('translate-x-full');
+
+        // Move execution controls out of the way
+        const execControls = document.querySelector('.execution-controls');
+        if (execControls) execControls.classList.add('sidebar-open');
 
         try {
             const response = await fetch(`/api/assets/${encodeURIComponent(node.id)}`);
@@ -466,6 +665,21 @@ class LatticeGraph {
                     <div class="detail-value" style="color: #8888aa; line-height: 1.6;">${data.description}</div>
                 </div>
                 ` : ''}
+
+                <div class="detail-section">
+                    <div class="detail-label">Checks (${data.checks ? data.checks.length : 0})</div>
+                    <div class="check-list">
+                        ${data.checks && data.checks.length > 0
+                ? data.checks.map(c => `
+                    <div class="check-badge">
+                        <span class="check-badge-icon">✓</span>
+                        <span class="check-badge-name">${c.name}</span>
+                        ${c.description ? `<span class="check-badge-desc">${c.description}</span>` : ''}
+                    </div>
+                `).join('')
+                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NO CHECKS ]</span>'}
+                    </div>
+                </div>
 
                 <div class="detail-section">
                     <div class="detail-label">Dependencies (${data.dependencies.length})</div>

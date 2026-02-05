@@ -3,6 +3,15 @@
 from pydantic import BaseModel, ConfigDict
 
 
+class CheckSchema(BaseModel):
+    """Schema for a registered check."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    description: str | None = None
+
+
 class NodeSchema(BaseModel):
     """Graph node representing an asset."""
 
@@ -15,6 +24,7 @@ class NodeSchema(BaseModel):
     return_type: str | None = None
     dependency_count: int = 0
     dependent_count: int = 0
+    checks: list[CheckSchema] = []
 
 
 class EdgeSchema(BaseModel):
@@ -47,6 +57,7 @@ class AssetDetailSchema(BaseModel):
     return_type: str | None = None
     dependencies: list[str]
     dependents: list[str]
+    checks: list[CheckSchema] = []
 
 
 class PlanStepSchema(BaseModel):

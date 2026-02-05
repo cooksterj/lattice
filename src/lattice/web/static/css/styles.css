@@ -315,6 +315,33 @@ body {
 }
 
 /* ============================================
+   NAVIGATION LINKS
+   ============================================ */
+
+.nav-link {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--text-secondary);
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+.nav-link:hover {
+    color: var(--neon-cyan);
+    border-color: var(--border-dim);
+}
+
+.nav-link.active {
+    color: var(--neon-cyan);
+    border-color: var(--neon-cyan);
+    background: rgba(5, 217, 232, 0.1);
+}
+
+/* ============================================
    LOADING OVERLAY
    ============================================ */
 
@@ -521,6 +548,98 @@ body {
 }
 
 /* ============================================
+   CHECK BADGES & SLIVERS
+   ============================================ */
+
+.check-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.check-badge {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(5, 217, 232, 0.08);
+    border: 1px solid rgba(5, 217, 232, 0.25);
+    border-left: 3px solid var(--neon-cyan);
+    transition: all 0.2s ease;
+}
+
+.check-badge:hover {
+    background: rgba(5, 217, 232, 0.15);
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 15px var(--neon-cyan-glow);
+}
+
+.check-badge-icon {
+    flex-shrink: 0;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--neon-cyan);
+    color: var(--bg-void);
+    font-size: 10px;
+    font-weight: bold;
+    border-radius: 2px;
+    box-shadow: 0 0 8px var(--neon-cyan-glow);
+}
+
+.check-badge-name {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 8px var(--neon-cyan-glow);
+}
+
+.check-badge-desc {
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+    margin-top: 2px;
+    display: block;
+    width: 100%;
+}
+
+/* Check sliver styling in graph */
+.check-sliver {
+    transition: all 0.2s ease;
+}
+
+.node:hover .check-sliver {
+    filter: drop-shadow(0 0 8px rgba(5, 217, 232, 1)) !important;
+}
+
+/* Check sliver status during execution */
+.node.status-completed .check-sliver {
+    fill: #05d9e8;
+    filter: drop-shadow(0 0 6px rgba(5, 217, 232, 0.9));
+}
+
+.node.status-failed .check-sliver {
+    fill: var(--neon-pink);
+    filter: drop-shadow(0 0 6px var(--neon-pink-glow));
+}
+
+.node.status-running .check-sliver {
+    fill: var(--neon-yellow);
+    filter: drop-shadow(0 0 6px rgba(246, 255, 0, 0.8));
+    animation: checkPulse 1s ease-in-out infinite;
+}
+
+@keyframes checkPulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+/* ============================================
    TOOLTIP
    ============================================ */
 
@@ -582,31 +701,32 @@ body {
 }
 
 /* ============================================
-   GRAPH EDGES
+   GRAPH EDGES - Neon Synthwave Style
    ============================================ */
 
-.edge {
-    fill: none;
-    stroke: var(--neon-purple);
-    stroke-width: 2px;
-    opacity: 0.5;
-    transition: all 0.3s ease;
-    filter: drop-shadow(0 0 4px rgba(123, 44, 191, 0.5));
+.edge-group {
+    transition: opacity 0.3s ease;
 }
 
-.light .edge {
-    stroke: #9a8bb8;
-    opacity: 0.5;
-    filter: none;
+.edge-glow-layer {
+    pointer-events: none;
+    transition: opacity 0.2s ease, stroke-width 0.2s ease;
 }
 
-.edge.highlighted {
-    stroke: var(--neon-cyan);
-    stroke-width: 3px;
-    opacity: 1;
-    filter: drop-shadow(0 0 10px var(--neon-cyan-glow));
+.edge-main {
+    transition: stroke-width 0.2s ease;
 }
 
+/* Light mode adjustments */
+.light .edge-glow-layer {
+    opacity: 0.1 !important;
+}
+
+.light .edge-main {
+    stroke: #9a8bb8 !important;
+}
+
+/* Legacy classes for backwards compatibility */
 .edge-arrow {
     fill: var(--neon-purple);
 }
@@ -954,6 +1074,11 @@ body {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
+    transition: right 0.3s ease-out;
+}
+
+.execution-controls.sidebar-open {
+    right: 26rem; /* w-96 (24rem) + 2rem margin */
 }
 
 .execution-controls > * {
