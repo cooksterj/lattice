@@ -5,6 +5,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from lattice.observability.history.base import RunHistoryStore
 from lattice.observability.models import RunRecord
@@ -238,7 +239,8 @@ class SQLiteRunHistoryStore(RunHistoryStore):
                 )
             else:
                 cursor = conn.execute("SELECT COUNT(*) FROM runs")
-            return cursor.fetchone()[0]
+            row = cursor.fetchone()
+            return int(row[0]) if row else 0
 
     def clear(self) -> int:
         """
@@ -254,7 +256,7 @@ class SQLiteRunHistoryStore(RunHistoryStore):
             conn.commit()
             return cursor.rowcount
 
-    def _row_to_record(self, row: tuple) -> RunRecord:
+    def _row_to_record(self, row: tuple[Any, ...]) -> RunRecord:
         """
         Convert a database row to a RunRecord.
 

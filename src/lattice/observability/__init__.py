@@ -64,6 +64,7 @@ SQLiteRunHistoryStore
 
 import logging
 from datetime import date
+from typing import Any
 
 from lattice.executor import ExecutionResult, Executor
 from lattice.io.base import IOManager
@@ -222,7 +223,7 @@ def materialize_with_observability(
             checks = check_registry.get_checks(asset_key)
             for check_def in checks:
                 try:
-                    value = base_io_manager.load(asset_key)
+                    value: Any = base_io_manager.load(asset_key)
                     check_result = run_check(check_def, value)
                     check_results.append(check_result)
                 except Exception as e:

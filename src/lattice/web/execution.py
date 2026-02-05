@@ -247,7 +247,9 @@ class ExecutionManager:
             overall_start = datetime.now()
 
             # Execute for each date (or once if no dates specified)
-            execution_dates = dates_to_execute if dates_to_execute else [None]
+            execution_dates: list[date | None] = (
+                list(dates_to_execute) if dates_to_execute else [None]
+            )
 
             for date_index, partition_date in enumerate(execution_dates):
                 if partition_date is not None:
@@ -301,7 +303,7 @@ class ExecutionManager:
                         checks = check_registry.get_checks(asset_key)
                         for check_def in checks:
                             try:
-                                value = base_io_manager.load(asset_key)
+                                value: Any = base_io_manager.load(asset_key)
                                 check_result = run_check(check_def, value)
                                 check_results.append(check_result)
                             except Exception as e:
