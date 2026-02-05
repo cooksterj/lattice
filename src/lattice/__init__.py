@@ -18,6 +18,23 @@ from lattice.graph import DependencyGraph
 from lattice.io import FileIOManager, IOManager, MemoryIOManager
 from lattice.logging import configure_logging, get_logger
 from lattice.models import AssetDefinition, AssetKey
+from lattice.observability import (
+    AssetWithChecks,
+    CheckDefinition,
+    CheckRegistry,
+    CheckResult,
+    CheckStatus,
+    LineageEvent,
+    LineageIOManager,
+    LineageTracker,
+    LogEntry,
+    RunHistoryStore,
+    RunRecord,
+    RunResult,
+    SQLiteRunHistoryStore,
+    get_global_check_registry,
+    materialize_with_observability,
+)
 from lattice.plan import ExecutionPlan
 from lattice.registry import AssetRegistry, get_global_registry
 
@@ -48,6 +65,22 @@ __all__ = [
     # Logging
     "configure_logging",
     "get_logger",
+    # Observability
+    "AssetWithChecks",
+    "CheckDefinition",
+    "CheckRegistry",
+    "CheckResult",
+    "CheckStatus",
+    "LineageEvent",
+    "LineageIOManager",
+    "LineageTracker",
+    "LogEntry",
+    "RunHistoryStore",
+    "RunRecord",
+    "RunResult",
+    "SQLiteRunHistoryStore",
+    "get_global_check_registry",
+    "materialize_with_observability",
 ]
 
 # Optional ParquetIOManager
