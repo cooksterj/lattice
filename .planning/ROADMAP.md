@@ -60,11 +60,10 @@ Plans:
   1. Clicking an asset node on the graph opens a new browser window with the asset live monitoring page
   2. Clicking the same asset again focuses the existing window instead of opening a duplicate
   3. Main graph window continues updating execution status while asset windows are open
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 03-01: Graph click handler change from navigation to window.open()
-- [ ] 03-02: Window tracking, duplicate prevention, and popup blocker handling
+- [ ] 03-01-PLAN.md -- Click handler, window tracking, duplicate prevention, and popup blocker fallback
 
 ## Progress
 
@@ -75,4 +74,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Streaming Infrastructure and WebSocket | 3/3 | Complete | 2026-02-06 |
 | 2. Asset Live Monitoring Page | 3/3 | Complete | 2026-02-07 |
-| 3. Main Graph Window Integration | 0/2 | Not started | - |
+| 3. Main Graph Window Integration | 0/1 | Not started | - |
