@@ -15,9 +15,9 @@
 
 ### Graph Integration
 
-- [ ] **GRAF-01**: User can click an asset node on the graph to open a new browser window (not navigate away)
-- [ ] **GRAF-02**: Re-clicking an already-opened asset focuses the existing window instead of opening a duplicate
-- [ ] **GRAF-03**: Main graph window remains functional and updating while asset windows are open
+- [x] **GRAF-01**: User can click an asset node on the graph to open a new browser window (not navigate away)
+- [x] **GRAF-02**: Re-clicking an already-opened asset focuses the existing window instead of opening a duplicate
+- [x] **GRAF-03**: Main graph window remains functional and updating while asset windows are open
 
 ### Execution Continuity
 
@@ -57,9 +57,9 @@
 | AWIN-03 | Phase 2 | Done |
 | AWIN-04 | Phase 2 | Done |
 | AWIN-05 | Phase 2 | Done |
-| GRAF-01 | Phase 3 | Pending |
-| GRAF-02 | Phase 3 | Pending |
-| GRAF-03 | Phase 3 | Pending |
+| GRAF-01 | Phase 3 | Done |
+| GRAF-02 | Phase 3 | Done |
+| GRAF-03 | Phase 3 | Done |
 | EXEC-01 | Phase 1 | Done |
 | EXEC-02 | Phase 1 | Done |
 
@@ -70,4 +70,4 @@
 
 ---
 *Requirements defined: 2026-02-06*
-*Last updated: 2026-02-07 after Phase 2 completion*
+*Last updated: 2026-02-06 after Phase 3 completion (milestone complete)*

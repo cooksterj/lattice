@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Streaming Infrastructure and WebSocket** - Server-side log streaming with per-asset WebSocket subscriptions
 - [x] **Phase 2: Asset Live Monitoring Page** - Dedicated browser page for real-time log viewing and asset details
-- [ ] **Phase 3: Main Graph Window Integration** - Wire asset monitoring into DAG graph via window.open()
+- [x] **Phase 3: Main Graph Window Integration** - Wire asset monitoring into DAG graph via window.open()
 
 ## Phase Details
 
@@ -63,7 +63,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 03-01-PLAN.md -- Click handler, window tracking, duplicate prevention, and popup blocker fallback
+- [x] 03-01-PLAN.md -- Click handler, window tracking, duplicate prevention, and popup blocker fallback
 
 ## Progress
 
@@ -74,4 +74,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Streaming Infrastructure and WebSocket | 3/3 | Complete | 2026-02-06 |
 | 2. Asset Live Monitoring Page | 3/3 | Complete | 2026-02-07 |
-| 3. Main Graph Window Integration | 0/1 | Not started | - |
+| 3. Main Graph Window Integration | 1/1 | Complete | 2026-02-06 |
