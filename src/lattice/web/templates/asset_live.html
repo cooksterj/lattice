@@ -1,438 +1,429 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LATTICE // LIVE // {{ asset_key }}</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
-          rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css?v=9">
-    <style>
-        body {
-            overflow: auto;
-        }
+{% extends "base.html" %}
+{% block title %}LIVE // {{ asset_key }}{% endblock %}
+{% block head_extra %}
+<style>
+    body {
+        overflow: auto;
+    }
 
-        .live-container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 6rem 2rem 2rem;
-        }
+    .live-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 6rem 2rem 2rem;
+    }
 
-        /* Compact header for popup window */
-        .live-header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 50;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.75rem 1.5rem;
-            background: linear-gradient(
-                to bottom,
-                var(--bg-void) 0%,
-                rgba(10, 10, 15, 0.9) 70%,
-                transparent 100%
-            );
-        }
+    /* Compact header for popup window */
+    .live-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1.5rem;
+        background: linear-gradient(
+            to bottom,
+            var(--bg-void) 0%,
+            rgba(10, 10, 15, 0.9) 70%,
+            transparent 100%
+        );
+    }
 
-        .light .live-header {
-            background: linear-gradient(
-                to bottom,
-                var(--bg-void) 0%,
-                rgba(240, 240, 248, 0.9) 70%,
-                transparent 100%
-            );
-        }
+    .light .live-header {
+        background: linear-gradient(
+            to bottom,
+            var(--bg-void) 0%,
+            rgba(240, 240, 248, 0.9) 70%,
+            transparent 100%
+        );
+    }
 
-        .live-header-left {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
+    .live-header-left {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+    }
 
-        .live-header-title {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            color: var(--text-glow);
-            text-shadow: 0 0 8px var(--neon-cyan-glow);
-        }
+    .live-header-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        color: var(--text-glow);
+        text-shadow: 0 0 8px var(--neon-cyan-glow);
+    }
 
-        .light .live-header-title {
-            color: var(--text-primary);
-            text-shadow: none;
-        }
+    .light .live-header-title {
+        color: var(--text-primary);
+        text-shadow: none;
+    }
 
-        .live-header-separator {
-            color: var(--neon-pink);
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 700;
-        }
+    .live-header-separator {
+        color: var(--neon-pink);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 700;
+    }
 
-        .live-header-asset {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--neon-cyan);
-        }
+    .live-header-asset {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--neon-cyan);
+    }
 
-        .live-badge {
-            display: inline-block;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.6rem;
-            font-weight: 700;
-            letter-spacing: 0.15em;
-            color: var(--neon-pink);
-            background: rgba(196, 82, 112, 0.12);
-            border: 1px solid rgba(196, 82, 112, 0.3);
-            padding: 0.15rem 0.5rem;
-            margin-left: 0.5rem;
-        }
+    .live-badge {
+        display: inline-block;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.6rem;
+        font-weight: 700;
+        letter-spacing: 0.15em;
+        color: var(--neon-pink);
+        background: rgba(196, 82, 112, 0.12);
+        border: 1px solid rgba(196, 82, 112, 0.3);
+        padding: 0.15rem 0.5rem;
+        margin-left: 0.5rem;
+    }
 
-        /* Asset info panel */
-        .asset-info-panel {
-            background: rgba(18, 18, 26, 0.8);
-            border: 1px solid var(--border-dim);
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
-        }
+    /* Asset info panel */
+    .asset-info-panel {
+        background: rgba(18, 18, 26, 0.8);
+        border: 1px solid var(--border-dim);
+        padding: 1.5rem 2rem;
+        margin-bottom: 1.5rem;
+        clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+    }
 
-        .light .asset-info-panel {
-            background: rgba(250, 250, 252, 0.9);
-        }
+    .light .asset-info-panel {
+        background: rgba(250, 250, 252, 0.9);
+    }
 
-        .asset-name {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--neon-cyan);
-            letter-spacing: 0.05em;
-        }
+    .asset-name {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--neon-cyan);
+        letter-spacing: 0.05em;
+    }
 
-        .asset-group-badge {
-            display: inline-block;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.65rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--neon-purple);
-            background: rgba(110, 90, 142, 0.15);
-            border: 1px solid rgba(110, 90, 142, 0.3);
-            padding: 0.2rem 0.6rem;
-            margin-left: 0.75rem;
-            vertical-align: middle;
-        }
+    .asset-group-badge {
+        display: inline-block;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--neon-purple);
+        background: rgba(110, 90, 142, 0.15);
+        border: 1px solid rgba(110, 90, 142, 0.3);
+        padding: 0.2rem 0.6rem;
+        margin-left: 0.75rem;
+        vertical-align: middle;
+    }
 
-        .asset-description {
-            color: var(--text-secondary);
-            margin-top: 0.75rem;
-            font-size: 0.9rem;
-            line-height: 1.6;
-        }
+    .asset-description {
+        color: var(--text-secondary);
+        margin-top: 0.75rem;
+        font-size: 0.9rem;
+        line-height: 1.6;
+    }
 
-        .asset-meta {
-            display: flex;
-            gap: 2rem;
-            margin-top: 1rem;
-            flex-wrap: wrap;
-        }
+    .asset-meta {
+        display: flex;
+        gap: 2rem;
+        margin-top: 1rem;
+        flex-wrap: wrap;
+    }
 
-        .asset-meta-item {
-            font-size: 0.8rem;
-        }
+    .asset-meta-item {
+        font-size: 0.8rem;
+    }
 
-        .asset-meta-label {
-            color: var(--text-secondary);
-            font-size: 0.7rem;
-            letter-spacing: 0.1em;
-            margin-bottom: 0.25rem;
-        }
+    .asset-meta-label {
+        color: var(--text-secondary);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.25rem;
+    }
 
-        .asset-meta-value {
-            color: var(--text-primary);
-        }
+    .asset-meta-value {
+        color: var(--text-primary);
+    }
 
-        .asset-meta-value.type {
-            color: var(--neon-yellow);
-        }
+    .asset-meta-value.type {
+        color: var(--neon-yellow);
+    }
 
-        .dep-link {
-            display: inline-block;
-            padding: 0.2rem 0.5rem;
-            font-size: 0.8rem;
-            color: var(--neon-yellow);
-            background: rgba(184, 158, 74, 0.1);
-            border: 1px solid rgba(184, 158, 74, 0.25);
-            margin: 0.25rem;
-            cursor: pointer;
-            text-decoration: none;
-            transition: all 0.2s ease;
-        }
+    .dep-link {
+        display: inline-block;
+        padding: 0.2rem 0.5rem;
+        font-size: 0.8rem;
+        color: var(--neon-yellow);
+        background: rgba(184, 158, 74, 0.1);
+        border: 1px solid rgba(184, 158, 74, 0.25);
+        margin: 0.25rem;
+        cursor: pointer;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
 
-        .dep-link:hover {
-            background: rgba(184, 158, 74, 0.2);
-            border-color: rgba(184, 158, 74, 0.4);
-        }
+    .dep-link:hover {
+        background: rgba(184, 158, 74, 0.2);
+        border-color: rgba(184, 158, 74, 0.4);
+    }
 
-        /* Status bar */
-        .status-bar {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem 1rem;
-            background: rgba(18, 18, 26, 0.6);
-            border: 1px solid var(--border-dim);
-            margin-bottom: 0.5rem;
-            font-size: 0.75rem;
-        }
+    /* Status bar */
+    .status-bar {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.5rem 1rem;
+        background: rgba(18, 18, 26, 0.6);
+        border: 1px solid var(--border-dim);
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+    }
 
-        .light .status-bar {
-            background: rgba(250, 250, 252, 0.8);
-        }
+    .light .status-bar {
+        background: rgba(250, 250, 252, 0.8);
+    }
 
-        .status-indicator {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--text-secondary);
-        }
+    .status-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--text-secondary);
+    }
 
-        .status-indicator.connected {
-            background: var(--neon-cyan);
-            box-shadow: 0 0 6px var(--neon-cyan-glow);
-        }
+    .status-indicator.connected {
+        background: var(--neon-cyan);
+        box-shadow: 0 0 6px var(--neon-cyan-glow);
+    }
 
-        .status-indicator.disconnected {
-            background: var(--neon-pink);
-            box-shadow: 0 0 6px var(--neon-pink-glow);
-        }
+    .status-indicator.disconnected {
+        background: var(--neon-pink);
+        box-shadow: 0 0 6px var(--neon-pink-glow);
+    }
 
-        .status-indicator.running {
-            background: var(--neon-yellow);
-            box-shadow: 0 0 6px rgba(184, 158, 74, 0.5);
-            animation: statusPulse 1.5s ease-in-out infinite;
-        }
+    .status-indicator.running {
+        background: var(--neon-yellow);
+        box-shadow: 0 0 6px rgba(184, 158, 74, 0.5);
+        animation: statusPulse 1.5s ease-in-out infinite;
+    }
 
-        @keyframes statusPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
+    @keyframes statusPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
 
-        .status-text {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-        }
+    .status-text {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-secondary);
+    }
 
-        .status-text.running {
-            color: var(--neon-yellow);
-        }
+    .status-text.running {
+        color: var(--neon-yellow);
+    }
 
-        .status-text.completed {
-            color: var(--neon-cyan);
-        }
+    .status-text.completed {
+        color: var(--neon-cyan);
+    }
 
-        .status-text.failed {
-            color: var(--neon-pink);
-        }
+    .status-text.failed {
+        color: var(--neon-pink);
+    }
 
-        /* Log container */
-        .log-container {
-            max-height: calc(100vh - 350px);
-            overflow-y: auto;
-            background: rgba(10, 10, 15, 0.9);
-            border: 1px solid var(--border-dim);
-            padding: 0.5rem;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.8rem;
-        }
+    /* Log container */
+    .log-container {
+        max-height: calc(100vh - 350px);
+        overflow-y: auto;
+        background: rgba(10, 10, 15, 0.9);
+        border: 1px solid var(--border-dim);
+        padding: 0.5rem;
+        font-family: 'Space Mono', monospace;
+        font-size: 0.8rem;
+    }
 
-        .light .log-container {
-            background: rgba(245, 244, 247, 0.9);
-        }
+    .light .log-container {
+        background: rgba(245, 244, 247, 0.9);
+    }
 
-        .log-entry {
-            display: flex;
-            gap: 0.75rem;
-            padding: 0.3rem 0.75rem;
-            font-size: 0.8rem;
-            line-height: 1.5;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
-            font-family: 'Space Mono', monospace;
-        }
+    .log-entry {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.3rem 0.75rem;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        font-family: 'Space Mono', monospace;
+    }
 
-        .light .log-entry {
-            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-        }
+    .light .log-entry {
+        border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
 
-        .log-entry:last-child {
-            border-bottom: none;
-        }
+    .log-entry:last-child {
+        border-bottom: none;
+    }
 
-        .log-level {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.65rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            min-width: 4.5rem;
-            text-align: right;
-            flex-shrink: 0;
-            padding-top: 0.15rem;
-        }
+    .log-level {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        min-width: 4.5rem;
+        text-align: right;
+        flex-shrink: 0;
+        padding-top: 0.15rem;
+    }
 
-        .log-level.DEBUG { color: var(--text-secondary); }
-        .log-level.INFO { color: var(--neon-cyan); }
-        .log-level.WARNING { color: var(--neon-amber, #f59e0b); }
-        .log-level.ERROR { color: var(--neon-red, #ef4444); }
-        .log-level.CRITICAL { color: #ff0000; font-weight: 700; }
+    .log-level.DEBUG { color: var(--text-secondary); }
+    .log-level.INFO { color: var(--neon-cyan); }
+    .log-level.WARNING { color: var(--neon-amber, #f59e0b); }
+    .log-level.ERROR { color: var(--neon-red, #ef4444); }
+    .log-level.CRITICAL { color: #ff0000; font-weight: 700; }
 
-        .log-timestamp {
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            flex-shrink: 0;
-            min-width: 5.5rem;
-        }
+    .log-timestamp {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        flex-shrink: 0;
+        min-width: 5.5rem;
+    }
 
-        .log-message {
-            color: var(--text-primary);
-            word-break: break-word;
-            flex: 1;
-        }
+    .log-message {
+        color: var(--text-primary);
+        word-break: break-word;
+        flex: 1;
+    }
 
-        /* Connection status indicator */
-        .connection-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 0.5rem;
-        }
-        .connection-dot.connected { background: var(--neon-green, #22c55e); }
-        .connection-dot.disconnected { background: var(--neon-red, #ef4444); }
-        .connection-dot.connecting { background: var(--neon-amber, #f59e0b); animation: connPulse 1s infinite; }
-        .connection-dot.error { background: var(--neon-red, #ef4444); }
+    /* Connection status indicator */
+    .connection-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        display: inline-block;
+        margin-right: 0.5rem;
+    }
+    .connection-dot.connected { background: var(--neon-green, #22c55e); }
+    .connection-dot.disconnected { background: var(--neon-red, #ef4444); }
+    .connection-dot.connecting { background: var(--neon-amber, #f59e0b); animation: connPulse 1s infinite; }
+    .connection-dot.error { background: var(--neon-red, #ef4444); }
 
-        @keyframes connPulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
+    @keyframes connPulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.4; }
+    }
 
-        .connection-label {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.6rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-        }
+    .connection-label {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.6rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-secondary);
+    }
 
-        .log-empty {
-            text-align: center;
-            padding: 2rem;
-            color: var(--text-secondary);
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.8rem;
-            letter-spacing: 0.15em;
-        }
+    .log-empty {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.8rem;
+        letter-spacing: 0.15em;
+    }
 
-        /* Completion banner */
-        .completion-banner {
-            display: none;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.5rem;
-            margin-bottom: 1rem;
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
-        }
+    /* Completion banner */
+    .completion-banner {
+        display: none;
+        align-items: center;
+        gap: 1rem;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1rem;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
+    }
 
-        .completion-banner.success {
-            display: flex;
-            flex-wrap: wrap;
-            background: rgba(34, 197, 94, 0.1);
-            border: 1px solid rgba(34, 197, 94, 0.3);
-            color: var(--neon-green, #22c55e);
-        }
+    .completion-banner.success {
+        display: flex;
+        flex-wrap: wrap;
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.3);
+        color: var(--neon-green, #22c55e);
+    }
 
-        .completion-banner.failure {
-            display: flex;
-            flex-wrap: wrap;
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: var(--neon-red, #ef4444);
-        }
+    .completion-banner.failure {
+        display: flex;
+        flex-wrap: wrap;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: var(--neon-red, #ef4444);
+    }
 
-        .banner-icon {
-            font-size: 1.2rem;
-        }
+    .banner-icon {
+        font-size: 1.2rem;
+    }
 
-        .banner-status {
-            flex: 1;
-        }
+    .banner-status {
+        flex: 1;
+    }
 
-        .banner-duration {
-            color: var(--text-secondary);
-            font-size: 0.75rem;
-            font-weight: 400;
-        }
+    .banner-duration {
+        color: var(--text-secondary);
+        font-size: 0.75rem;
+        font-weight: 400;
+    }
 
-        /* Action buttons area */
-        .action-buttons {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-            padding: 1rem 0;
-        }
+    /* Action buttons area */
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem;
+        padding: 1rem 0;
+    }
 
-        .action-btn {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            padding: 0.6rem 1.2rem;
-            border: 1px solid var(--border-dim);
-            background: rgba(18, 18, 26, 0.6);
-            color: var(--text-secondary);
-            cursor: pointer;
-            transition: all 0.2s ease;
-            clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-        }
+    .action-btn {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        padding: 0.6rem 1.2rem;
+        border: 1px solid var(--border-dim);
+        background: rgba(18, 18, 26, 0.6);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    }
 
-        .light .action-btn {
-            background: rgba(250, 250, 252, 0.8);
-        }
+    .light .action-btn {
+        background: rgba(250, 250, 252, 0.8);
+    }
 
-        .action-btn:hover {
-            color: var(--neon-cyan);
-            border-color: var(--neon-cyan);
-            background: rgba(0, 247, 255, 0.05);
-        }
+    .action-btn:hover {
+        color: var(--neon-cyan);
+        border-color: var(--neon-cyan);
+        background: rgba(0, 247, 255, 0.05);
+    }
 
-        .action-btn.primary {
-            border-color: var(--neon-cyan);
-            color: var(--neon-cyan);
-        }
+    .action-btn.primary {
+        border-color: var(--neon-cyan);
+        color: var(--neon-cyan);
+    }
 
-        .action-btn:disabled {
-            opacity: 0.3;
-            cursor: not-allowed;
-        }
-    </style>
-</head>
-<body class="font-mono">
+    .action-btn:disabled {
+        opacity: 0.3;
+        cursor: not-allowed;
+    }
+</style>
+{% endblock %}
+{% block content %}
     <!-- Compact header for live monitoring window -->
     <div class="live-header">
         <div class="live-header-left">
@@ -491,401 +482,395 @@
             </button>
         </div>
     </div>
+{% endblock %}
+{% block scripts %}
+<script>
+    const ASSET_KEY = "{{ asset_key }}";
 
-    <!-- Corner decorations -->
-    <div class="corner-decor top-left"></div>
-    <div class="corner-decor top-right"></div>
-    <div class="corner-decor bottom-left"></div>
-    <div class="corner-decor bottom-right"></div>
+    // =============================================
+    // Theme toggle (same pattern as asset_detail.html)
+    // =============================================
+    const themeToggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
 
-    <script>
-        const ASSET_KEY = "{{ asset_key }}";
+    function updateThemeIcons() {
+        const isDark = html.classList.contains('dark');
+        themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
+        themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
+    }
 
-        // =============================================
-        // Theme toggle (same pattern as asset_detail.html)
-        // =============================================
-        const themeToggle = document.getElementById('theme-toggle');
-        const html = document.documentElement;
-
-        function updateThemeIcons() {
-            const isDark = html.classList.contains('dark');
-            themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
-            themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
-        }
-
-        themeToggle.addEventListener('click', () => {
-            html.classList.toggle('dark');
-            html.classList.toggle('light');
-            localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
-            updateThemeIcons();
-        });
-
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
-            html.classList.remove('dark');
-            html.classList.add('light');
-        }
+    themeToggle.addEventListener('click', () => {
+        html.classList.toggle('dark');
+        html.classList.toggle('light');
+        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
         updateThemeIcons();
+    });
 
-        // =============================================
-        // Helpers
-        // =============================================
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        html.classList.remove('dark');
+        html.classList.add('light');
+    }
+    updateThemeIcons();
+
+    // =============================================
+    // Helpers
+    // =============================================
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatDuration(ms) {
+        if (ms == null) return '';
+        if (ms < 1000) return `${Math.round(ms)}ms`;
+        if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+        const minutes = Math.floor(ms / 60000);
+        const seconds = ((ms % 60000) / 1000).toFixed(0);
+        return `${minutes}m ${seconds}s`;
+    }
+
+    function formatTime(isoString) {
+        const d = new Date(isoString);
+        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    // =============================================
+    // Load asset details from existing REST API
+    // =============================================
+    async function loadAssetDetails() {
+        try {
+            const resp = await fetch(`/api/assets/${ASSET_KEY}`);
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            renderAssetInfo(data);
+        } catch (e) {
+            console.error('Failed to load asset details:', e);
+            document.getElementById('asset-info').innerHTML =
+                '<p style="color: var(--neon-pink); font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">FAILED TO LOAD ASSET DETAILS</p>';
         }
+    }
 
-        function formatDuration(ms) {
-            if (ms == null) return '';
-            if (ms < 1000) return `${Math.round(ms)}ms`;
-            if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-            const minutes = Math.floor(ms / 60000);
-            const seconds = ((ms % 60000) / 1000).toFixed(0);
-            return `${minutes}m ${seconds}s`;
-        }
+    function renderAssetInfo(asset) {
+        const panel = document.getElementById('asset-info');
 
-        function formatTime(isoString) {
-            const d = new Date(isoString);
-            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        }
+        const depsHtml = asset.dependencies.length > 0
+            ? asset.dependencies.map(d =>
+                `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
+            ).join('')
+            : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (source asset)</span>';
 
-        // =============================================
-        // Load asset details from existing REST API
-        // =============================================
-        async function loadAssetDetails() {
-            try {
-                const resp = await fetch(`/api/assets/${ASSET_KEY}`);
-                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-                const data = await resp.json();
-                renderAssetInfo(data);
-            } catch (e) {
-                console.error('Failed to load asset details:', e);
-                document.getElementById('asset-info').innerHTML =
-                    '<p style="color: var(--neon-pink); font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">FAILED TO LOAD ASSET DETAILS</p>';
-            }
-        }
+        const dependentsHtml = asset.dependents.length > 0
+            ? asset.dependents.map(d =>
+                `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
+            ).join('')
+            : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (terminal asset)</span>';
 
-        function renderAssetInfo(asset) {
-            const panel = document.getElementById('asset-info');
-
-            const depsHtml = asset.dependencies.length > 0
-                ? asset.dependencies.map(d =>
-                    `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
-                ).join('')
-                : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (source asset)</span>';
-
-            const dependentsHtml = asset.dependents.length > 0
-                ? asset.dependents.map(d =>
-                    `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
-                ).join('')
-                : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (terminal asset)</span>';
-
-            panel.innerHTML = `
-                <div>
-                    <span class="asset-name">${escapeHtml(asset.name)}</span>
-                    <span class="asset-group-badge">${escapeHtml(asset.group.toUpperCase())}</span>
+        panel.innerHTML = `
+            <div>
+                <span class="asset-name">${escapeHtml(asset.name)}</span>
+                <span class="asset-group-badge">${escapeHtml(asset.group.toUpperCase())}</span>
+            </div>
+            ${asset.description ? `<div class="asset-description">${escapeHtml(asset.description)}</div>` : ''}
+            <div class="asset-meta">
+                ${asset.return_type ? `
+                <div class="asset-meta-item">
+                    <div class="asset-meta-label">RETURN TYPE</div>
+                    <div class="asset-meta-value type">${escapeHtml(asset.return_type)}</div>
                 </div>
-                ${asset.description ? `<div class="asset-description">${escapeHtml(asset.description)}</div>` : ''}
-                <div class="asset-meta">
-                    ${asset.return_type ? `
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">RETURN TYPE</div>
-                        <div class="asset-meta-value type">${escapeHtml(asset.return_type)}</div>
-                    </div>
-                    ` : ''}
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">DEPENDENCIES</div>
-                        <div>${depsHtml}</div>
-                    </div>
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">DEPENDENTS</div>
-                        <div>${dependentsHtml}</div>
-                    </div>
+                ` : ''}
+                <div class="asset-meta-item">
+                    <div class="asset-meta-label">DEPENDENCIES</div>
+                    <div>${depsHtml}</div>
                 </div>
-            `;
+                <div class="asset-meta-item">
+                    <div class="asset-meta-label">DEPENDENTS</div>
+                    <div>${dependentsHtml}</div>
+                </div>
+            </div>
+        `;
+    }
+
+    // =============================================
+    // WEBSOCKET CONNECTION (Plan 02)
+    // =============================================
+
+    // --- A. State machine ---
+    let currentState = 'idle'; // 'idle' | 'running' | 'completed' | 'failed'
+    let logCount = 0;
+    const MAX_LOG_ENTRIES = 2000;
+
+    function setState(newState) {
+        currentState = newState;
+        updateUIForState();
+    }
+
+    function updateUIForState() {
+        const logContainer = document.getElementById('log-container');
+        const assetInfo = document.getElementById('asset-info');
+        const statusText = document.getElementById('status-text');
+        const statusIndicator = document.getElementById('status-indicator');
+
+        switch (currentState) {
+            case 'idle':
+                logContainer.style.display = 'none';
+                assetInfo.style.display = 'block';
+                statusText.textContent = 'AWAITING EXECUTION...';
+                statusText.className = 'status-text';
+                statusIndicator.className = 'status-indicator';
+                break;
+            case 'running':
+                logContainer.style.display = 'block';
+                assetInfo.style.display = 'none';
+                statusText.textContent = 'STREAMING LOGS...';
+                statusText.className = 'status-text running';
+                statusIndicator.className = 'status-indicator running';
+                break;
+            case 'completed':
+                logContainer.style.display = 'block';
+                assetInfo.style.display = 'none';
+                statusText.textContent = 'EXECUTION COMPLETE';
+                statusText.className = 'status-text completed';
+                statusIndicator.className = 'status-indicator connected';
+                break;
+            case 'failed':
+                logContainer.style.display = 'block';
+                assetInfo.style.display = 'none';
+                statusText.textContent = 'EXECUTION FAILED';
+                statusText.className = 'status-text failed';
+                statusIndicator.className = 'status-indicator disconnected';
+                break;
+        }
+    }
+
+    // --- B. WebSocket connection ---
+    let ws = null;
+    let reconnectTimer = null;
+
+    function connectWebSocket() {
+        // Clear any pending reconnect
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
         }
 
-        // =============================================
-        // WEBSOCKET CONNECTION (Plan 02)
-        // =============================================
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const url = `${protocol}//${window.location.host}/ws/asset/${ASSET_KEY}`;
 
-        // --- A. State machine ---
-        let currentState = 'idle'; // 'idle' | 'running' | 'completed' | 'failed'
-        let logCount = 0;
-        const MAX_LOG_ENTRIES = 2000;
+        updateConnectionStatus('connecting');
+        ws = new WebSocket(url);
 
-        function setState(newState) {
-            currentState = newState;
-            updateUIForState();
-        }
+        ws.onopen = () => {
+            updateConnectionStatus('connected');
+        };
 
-        function updateUIForState() {
-            const logContainer = document.getElementById('log-container');
-            const assetInfo = document.getElementById('asset-info');
-            const statusText = document.getElementById('status-text');
-            const statusIndicator = document.getElementById('status-indicator');
+        ws.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            handleMessage(message);
+        };
 
-            switch (currentState) {
-                case 'idle':
-                    logContainer.style.display = 'none';
-                    assetInfo.style.display = 'block';
-                    statusText.textContent = 'AWAITING EXECUTION...';
-                    statusText.className = 'status-text';
-                    statusIndicator.className = 'status-indicator';
-                    break;
-                case 'running':
-                    logContainer.style.display = 'block';
-                    assetInfo.style.display = 'none';
-                    statusText.textContent = 'STREAMING LOGS...';
-                    statusText.className = 'status-text running';
-                    statusIndicator.className = 'status-indicator running';
-                    break;
-                case 'completed':
-                    logContainer.style.display = 'block';
-                    assetInfo.style.display = 'none';
-                    statusText.textContent = 'EXECUTION COMPLETE';
-                    statusText.className = 'status-text completed';
-                    statusIndicator.className = 'status-indicator connected';
-                    break;
-                case 'failed':
-                    logContainer.style.display = 'block';
-                    assetInfo.style.display = 'none';
-                    statusText.textContent = 'EXECUTION FAILED';
-                    statusText.className = 'status-text failed';
-                    statusIndicator.className = 'status-indicator disconnected';
-                    break;
-            }
-        }
+        ws.onclose = () => {
+            updateConnectionStatus('disconnected');
+            // Reconnect after 2s
+            reconnectTimer = setTimeout(connectWebSocket, 2000);
+        };
 
-        // --- B. WebSocket connection ---
-        let ws = null;
-        let reconnectTimer = null;
+        ws.onerror = () => {
+            updateConnectionStatus('error');
+        };
+    }
 
-        function connectWebSocket() {
-            // Clear any pending reconnect
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
-                reconnectTimer = null;
-            }
-
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const url = `${protocol}//${window.location.host}/ws/asset/${ASSET_KEY}`;
-
-            updateConnectionStatus('connecting');
-            ws = new WebSocket(url);
-
-            ws.onopen = () => {
-                updateConnectionStatus('connected');
-            };
-
-            ws.onmessage = (event) => {
-                const message = JSON.parse(event.data);
-                handleMessage(message);
-            };
-
-            ws.onclose = () => {
-                updateConnectionStatus('disconnected');
-                // Reconnect after 2s
-                reconnectTimer = setTimeout(connectWebSocket, 2000);
-            };
-
-            ws.onerror = () => {
-                updateConnectionStatus('error');
-            };
-        }
-
-        // --- C. Message handler ---
-        function handleMessage(message) {
-            switch (message.type) {
-                case 'replay':
-                    // Replay buffer entries -- process each as if live
-                    if (message.data && message.data.entries) {
-                        for (const entry of message.data.entries) {
-                            handleMessage(entry);
-                        }
-                    }
-                    break;
-
-                case 'asset_start':
-                    // New execution starting -- clear logs, hide banner, switch to running
-                    clearLogContainer();
-                    hideCompletionBanner();
-                    setState('running');
-                    break;
-
-                case 'asset_log':
-                    // Log entry -- transition to running if not already, append entry
-                    if (currentState !== 'running') {
-                        setState('running');
-                    }
-                    appendLogEntry(message.data);
-                    break;
-
-                case 'asset_complete':
-                    // Execution finished -- set state based on status
-                    setState(message.data.status);
-                    showCompletionBanner(message.data);
-                    break;
-            }
-        }
-
-        // --- D. Log entry rendering (XSS-safe with textContent) ---
-        function appendLogEntry(data) {
-            const container = document.getElementById('log-container');
-
-            // Remove the empty message if present
-            const emptyMsg = document.getElementById('log-empty');
-            if (emptyMsg) {
-                emptyMsg.remove();
-            }
-
-            const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
-
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-
-            // Level badge
-            const levelSpan = document.createElement('span');
-            levelSpan.className = `log-level ${data.level}`;
-            levelSpan.textContent = data.level;
-            entry.appendChild(levelSpan);
-
-            // Timestamp
-            const timeSpan = document.createElement('span');
-            timeSpan.className = 'log-timestamp';
-            timeSpan.textContent = formatTimestamp(data.timestamp);
-            entry.appendChild(timeSpan);
-
-            // Message -- USER-PROVIDED STRING, MUST use textContent for XSS safety
-            const msgSpan = document.createElement('span');
-            msgSpan.className = 'log-message';
-            msgSpan.textContent = data.message;
-            entry.appendChild(msgSpan);
-
-            container.appendChild(entry);
-            logCount++;
-
-            // Cap DOM entries at MAX_LOG_ENTRIES to prevent browser slowdown
-            while (logCount > MAX_LOG_ENTRIES && container.firstChild) {
-                container.removeChild(container.firstChild);
-                logCount--;
-            }
-
-            // Auto-scroll only if user was at bottom
-            if (isAtBottom) {
-                entry.scrollIntoView({ behavior: 'smooth' });
-            }
-        }
-
-        function formatTimestamp(isoString) {
-            try {
-                const d = new Date(isoString);
-                return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            } catch (e) {
-                return isoString || '';
-            }
-        }
-
-        function clearLogContainer() {
-            const container = document.getElementById('log-container');
-            container.innerHTML = '';
-            logCount = 0;
-        }
-
-        // --- Completion banner ---
-        function showCompletionBanner(data) {
-            const banner = document.getElementById('completion-banner');
-            const isSuccess = data.status === 'completed';
-
-            banner.className = `completion-banner ${isSuccess ? 'success' : 'failure'}`;
-            banner.innerHTML = '';
-
-            const icon = document.createElement('span');
-            icon.className = 'banner-icon';
-            icon.textContent = isSuccess ? '\u2714' : '\u2718';
-            banner.appendChild(icon);
-
-            const status = document.createElement('span');
-            status.className = 'banner-status';
-            status.textContent = isSuccess ? 'EXECUTION COMPLETE' : 'EXECUTION FAILED';
-            banner.appendChild(status);
-
-            const duration = document.createElement('span');
-            duration.className = 'banner-duration';
-            duration.textContent = formatDuration(data.duration_ms);
-            banner.appendChild(duration);
-
-            if (!isSuccess && data.error) {
-                const errorDiv = document.createElement('div');
-                errorDiv.className = 'banner-error';
-                errorDiv.style.cssText = 'width: 100%; font-size: 0.75rem; font-weight: 400; margin-top: 0.5rem; font-family: "Space Mono", monospace;';
-                errorDiv.textContent = data.error;
-                banner.appendChild(errorDiv);
-            }
-        }
-
-        function hideCompletionBanner() {
-            const banner = document.getElementById('completion-banner');
-            banner.className = 'completion-banner';
-            banner.innerHTML = '';
-        }
-
-        // --- E. Connection status indicator ---
-        function updateConnectionStatus(status) {
-            const dot = document.getElementById('connection-dot');
-            const label = document.getElementById('connection-label');
-            if (dot) {
-                dot.className = `connection-dot ${status}`;
-            }
-            if (label) {
-                label.textContent = status.toUpperCase();
-            }
-        }
-
-        // --- F. Initial state check via REST ---
-        async function checkInitialState() {
-            try {
-                const resp = await fetch('/api/execution/status');
-                if (!resp.ok) return;
-                const status = await resp.json();
-                if (status.is_running && status.asset_statuses) {
-                    const assetStatus = status.asset_statuses.find(a => a.id === ASSET_KEY);
-                    if (assetStatus) {
-                        if (assetStatus.status === 'running') {
-                            setState('running');
-                        } else if (assetStatus.status === 'completed' || assetStatus.status === 'failed') {
-                            setState(assetStatus.status);
-                        }
+    // --- C. Message handler ---
+    function handleMessage(message) {
+        switch (message.type) {
+            case 'replay':
+                // Replay buffer entries -- process each as if live
+                if (message.data && message.data.entries) {
+                    for (const entry of message.data.entries) {
+                        handleMessage(entry);
                     }
                 }
-            } catch (e) {
-                console.error('Failed to check execution status:', e);
+                break;
+
+            case 'asset_start':
+                // New execution starting -- clear logs, hide banner, switch to running
+                clearLogContainer();
+                hideCompletionBanner();
+                setState('running');
+                break;
+
+            case 'asset_log':
+                // Log entry -- transition to running if not already, append entry
+                if (currentState !== 'running') {
+                    setState('running');
+                }
+                appendLogEntry(message.data);
+                break;
+
+            case 'asset_complete':
+                // Execution finished -- set state based on status
+                setState(message.data.status);
+                showCompletionBanner(message.data);
+                break;
+        }
+    }
+
+    // --- D. Log entry rendering (XSS-safe with textContent) ---
+    function appendLogEntry(data) {
+        const container = document.getElementById('log-container');
+
+        // Remove the empty message if present
+        const emptyMsg = document.getElementById('log-empty');
+        if (emptyMsg) {
+            emptyMsg.remove();
+        }
+
+        const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+
+        const entry = document.createElement('div');
+        entry.className = 'log-entry';
+
+        // Level badge
+        const levelSpan = document.createElement('span');
+        levelSpan.className = `log-level ${data.level}`;
+        levelSpan.textContent = data.level;
+        entry.appendChild(levelSpan);
+
+        // Timestamp
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'log-timestamp';
+        timeSpan.textContent = formatTimestamp(data.timestamp);
+        entry.appendChild(timeSpan);
+
+        // Message -- USER-PROVIDED STRING, MUST use textContent for XSS safety
+        const msgSpan = document.createElement('span');
+        msgSpan.className = 'log-message';
+        msgSpan.textContent = data.message;
+        entry.appendChild(msgSpan);
+
+        container.appendChild(entry);
+        logCount++;
+
+        // Cap DOM entries at MAX_LOG_ENTRIES to prevent browser slowdown
+        while (logCount > MAX_LOG_ENTRIES && container.firstChild) {
+            container.removeChild(container.firstChild);
+            logCount--;
+        }
+
+        // Auto-scroll only if user was at bottom
+        if (isAtBottom) {
+            entry.scrollIntoView({ behavior: 'smooth' });
+        }
+    }
+
+    function formatTimestamp(isoString) {
+        try {
+            const d = new Date(isoString);
+            return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch (e) {
+            return isoString || '';
+        }
+    }
+
+    function clearLogContainer() {
+        const container = document.getElementById('log-container');
+        container.innerHTML = '';
+        logCount = 0;
+    }
+
+    // --- Completion banner ---
+    function showCompletionBanner(data) {
+        const banner = document.getElementById('completion-banner');
+        const isSuccess = data.status === 'completed';
+
+        banner.className = `completion-banner ${isSuccess ? 'success' : 'failure'}`;
+        banner.innerHTML = '';
+
+        const icon = document.createElement('span');
+        icon.className = 'banner-icon';
+        icon.textContent = isSuccess ? '\u2714' : '\u2718';
+        banner.appendChild(icon);
+
+        const status = document.createElement('span');
+        status.className = 'banner-status';
+        status.textContent = isSuccess ? 'EXECUTION COMPLETE' : 'EXECUTION FAILED';
+        banner.appendChild(status);
+
+        const duration = document.createElement('span');
+        duration.className = 'banner-duration';
+        duration.textContent = formatDuration(data.duration_ms);
+        banner.appendChild(duration);
+
+        if (!isSuccess && data.error) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'banner-error';
+            errorDiv.style.cssText = 'width: 100%; font-size: 0.75rem; font-weight: 400; margin-top: 0.5rem; font-family: "Space Mono", monospace;';
+            errorDiv.textContent = data.error;
+            banner.appendChild(errorDiv);
+        }
+    }
+
+    function hideCompletionBanner() {
+        const banner = document.getElementById('completion-banner');
+        banner.className = 'completion-banner';
+        banner.innerHTML = '';
+    }
+
+    // --- E. Connection status indicator ---
+    function updateConnectionStatus(status) {
+        const dot = document.getElementById('connection-dot');
+        const label = document.getElementById('connection-label');
+        if (dot) {
+            dot.className = `connection-dot ${status}`;
+        }
+        if (label) {
+            label.textContent = status.toUpperCase();
+        }
+    }
+
+    // --- F. Initial state check via REST ---
+    async function checkInitialState() {
+        try {
+            const resp = await fetch('/api/execution/status');
+            if (!resp.ok) return;
+            const status = await resp.json();
+            if (status.is_running && status.asset_statuses) {
+                const assetStatus = status.asset_statuses.find(a => a.id === ASSET_KEY);
+                if (assetStatus) {
+                    if (assetStatus.status === 'running') {
+                        setState('running');
+                    } else if (assetStatus.status === 'completed' || assetStatus.status === 'failed') {
+                        setState(assetStatus.status);
+                    }
+                }
             }
+        } catch (e) {
+            console.error('Failed to check execution status:', e);
         }
+    }
 
-        // --- G. Action buttons ---
-        function refocusMainWindow() {
-            // window.open with a named target focuses that window (user-gesture context)
-            // Hash-only change avoids reloading the graph page
-            window.open('/#refocus', 'lattice_graph');
-        }
+    // --- G. Action buttons ---
+    function refocusMainWindow() {
+        // window.open with a named target focuses that window (user-gesture context)
+        // Hash-only change avoids reloading the graph page
+        window.open('/#refocus', 'lattice_graph');
+    }
 
-        function openRunHistory() {
-            window.open('/asset/' + ASSET_KEY, '_blank');
-        }
+    function openRunHistory() {
+        window.open('/asset/' + ASSET_KEY, '_blank');
+    }
 
-        // =============================================
-        // Initialize
-        // =============================================
-        // 1. Load asset details (from Plan 01)
-        loadAssetDetails();
-        // 2. Check execution status to set initial state
-        checkInitialState().then(() => {
-            // 3. Connect WebSocket AFTER initial state is determined
-            connectWebSocket();
-        });
-        // 4. Refocus button uses BroadcastChannel (works regardless of window.opener)
-    </script>
-</body>
-</html>
+    // =============================================
+    // Initialize
+    // =============================================
+    // 1. Load asset details (from Plan 01)
+    loadAssetDetails();
+    // 2. Check execution status to set initial state
+    checkInitialState().then(() => {
+        // 3. Connect WebSocket AFTER initial state is determined
+        connectWebSocket();
+    });
+    // 4. Refocus button uses BroadcastChannel (works regardless of window.opener)
+</script>
+{% endblock %}
