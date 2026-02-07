@@ -60,23 +60,23 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | — | Pending |
-| SIDE-02 | — | Pending |
-| SIDE-03 | — | Pending |
-| RUNS-01 | — | Pending |
-| RUNS-02 | — | Pending |
-| RUNS-03 | — | Pending |
-| RUNS-04 | — | Pending |
-| RECV-01 | — | Pending |
-| RECV-02 | — | Pending |
-| RECV-03 | — | Pending |
-| CLEN-01 | — | Pending |
+| SIDE-01 | Phase 4 | Pending |
+| SIDE-02 | Phase 4 | Pending |
+| SIDE-03 | Phase 4 | Pending |
+| RUNS-01 | Phase 5 | Pending |
+| RUNS-02 | Phase 5 | Pending |
+| RUNS-03 | Phase 5 | Pending |
+| RUNS-04 | Phase 5 | Pending |
+| RECV-01 | Phase 6 | Pending |
+| RECV-02 | Phase 6 | Pending |
+| RECV-03 | Phase 5 | Pending |
+| CLEN-01 | Phase 7 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 (pending roadmap creation)
+- Mapped to phases: 11
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-07*
-*Last updated: 2026-02-07 after initial definition*
+*Last updated: 2026-02-07 after roadmap creation*
