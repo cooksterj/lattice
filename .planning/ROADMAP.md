@@ -41,7 +41,7 @@ Plans:
 
 **Milestone Goal:** Replace popup windows with sidebar-driven full-page navigation and add failed asset re-execution with downstream propagation.
 
-- [ ] **Phase 4: Template Foundation & Sidebar** - Base template with persistent sidebar on all pages
+- [x] **Phase 4: Template Foundation & Sidebar** - Base template with persistent sidebar on all pages
 - [ ] **Phase 5: Run Monitoring & Live Logs** - Active runs page, history re-parenting, live logs as full page
 - [ ] **Phase 6: Graph Selection & Failure Recovery** - Click-to-select on graph, context-aware Execute for re-runs
 - [ ] **Phase 7: Popup Cleanup** - Remove all v1 popup infrastructure
@@ -60,8 +60,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01-PLAN.md — Create base.html with sidebar, sidebar CSS, and current_page route context
-- [ ] 04-02-PLAN.md — Migrate all 4 templates to extend base.html + visual verification
+- [x] 04-01-PLAN.md — Create base.html with sidebar, sidebar CSS, and current_page route context
+- [x] 04-02-PLAN.md — Migrate all 4 templates to extend base.html + visual verification
 
 ### Phase 5: Run Monitoring & Live Logs
 **Goal**: Users can monitor active execution progress and view live logs as full pages within the sidebar layout
@@ -115,7 +115,7 @@ Plans:
 | 1. Streaming Infrastructure | v1.0 | 3/3 | Complete | 2026-02-06 |
 | 2. Asset Live Monitoring | v1.0 | 2/2 | Complete | 2026-02-06 |
 | 3. Graph Window Integration | v1.0 | 2/2 | Complete | 2026-02-06 |
-| 4. Template Foundation & Sidebar | v2.0 | 0/2 | Not started | - |
+| 4. Template Foundation & Sidebar | v2.0 | 2/2 | Complete | 2026-02-07 |
 | 5. Run Monitoring & Live Logs | v2.0 | 0/TBD | Not started | - |
 | 6. Graph Selection & Failure Recovery | v2.0 | 0/TBD | Not started | - |
 | 7. Popup Cleanup | v2.0 | 0/TBD | Not started | - |

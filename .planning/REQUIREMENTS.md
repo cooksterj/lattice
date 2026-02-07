@@ -7,9 +7,9 @@
 
 ### Sidebar Navigation
 
-- [ ] **SIDE-01**: Persistent icon rail sidebar on all pages with 3 icons (graph/home, active runs, run history) — ~48-56px wide with tooltips
-- [ ] **SIDE-02**: Active page icon is visually highlighted in the sidebar
-- [ ] **SIDE-03**: All views are full-page navigation with browser back/forward support
+- [x] **SIDE-01**: Persistent icon rail sidebar on all pages with 3 icons (graph/home, active runs, run history) — ~48-56px wide with tooltips
+- [x] **SIDE-02**: Active page icon is visually highlighted in the sidebar
+- [x] **SIDE-03**: All views are full-page navigation with browser back/forward support
 
 ### Run Monitoring
 
@@ -60,9 +60,9 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| SIDE-01 | Phase 4 | Pending |
-| SIDE-02 | Phase 4 | Pending |
-| SIDE-03 | Phase 4 | Pending |
+| SIDE-01 | Phase 4 | Complete |
+| SIDE-02 | Phase 4 | Complete |
+| SIDE-03 | Phase 4 | Complete |
 | RUNS-01 | Phase 5 | Pending |
 | RUNS-02 | Phase 5 | Pending |
 | RUNS-03 | Phase 5 | Pending |
