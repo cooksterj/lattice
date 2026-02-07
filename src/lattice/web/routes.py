@@ -49,6 +49,11 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
         """Serve the main visualization page."""
         return templates.TemplateResponse(request, "index.html", {"current_page": "graph"})
 
+    @router.get("/runs", response_class=HTMLResponse)
+    async def runs_page(request: Request) -> HTMLResponse:
+        """Serve the active runs monitoring page."""
+        return templates.TemplateResponse(request, "runs.html", {"current_page": "runs"})
+
     @router.get("/asset/{key:path}/live", response_class=HTMLResponse)
     async def asset_live(request: Request, key: str) -> HTMLResponse:
         """Serve the asset live monitoring page."""

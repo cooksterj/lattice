@@ -1,0 +1,425 @@
+{% extends "base.html" %}
+{% block title %}Active Runs{% endblock %}
+{% block body_class %}overflow-auto{% endblock %}
+{% block content %}
+    <div class="runs-page">
+        <!-- Page header with title and theme toggle -->
+        <div class="runs-header">
+            <div class="runs-header-left">
+                <span class="runs-title">ACTIVE RUNS</span>
+                <span id="runs-mode-badge" class="runs-mode-badge">LOADING...</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="theme-toggle" class="header-btn" title="Toggle theme">
+                    <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <svg class="w-5 h-5 moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Live mode content (hidden when idle) -->
+        <div id="live-panel" style="display:none;">
+            <div class="runs-progress-bar">
+                <span id="progress-text">0/0 ASSETS</span>
+                <div class="runs-progress-track">
+                    <div id="progress-fill" class="runs-progress-fill"></div>
+                </div>
+            </div>
+            <div id="asset-list" class="runs-asset-list">
+                <!-- Asset rows populated dynamically -->
+            </div>
+        </div>
+
+        <!-- Idle mode content (hidden when live) -->
+        <div id="idle-panel" style="display:none;">
+            <div id="last-run-summary" class="runs-last-run">
+                <!-- Last run summary card populated dynamically -->
+            </div>
+            <div class="runs-idle-message">
+                <span>NO ACTIVE EXECUTION</span>
+                <span class="runs-idle-hint">Start an execution from the Graph page</span>
+            </div>
+        </div>
+
+        <!-- Loading state -->
+        <div id="loading-panel" class="runs-loading">
+            CONNECTING...
+        </div>
+    </div>
+{% endblock %}
+{% block scripts %}
+<script>
+    // =============================================
+    // Theme toggle (same pattern as other pages)
+    // =============================================
+    const themeToggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
+
+    function updateThemeIcons() {
+        const isDark = html.classList.contains('dark');
+        themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
+        themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
+    }
+
+    themeToggle.addEventListener('click', function() {
+        html.classList.toggle('dark');
+        html.classList.toggle('light');
+        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+        updateThemeIcons();
+    });
+
+    updateThemeIcons();
+
+    // =============================================
+    // State management
+    // =============================================
+    const STATES = { LOADING: 'loading', LIVE: 'live', IDLE: 'idle' };
+    let currentMode = STATES.LOADING;
+    let ws = null;
+    let reconnectTimer = null;
+    let assetStatuses = {}; // key -> {status, started_at, duration_ms, error}
+    let totalAssets = 0;
+
+    // =============================================
+    // Helpers
+    // =============================================
+    async function fetchJSON(url) {
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
+
+    function formatDuration(ms) {
+        if (ms == null) return '';
+        if (ms < 1000) return Math.round(ms) + 'ms';
+        if (ms < 60000) return (ms / 1000).toFixed(1) + 's';
+        var minutes = Math.floor(ms / 60000);
+        var seconds = ((ms % 60000) / 1000).toFixed(0);
+        return minutes + 'm ' + seconds + 's';
+    }
+
+    function formatTime(isoString) {
+        try {
+            var d = new Date(isoString);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        } catch (e) {
+            return isoString || '';
+        }
+    }
+
+    // =============================================
+    // Mode transitions
+    // =============================================
+    function setMode(mode) {
+        currentMode = mode;
+        var loadingPanel = document.getElementById('loading-panel');
+        var livePanel = document.getElementById('live-panel');
+        var idlePanel = document.getElementById('idle-panel');
+        var badge = document.getElementById('runs-mode-badge');
+
+        loadingPanel.style.display = 'none';
+        livePanel.style.display = 'none';
+        idlePanel.style.display = 'none';
+
+        switch (mode) {
+            case STATES.LOADING:
+                loadingPanel.style.display = 'flex';
+                badge.textContent = 'LOADING...';
+                badge.className = 'runs-mode-badge';
+                break;
+            case STATES.LIVE:
+                livePanel.style.display = 'block';
+                badge.textContent = 'LIVE';
+                badge.className = 'runs-mode-badge live';
+                break;
+            case STATES.IDLE:
+                idlePanel.style.display = 'block';
+                badge.textContent = 'IDLE';
+                badge.className = 'runs-mode-badge idle';
+                break;
+        }
+    }
+
+    // =============================================
+    // Live mode: asset list rendering
+    // =============================================
+    function renderAssetList() {
+        var container = document.getElementById('asset-list');
+        container.innerHTML = '';
+
+        var keys = Object.keys(assetStatuses).sort();
+        var completed = 0;
+        var failed = 0;
+
+        for (var i = 0; i < keys.length; i++) {
+            var key = keys[i];
+            var info = assetStatuses[key];
+
+            if (info.status === 'completed') completed++;
+            if (info.status === 'failed') { completed++; failed++; }
+
+            var row = document.createElement('a');
+            row.className = 'runs-asset-row';
+            row.href = '/asset/' + encodeURIComponent(key) + '/live';
+
+            var idSpan = document.createElement('span');
+            idSpan.className = 'asset-id';
+            idSpan.textContent = key;
+            row.appendChild(idSpan);
+
+            var statusBadge = document.createElement('span');
+            statusBadge.className = 'status-badge ' + info.status;
+            statusBadge.textContent = info.status.toUpperCase();
+            row.appendChild(statusBadge);
+
+            var durationSpan = document.createElement('span');
+            durationSpan.className = 'duration';
+            durationSpan.textContent = formatDuration(info.duration_ms);
+            row.appendChild(durationSpan);
+
+            container.appendChild(row);
+        }
+
+        // Update progress
+        var done = completed;
+        var total = totalAssets > 0 ? totalAssets : keys.length;
+        var progressText = document.getElementById('progress-text');
+        progressText.textContent = done + '/' + total + ' ASSETS';
+
+        var progressFill = document.getElementById('progress-fill');
+        var pct = total > 0 ? (done / total * 100) : 0;
+        progressFill.style.width = pct + '%';
+
+        if (failed > 0) {
+            progressFill.classList.add('has-failures');
+        } else {
+            progressFill.classList.remove('has-failures');
+        }
+    }
+
+    function enterLiveMode(status) {
+        // Populate initial asset statuses from REST response
+        assetStatuses = {};
+        if (status && status.asset_statuses) {
+            for (var i = 0; i < status.asset_statuses.length; i++) {
+                var a = status.asset_statuses[i];
+                assetStatuses[a.id] = {
+                    status: a.status,
+                    started_at: a.started_at,
+                    duration_ms: a.duration_ms,
+                    error: a.error
+                };
+            }
+        }
+        totalAssets = (status && status.total_assets) ? status.total_assets : Object.keys(assetStatuses).length;
+        renderAssetList();
+        setMode(STATES.LIVE);
+    }
+
+    // =============================================
+    // Idle mode: last run summary
+    // =============================================
+    async function enterIdleMode() {
+        setMode(STATES.IDLE);
+        try {
+            var data = await fetchJSON('/api/history/runs?limit=1');
+            renderLastRun(data);
+        } catch (e) {
+            renderNoRuns();
+        }
+    }
+
+    function renderLastRun(data) {
+        var container = document.getElementById('last-run-summary');
+        container.innerHTML = '';
+
+        if (!data.runs || data.runs.length === 0) {
+            renderNoRuns();
+            return;
+        }
+
+        var run = data.runs[0];
+        var isSuccess = run.status === 'completed';
+
+        // Header row
+        var header = document.createElement('div');
+        header.style.cssText = 'display:flex; align-items:center; justify-content:space-between; margin-bottom:1rem;';
+
+        var titleEl = document.createElement('span');
+        titleEl.style.cssText = "font-family:'Orbitron',sans-serif; font-size:0.75rem; font-weight:600; letter-spacing:0.15em; color:var(--text-secondary);";
+        titleEl.textContent = 'LAST COMPLETED RUN';
+        header.appendChild(titleEl);
+
+        var statusEl = document.createElement('span');
+        statusEl.className = 'status-badge ' + run.status;
+        statusEl.textContent = run.status.toUpperCase();
+        header.appendChild(statusEl);
+
+        container.appendChild(header);
+
+        // Run info grid
+        var grid = document.createElement('div');
+        grid.style.cssText = 'display:grid; grid-template-columns:1fr 1fr; gap:1rem;';
+
+        var items = [
+            { label: 'RUN ID', value: run.run_id.substring(0, 8), color: 'var(--text-primary)' },
+            { label: 'DURATION', value: formatDuration(run.duration_ms), color: 'var(--neon-cyan)' },
+            { label: 'ASSETS', value: run.completed_count + '/' + run.total_assets + ' completed', color: 'var(--text-primary)' },
+            { label: 'STARTED', value: formatTime(run.started_at), color: 'var(--text-primary)' }
+        ];
+
+        if (run.failed_count > 0) {
+            items.push({ label: 'FAILED', value: run.failed_count + ' asset(s)', color: 'var(--neon-pink)' });
+        }
+        if (run.target) {
+            items.push({ label: 'TARGET', value: run.target, color: 'var(--neon-yellow)' });
+        }
+
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            var cell = document.createElement('div');
+
+            var label = document.createElement('div');
+            label.style.cssText = "font-family:'Orbitron',sans-serif; font-size:0.6rem; font-weight:600; letter-spacing:0.1em; color:var(--text-secondary); margin-bottom:0.25rem;";
+            label.textContent = item.label;
+            cell.appendChild(label);
+
+            var val = document.createElement('div');
+            val.style.cssText = 'font-size:0.85rem; color:' + item.color + ';';
+            val.textContent = item.value;
+            cell.appendChild(val);
+
+            grid.appendChild(cell);
+        }
+
+        container.appendChild(grid);
+    }
+
+    function renderNoRuns() {
+        var container = document.getElementById('last-run-summary');
+        container.innerHTML = '';
+        var msg = document.createElement('div');
+        msg.style.cssText = "text-align:center; padding:2rem; color:var(--text-secondary); font-family:'Orbitron',sans-serif; font-size:0.8rem; letter-spacing:0.15em;";
+        msg.textContent = 'NO PREVIOUS RUNS';
+        container.appendChild(msg);
+    }
+
+    // =============================================
+    // WebSocket connection
+    // =============================================
+    function connectWebSocket() {
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
+
+        var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        var url = protocol + '//' + window.location.host + '/ws/execution';
+
+        ws = new WebSocket(url);
+
+        ws.onopen = function() {
+            // Connected
+        };
+
+        ws.onmessage = function(event) {
+            var message = JSON.parse(event.data);
+            handleMessage(message);
+        };
+
+        ws.onclose = function() {
+            reconnectTimer = setTimeout(connectWebSocket, 2000);
+        };
+
+        ws.onerror = function() {
+            // Errors will trigger onclose
+        };
+    }
+
+    function handleMessage(message) {
+        switch (message.type) {
+            case 'asset_start':
+                handleAssetStart(message.data);
+                break;
+            case 'asset_complete':
+                handleAssetComplete(message.data);
+                break;
+            case 'execution_complete':
+                handleExecutionComplete(message.data);
+                break;
+            // memory_update, partition_start, partition_complete: ignored on this page
+        }
+    }
+
+    function handleAssetStart(data) {
+        var assetId = data.asset_id;
+
+        // If we are in idle mode, transition to live mode
+        if (currentMode !== STATES.LIVE) {
+            assetStatuses = {};
+            totalAssets = 0;
+        }
+
+        assetStatuses[assetId] = {
+            status: 'running',
+            started_at: new Date().toISOString(),
+            duration_ms: null,
+            error: null
+        };
+
+        if (currentMode !== STATES.LIVE) {
+            totalAssets = Object.keys(assetStatuses).length;
+            setMode(STATES.LIVE);
+        }
+
+        renderAssetList();
+    }
+
+    function handleAssetComplete(data) {
+        var assetId = data.asset_id;
+        assetStatuses[assetId] = {
+            status: data.status,
+            started_at: assetStatuses[assetId] ? assetStatuses[assetId].started_at : null,
+            duration_ms: data.duration_ms,
+            error: data.error
+        };
+        renderAssetList();
+    }
+
+    function handleExecutionComplete(data) {
+        // Brief pause so user sees the final state, then transition to idle
+        setTimeout(function() {
+            enterIdleMode();
+        }, 1500);
+    }
+
+    // =============================================
+    // Initialization
+    // =============================================
+    async function initialize() {
+        // 1. Connect WebSocket FIRST (per research pitfall #1)
+        connectWebSocket();
+
+        // 2. Check REST status to determine initial mode
+        try {
+            var status = await fetchJSON('/api/execution/status');
+            if (status.is_running) {
+                enterLiveMode(status);
+            } else {
+                await enterIdleMode();
+            }
+        } catch (e) {
+            console.error('Failed to fetch execution status:', e);
+            await enterIdleMode();
+        }
+    }
+
+    initialize();
+</script>
+{% endblock %}
