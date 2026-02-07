@@ -4,8 +4,539 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LATTICE // LIVE // {{ asset_key }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css?v=9">
+    <style>
+        body {
+            overflow: auto;
+        }
+
+        .live-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 6rem 2rem 2rem;
+        }
+
+        /* Compact header for popup window */
+        .live-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 50;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: linear-gradient(
+                to bottom,
+                var(--bg-void) 0%,
+                rgba(10, 10, 15, 0.9) 70%,
+                transparent 100%
+            );
+        }
+
+        .light .live-header {
+            background: linear-gradient(
+                to bottom,
+                var(--bg-void) 0%,
+                rgba(240, 240, 248, 0.9) 70%,
+                transparent 100%
+            );
+        }
+
+        .live-header-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .live-header-title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: var(--text-glow);
+            text-shadow: 0 0 8px var(--neon-cyan-glow);
+        }
+
+        .light .live-header-title {
+            color: var(--text-primary);
+            text-shadow: none;
+        }
+
+        .live-header-separator {
+            color: var(--neon-pink);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 700;
+        }
+
+        .live-header-asset {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--neon-cyan);
+        }
+
+        .live-badge {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            font-weight: 700;
+            letter-spacing: 0.15em;
+            color: var(--neon-pink);
+            background: rgba(196, 82, 112, 0.12);
+            border: 1px solid rgba(196, 82, 112, 0.3);
+            padding: 0.15rem 0.5rem;
+            margin-left: 0.5rem;
+        }
+
+        /* Asset info panel */
+        .asset-info-panel {
+            background: rgba(18, 18, 26, 0.8);
+            border: 1px solid var(--border-dim);
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
+            clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+        }
+
+        .light .asset-info-panel {
+            background: rgba(250, 250, 252, 0.9);
+        }
+
+        .asset-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--neon-cyan);
+            letter-spacing: 0.05em;
+        }
+
+        .asset-group-badge {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--neon-purple);
+            background: rgba(110, 90, 142, 0.15);
+            border: 1px solid rgba(110, 90, 142, 0.3);
+            padding: 0.2rem 0.6rem;
+            margin-left: 0.75rem;
+            vertical-align: middle;
+        }
+
+        .asset-description {
+            color: var(--text-secondary);
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .asset-meta {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .asset-meta-item {
+            font-size: 0.8rem;
+        }
+
+        .asset-meta-label {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.25rem;
+        }
+
+        .asset-meta-value {
+            color: var(--text-primary);
+        }
+
+        .asset-meta-value.type {
+            color: var(--neon-yellow);
+        }
+
+        .dep-link {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.8rem;
+            color: var(--neon-yellow);
+            background: rgba(184, 158, 74, 0.1);
+            border: 1px solid rgba(184, 158, 74, 0.25);
+            margin: 0.25rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .dep-link:hover {
+            background: rgba(184, 158, 74, 0.2);
+            border-color: rgba(184, 158, 74, 0.4);
+        }
+
+        /* Status bar */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem 1rem;
+            background: rgba(18, 18, 26, 0.6);
+            border: 1px solid var(--border-dim);
+            margin-bottom: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .light .status-bar {
+            background: rgba(250, 250, 252, 0.8);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-secondary);
+        }
+
+        .status-indicator.connected {
+            background: var(--neon-cyan);
+            box-shadow: 0 0 6px var(--neon-cyan-glow);
+        }
+
+        .status-indicator.disconnected {
+            background: var(--neon-pink);
+            box-shadow: 0 0 6px var(--neon-pink-glow);
+        }
+
+        .status-indicator.running {
+            background: var(--neon-yellow);
+            box-shadow: 0 0 6px rgba(184, 158, 74, 0.5);
+            animation: statusPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .status-text {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+        }
+
+        .status-text.running {
+            color: var(--neon-yellow);
+        }
+
+        .status-text.completed {
+            color: var(--neon-cyan);
+        }
+
+        .status-text.failed {
+            color: var(--neon-pink);
+        }
+
+        /* Log container */
+        .log-container {
+            max-height: calc(100vh - 350px);
+            overflow-y: auto;
+            background: rgba(10, 10, 15, 0.9);
+            border: 1px solid var(--border-dim);
+            padding: 0.5rem;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        .light .log-container {
+            background: rgba(245, 244, 247, 0.9);
+        }
+
+        .log-entry {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.35rem 0.5rem;
+            border-bottom: 1px solid var(--border-dim);
+            line-height: 1.5;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-level {
+            font-weight: 600;
+            width: 55px;
+            flex-shrink: 0;
+            text-align: right;
+        }
+
+        .log-level.INFO { color: var(--neon-cyan); }
+        .log-level.WARNING { color: var(--neon-yellow); }
+        .log-level.ERROR { color: var(--neon-pink); }
+        .log-level.DEBUG { color: var(--text-secondary); }
+
+        .log-timestamp {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            flex-shrink: 0;
+            width: 80px;
+        }
+
+        .log-message {
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .log-empty {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.8rem;
+            letter-spacing: 0.15em;
+        }
+
+        /* Completion banner */
+        .completion-banner {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            margin-bottom: 1rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+        }
+
+        .completion-banner.success {
+            display: flex;
+            background: rgba(104, 181, 194, 0.1);
+            border: 1px solid rgba(104, 181, 194, 0.3);
+            color: var(--neon-cyan);
+        }
+
+        .completion-banner.failure {
+            display: flex;
+            background: rgba(196, 82, 112, 0.1);
+            border: 1px solid rgba(196, 82, 112, 0.3);
+            color: var(--neon-pink);
+        }
+
+        /* Action buttons area */
+        .action-buttons {
+            display: none;
+            gap: 0.75rem;
+            margin-top: 1rem;
+            justify-content: flex-end;
+        }
+
+        .action-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid var(--border-dim);
+            background: transparent;
+            color: var(--text-secondary);
+            clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+        }
+
+        .action-btn:hover {
+            color: var(--neon-cyan);
+            border-color: var(--neon-cyan);
+            background: rgba(90, 158, 170, 0.08);
+        }
+    </style>
 </head>
 <body class="font-mono">
-    <div id="asset-key-data" data-key="{{ asset_key }}">LIVE</div>
+    <!-- Compact header for live monitoring window -->
+    <div class="live-header">
+        <div class="live-header-left">
+            <span class="live-header-title">LATTICE</span>
+            <span class="live-header-separator">//</span>
+            <span class="live-header-asset" id="header-asset-name">{{ asset_key }}</span>
+            <span class="live-badge">LIVE</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="theme-toggle" class="header-btn" title="Toggle theme">
+                <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                </svg>
+                <svg class="w-5 h-5 moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <div class="live-container">
+        <!-- Asset info panel -->
+        <div class="asset-info-panel" id="asset-info">
+            <div style="color: var(--text-secondary); font-family: Orbitron, sans-serif; letter-spacing: 0.15em; font-size: 0.85rem;">
+                LOADING ASSET DATA...
+            </div>
+        </div>
+
+        <!-- COMPLETION BANNER (Plan 03) -->
+        <div id="completion-banner" class="completion-banner"></div>
+
+        <!-- Status bar -->
+        <div class="status-bar">
+            <div id="status-indicator" class="status-indicator"></div>
+            <div id="status-text" class="status-text">AWAITING EXECUTION...</div>
+        </div>
+
+        <!-- Log container (hidden in idle state, shown when running) -->
+        <div id="log-container" class="log-container" style="display: none;">
+            <div class="log-empty" id="log-empty">NO LOG ENTRIES</div>
+        </div>
+
+        <!-- ACTION BUTTONS (Plan 03) -->
+        <div id="action-buttons" class="action-buttons"></div>
+    </div>
+
+    <!-- Corner decorations -->
+    <div class="corner-decor top-left"></div>
+    <div class="corner-decor top-right"></div>
+    <div class="corner-decor bottom-left"></div>
+    <div class="corner-decor bottom-right"></div>
+
+    <script>
+        const ASSET_KEY = "{{ asset_key }}";
+
+        // =============================================
+        // Theme toggle (same pattern as asset_detail.html)
+        // =============================================
+        const themeToggle = document.getElementById('theme-toggle');
+        const html = document.documentElement;
+
+        function updateThemeIcons() {
+            const isDark = html.classList.contains('dark');
+            themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
+            themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
+        }
+
+        themeToggle.addEventListener('click', () => {
+            html.classList.toggle('dark');
+            html.classList.toggle('light');
+            localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
+            updateThemeIcons();
+        });
+
+        const savedTheme = localStorage.getItem('theme');
+        if (savedTheme === 'light') {
+            html.classList.remove('dark');
+            html.classList.add('light');
+        }
+        updateThemeIcons();
+
+        // =============================================
+        // Helpers
+        // =============================================
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDuration(ms) {
+            if (ms < 1000) return `${ms.toFixed(1)}ms`;
+            return `${(ms / 1000).toFixed(2)}s`;
+        }
+
+        function formatTime(isoString) {
+            const d = new Date(isoString);
+            return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        // =============================================
+        // Load asset details from existing REST API
+        // =============================================
+        async function loadAssetDetails() {
+            try {
+                const resp = await fetch(`/api/assets/${ASSET_KEY}`);
+                if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                const data = await resp.json();
+                renderAssetInfo(data);
+            } catch (e) {
+                console.error('Failed to load asset details:', e);
+                document.getElementById('asset-info').innerHTML =
+                    '<p style="color: var(--neon-pink); font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">FAILED TO LOAD ASSET DETAILS</p>';
+            }
+        }
+
+        function renderAssetInfo(asset) {
+            const panel = document.getElementById('asset-info');
+
+            const depsHtml = asset.dependencies.length > 0
+                ? asset.dependencies.map(d =>
+                    `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
+                ).join('')
+                : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (source asset)</span>';
+
+            const dependentsHtml = asset.dependents.length > 0
+                ? asset.dependents.map(d =>
+                    `<a href="/asset/${encodeURIComponent(d)}" class="dep-link">${escapeHtml(d)}</a>`
+                ).join('')
+                : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (terminal asset)</span>';
+
+            panel.innerHTML = `
+                <div>
+                    <span class="asset-name">${escapeHtml(asset.name)}</span>
+                    <span class="asset-group-badge">${escapeHtml(asset.group.toUpperCase())}</span>
+                </div>
+                ${asset.description ? `<div class="asset-description">${escapeHtml(asset.description)}</div>` : ''}
+                <div class="asset-meta">
+                    ${asset.return_type ? `
+                    <div class="asset-meta-item">
+                        <div class="asset-meta-label">RETURN TYPE</div>
+                        <div class="asset-meta-value type">${escapeHtml(asset.return_type)}</div>
+                    </div>
+                    ` : ''}
+                    <div class="asset-meta-item">
+                        <div class="asset-meta-label">DEPENDENCIES</div>
+                        <div>${depsHtml}</div>
+                    </div>
+                    <div class="asset-meta-item">
+                        <div class="asset-meta-label">DEPENDENTS</div>
+                        <div>${dependentsHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // =============================================
+        // WEBSOCKET CONNECTION (Plan 02)
+        // =============================================
+        // WebSocket connection to /ws/asset/{key} will be added here.
+        // It will handle message types: replay, asset_start, asset_log, asset_complete.
+        // The state machine (idle -> running -> completed/failed) will drive UI updates.
+
+        // =============================================
+        // Initialize
+        // =============================================
+        loadAssetDetails();
+    </script>
 </body>
 </html>
