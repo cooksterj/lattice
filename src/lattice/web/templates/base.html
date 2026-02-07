@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LATTICE // {% block title %}{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/styles.css?v=10">
+    {% block head_extra %}{% endblock %}
+</head>
+<body class="font-mono {% block body_class %}{% endblock %}">
+    {# Sidebar navigation rail #}
+    <nav class="sidebar-rail">
+        <a href="/" class="sidebar-icon {% if current_page == 'graph' %}active{% endif %}" title="Graph">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <rect x="2" y="2" width="8" height="8" rx="1"/>
+                <rect x="14" y="2" width="8" height="8" rx="1"/>
+                <rect x="2" y="14" width="8" height="8" rx="1"/>
+                <rect x="14" y="14" width="8" height="8" rx="1"/>
+                <line x1="10" y1="6" x2="14" y2="6"/>
+                <line x1="6" y1="10" x2="6" y2="14"/>
+            </svg>
+        </a>
+        <a href="/runs" class="sidebar-icon {% if current_page == 'runs' %}active{% endif %}" title="Active Runs">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+        </a>
+        <a href="/history" class="sidebar-icon {% if current_page == 'history' %}active{% endif %}" title="Run History">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
+                <circle cx="12" cy="12" r="10"/>
+                <polyline points="12 6 12 12 16 14"/>
+            </svg>
+        </a>
+    </nav>
+
+    {# Main content area offset by sidebar width #}
+    <main class="main-content {% block main_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </main>
+
+    {# Corner decorations #}
+    <div class="corner-decor top-left"></div>
+    <div class="corner-decor top-right"></div>
+    <div class="corner-decor bottom-left"></div>
+    <div class="corner-decor bottom-right"></div>
+
+    {# Theme initialization: read saved preference and apply #}
+    <script>
+        (function() {
+            var savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'light') {
+                document.documentElement.classList.remove('dark');
+                document.documentElement.classList.add('light');
+            }
+        })();
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
