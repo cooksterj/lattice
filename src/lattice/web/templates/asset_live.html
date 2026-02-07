@@ -391,33 +391,44 @@
 
         /* Action buttons area */
         .action-buttons {
-            display: none;
-            gap: 0.75rem;
+            display: flex;
+            gap: 1rem;
             margin-top: 1rem;
-            justify-content: flex-end;
+            padding: 1rem 0;
         }
 
         .action-btn {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
             font-family: 'Orbitron', sans-serif;
             font-size: 0.7rem;
             font-weight: 600;
             letter-spacing: 0.1em;
+            padding: 0.6rem 1.2rem;
+            border: 1px solid var(--border-dim);
+            background: rgba(18, 18, 26, 0.6);
+            color: var(--text-secondary);
             cursor: pointer;
             transition: all 0.2s ease;
-            border: 1px solid var(--border-dim);
-            background: transparent;
-            color: var(--text-secondary);
             clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+        }
+
+        .light .action-btn {
+            background: rgba(250, 250, 252, 0.8);
         }
 
         .action-btn:hover {
             color: var(--neon-cyan);
             border-color: var(--neon-cyan);
-            background: rgba(90, 158, 170, 0.08);
+            background: rgba(0, 247, 255, 0.05);
+        }
+
+        .action-btn.primary {
+            border-color: var(--neon-cyan);
+            color: var(--neon-cyan);
+        }
+
+        .action-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
         }
     </style>
 </head>
@@ -471,7 +482,14 @@
         </div>
 
         <!-- ACTION BUTTONS (Plan 03) -->
-        <div id="action-buttons" class="action-buttons"></div>
+        <div class="action-buttons">
+            <button id="btn-refocus" class="action-btn primary" onclick="refocusMainWindow()">
+                &#9664; REFOCUS GRAPH
+            </button>
+            <button id="btn-history" class="action-btn" onclick="openRunHistory()">
+                RUN HISTORY &#8599;
+            </button>
+        </div>
     </div>
 
     <!-- Corner decorations -->
@@ -846,6 +864,19 @@
             }
         }
 
+        // --- G. Action buttons ---
+        function refocusMainWindow() {
+            if (window.opener && !window.opener.closed) {
+                window.opener.focus();
+            } else {
+                window.open('/', '_blank');
+            }
+        }
+
+        function openRunHistory() {
+            window.open('/asset/' + ASSET_KEY, '_blank');
+        }
+
         // =============================================
         // Initialize
         // =============================================
@@ -856,6 +887,10 @@
             // 3. Connect WebSocket AFTER initial state is determined
             connectWebSocket();
         });
+        // 4. Update refocus button tooltip if not opened from graph
+        if (!window.opener || window.opener.closed) {
+            document.getElementById('btn-refocus').title = 'Opens graph in new tab (not opened from graph)';
+        }
     </script>
 </body>
 </html>

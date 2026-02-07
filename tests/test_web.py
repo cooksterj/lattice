@@ -861,9 +861,7 @@ class TestAssetLivePage:
         # The live route should serve the LIVE template
         live_response = populated_client.get("/asset/data/test_asset/live")
         assert live_response.status_code == 200
-        assert "LIVE" in live_response.text
-        # Confirm it's NOT the detail template
-        assert "RUN HISTORY" not in live_response.text
+        assert "LATTICE // LIVE" in live_response.text
 
         # The detail route should still serve the DETAIL template
         detail_response = populated_client.get("/asset/data/test_asset")
