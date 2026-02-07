@@ -9,83 +9,70 @@
     .live-container {
         max-width: 1200px;
         margin: 0 auto;
-        padding: 6rem 2rem 2rem;
+        padding: 0 2rem 2rem;
     }
 
-    /* Compact header for popup window */
-    .live-header {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 50;
+    /* Page header with back button */
+    .live-page-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.75rem 1.5rem;
-        background: linear-gradient(
-            to bottom,
-            var(--bg-void) 0%,
-            rgba(10, 10, 15, 0.9) 70%,
-            transparent 100%
-        );
+        padding: 1rem 0 1.5rem;
     }
 
-    .light .live-header {
-        background: linear-gradient(
-            to bottom,
-            var(--bg-void) 0%,
-            rgba(240, 240, 248, 0.9) 70%,
-            transparent 100%
-        );
-    }
-
-    .live-header-left {
+    .live-page-header-left {
         display: flex;
         align-items: center;
         gap: 0.75rem;
     }
 
-    .live-header-title {
+    .back-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
         font-family: 'Orbitron', sans-serif;
-        font-size: 0.85rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-secondary);
+        text-decoration: none;
+        padding: 0.3rem 0.6rem;
+        border: 1px solid var(--border-dim);
+        transition: all 0.15s ease;
+    }
+
+    .back-btn:hover {
+        color: var(--neon-cyan);
+        border-color: var(--neon-cyan);
+    }
+
+    .live-page-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1rem;
         font-weight: 700;
-        letter-spacing: 0.15em;
+        letter-spacing: 0.2em;
         color: var(--text-glow);
         text-shadow: 0 0 8px var(--neon-cyan-glow);
     }
 
-    .light .live-header-title {
+    .light .live-page-title {
         color: var(--text-primary);
         text-shadow: none;
     }
 
-    .live-header-separator {
+    .live-page-separator {
         color: var(--neon-pink);
         font-family: 'Orbitron', sans-serif;
         font-size: 0.85rem;
         font-weight: 700;
     }
 
-    .live-header-asset {
+    .live-page-asset {
         font-family: 'Orbitron', sans-serif;
         font-size: 0.85rem;
         font-weight: 600;
         letter-spacing: 0.1em;
         color: var(--neon-cyan);
-    }
-
-    .live-badge {
-        display: inline-block;
-        font-family: 'Orbitron', sans-serif;
-        font-size: 0.6rem;
-        font-weight: 700;
-        letter-spacing: 0.15em;
-        color: var(--neon-pink);
-        background: rgba(196, 82, 112, 0.12);
-        border: 1px solid rgba(196, 82, 112, 0.3);
-        padding: 0.15rem 0.5rem;
-        margin-left: 0.5rem;
     }
 
     /* Asset info panel */
@@ -380,73 +367,36 @@
         font-weight: 400;
     }
 
-    /* Action buttons area */
-    .action-buttons {
-        display: flex;
-        gap: 1rem;
-        margin-top: 1rem;
-        padding: 1rem 0;
-    }
-
-    .action-btn {
-        font-family: 'Orbitron', sans-serif;
-        font-size: 0.7rem;
-        font-weight: 600;
-        letter-spacing: 0.1em;
-        padding: 0.6rem 1.2rem;
-        border: 1px solid var(--border-dim);
-        background: rgba(18, 18, 26, 0.6);
-        color: var(--text-secondary);
-        cursor: pointer;
-        transition: all 0.2s ease;
-        clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
-    }
-
-    .light .action-btn {
-        background: rgba(250, 250, 252, 0.8);
-    }
-
-    .action-btn:hover {
-        color: var(--neon-cyan);
-        border-color: var(--neon-cyan);
-        background: rgba(0, 247, 255, 0.05);
-    }
-
-    .action-btn.primary {
-        border-color: var(--neon-cyan);
-        color: var(--neon-cyan);
-    }
-
-    .action-btn:disabled {
-        opacity: 0.3;
-        cursor: not-allowed;
-    }
 </style>
 {% endblock %}
 {% block content %}
-    <!-- Compact header for live monitoring window -->
-    <div class="live-header">
-        <div class="live-header-left">
-            <span class="live-header-title">LATTICE</span>
-            <span class="live-header-separator">//</span>
-            <span class="live-header-asset" id="header-asset-name">{{ asset_key }}</span>
-            <span class="live-badge">LIVE</span>
-        </div>
-        <div class="flex items-center gap-2">
-            <button id="theme-toggle" class="header-btn" title="Toggle theme">
-                <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
-                </svg>
-                <svg class="w-5 h-5 moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
-                </svg>
-            </button>
-        </div>
-    </div>
-
     <div class="live-container">
+        <!-- Page header with back button and theme toggle -->
+        <div class="live-page-header">
+            <div class="live-page-header-left">
+                <a href="/runs" class="back-btn" title="Back to Active Runs">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    RUNS
+                </a>
+                <span class="live-page-title">LIVE LOGS</span>
+                <span class="live-page-separator">//</span>
+                <span class="live-page-asset" id="header-asset-name">{{ asset_key }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="theme-toggle" class="header-btn" title="Toggle theme">
+                    <svg class="w-5 h-5 sun hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"/>
+                    </svg>
+                    <svg class="w-5 h-5 moon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
         <!-- Asset info panel -->
         <div class="asset-info-panel" id="asset-info">
             <div style="color: var(--text-secondary); font-family: Orbitron, sans-serif; letter-spacing: 0.15em; font-size: 0.85rem;">
@@ -472,15 +422,6 @@
             <div class="log-empty" id="log-empty">NO LOG ENTRIES</div>
         </div>
 
-        <!-- ACTION BUTTONS (Plan 03) -->
-        <div class="action-buttons">
-            <button id="btn-refocus" class="action-btn primary" onclick="refocusMainWindow()">
-                &#9664; REFOCUS GRAPH
-            </button>
-            <button id="btn-history" class="action-btn" onclick="openRunHistory()">
-                RUN HISTORY &#8599;
-            </button>
-        </div>
     </div>
 {% endblock %}
 {% block scripts %}
@@ -850,17 +791,6 @@
         }
     }
 
-    // --- G. Action buttons ---
-    function refocusMainWindow() {
-        // window.open with a named target focuses that window (user-gesture context)
-        // Hash-only change avoids reloading the graph page
-        window.open('/#refocus', 'lattice_graph');
-    }
-
-    function openRunHistory() {
-        window.open('/asset/' + ASSET_KEY, '_blank');
-    }
-
     // =============================================
     // Initialize
     // =============================================
@@ -871,6 +801,5 @@
         // 3. Connect WebSocket AFTER initial state is determined
         connectWebSocket();
     });
-    // 4. Refocus button uses BroadcastChannel (works regardless of window.opener)
 </script>
 {% endblock %}
