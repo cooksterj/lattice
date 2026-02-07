@@ -349,28 +349,44 @@
         .completion-banner {
             display: none;
             align-items: center;
-            justify-content: center;
             gap: 1rem;
             padding: 1rem 1.5rem;
             margin-bottom: 1rem;
             font-family: 'Orbitron', sans-serif;
             font-size: 0.85rem;
             font-weight: 600;
-            letter-spacing: 0.1em;
+            letter-spacing: 0.05em;
+            clip-path: polygon(12px 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%, 0 12px);
         }
 
         .completion-banner.success {
             display: flex;
-            background: rgba(104, 181, 194, 0.1);
-            border: 1px solid rgba(104, 181, 194, 0.3);
-            color: var(--neon-cyan);
+            flex-wrap: wrap;
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            color: var(--neon-green, #22c55e);
         }
 
         .completion-banner.failure {
             display: flex;
-            background: rgba(196, 82, 112, 0.1);
-            border: 1px solid rgba(196, 82, 112, 0.3);
-            color: var(--neon-pink);
+            flex-wrap: wrap;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            color: var(--neon-red, #ef4444);
+        }
+
+        .banner-icon {
+            font-size: 1.2rem;
+        }
+
+        .banner-status {
+            flex: 1;
+        }
+
+        .banner-duration {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            font-weight: 400;
         }
 
         /* Action buttons area */
@@ -503,8 +519,12 @@
         }
 
         function formatDuration(ms) {
-            if (ms < 1000) return `${ms.toFixed(1)}ms`;
-            return `${(ms / 1000).toFixed(2)}s`;
+            if (ms == null) return '';
+            if (ms < 1000) return `${Math.round(ms)}ms`;
+            if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
+            const minutes = Math.floor(ms / 60000);
+            const seconds = ((ms % 60000) / 1000).toFixed(0);
+            return `${minutes}m ${seconds}s`;
         }
 
         function formatTime(isoString) {
@@ -670,8 +690,9 @@
                     break;
 
                 case 'asset_start':
-                    // New execution starting -- clear logs and switch to running
+                    // New execution starting -- clear logs, hide banner, switch to running
                     clearLogContainer();
+                    hideCompletionBanner();
                     setState('running');
                     break;
 
@@ -686,6 +707,7 @@
                 case 'asset_complete':
                     // Execution finished -- set state based on status
                     setState(message.data.status);
+                    showCompletionBanner(message.data);
                     break;
             }
         }
@@ -751,6 +773,44 @@
             const container = document.getElementById('log-container');
             container.innerHTML = '';
             logCount = 0;
+        }
+
+        // --- Completion banner ---
+        function showCompletionBanner(data) {
+            const banner = document.getElementById('completion-banner');
+            const isSuccess = data.status === 'completed';
+
+            banner.className = `completion-banner ${isSuccess ? 'success' : 'failure'}`;
+            banner.innerHTML = '';
+
+            const icon = document.createElement('span');
+            icon.className = 'banner-icon';
+            icon.textContent = isSuccess ? '\u2714' : '\u2718';
+            banner.appendChild(icon);
+
+            const status = document.createElement('span');
+            status.className = 'banner-status';
+            status.textContent = isSuccess ? 'EXECUTION COMPLETE' : 'EXECUTION FAILED';
+            banner.appendChild(status);
+
+            const duration = document.createElement('span');
+            duration.className = 'banner-duration';
+            duration.textContent = formatDuration(data.duration_ms);
+            banner.appendChild(duration);
+
+            if (!isSuccess && data.error) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'banner-error';
+                errorDiv.style.cssText = 'width: 100%; font-size: 0.75rem; font-weight: 400; margin-top: 0.5rem; font-family: "Space Mono", monospace;';
+                errorDiv.textContent = data.error;
+                banner.appendChild(errorDiv);
+            }
+        }
+
+        function hideCompletionBanner() {
+            const banner = document.getElementById('completion-banner');
+            banner.className = 'completion-banner';
+            banner.innerHTML = '';
         }
 
         // --- E. Connection status indicator ---
