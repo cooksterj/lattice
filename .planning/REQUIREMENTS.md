@@ -52,22 +52,22 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AWIN-01 | Pending | Pending |
-| AWIN-02 | Pending | Pending |
-| AWIN-03 | Pending | Pending |
-| AWIN-04 | Pending | Pending |
-| AWIN-05 | Pending | Pending |
-| GRAF-01 | Pending | Pending |
-| GRAF-02 | Pending | Pending |
-| GRAF-03 | Pending | Pending |
-| EXEC-01 | Pending | Pending |
-| EXEC-02 | Pending | Pending |
+| AWIN-01 | Phase 2 | Pending |
+| AWIN-02 | Phase 2 | Pending |
+| AWIN-03 | Phase 2 | Pending |
+| AWIN-04 | Phase 2 | Pending |
+| AWIN-05 | Phase 2 | Pending |
+| GRAF-01 | Phase 3 | Pending |
+| GRAF-02 | Phase 3 | Pending |
+| GRAF-03 | Phase 3 | Pending |
+| EXEC-01 | Phase 1 | Pending |
+| EXEC-02 | Phase 1 | Pending |
 
 **Coverage:**
 - v1 requirements: 10 total
-- Mapped to phases: 0
-- Unmapped: 10
+- Mapped to phases: 10
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-06*
-*Last updated: 2026-02-06 after initial definition*
+*Last updated: 2026-02-06 after roadmap creation*
