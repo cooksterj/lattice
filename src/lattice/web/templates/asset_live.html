@@ -571,14 +571,231 @@
         // =============================================
         // WEBSOCKET CONNECTION (Plan 02)
         // =============================================
-        // WebSocket connection to /ws/asset/{key} will be added here.
-        // It will handle message types: replay, asset_start, asset_log, asset_complete.
-        // The state machine (idle -> running -> completed/failed) will drive UI updates.
+
+        // --- A. State machine ---
+        let currentState = 'idle'; // 'idle' | 'running' | 'completed' | 'failed'
+        let logCount = 0;
+        const MAX_LOG_ENTRIES = 2000;
+
+        function setState(newState) {
+            currentState = newState;
+            updateUIForState();
+        }
+
+        function updateUIForState() {
+            const logContainer = document.getElementById('log-container');
+            const assetInfo = document.getElementById('asset-info');
+            const statusText = document.getElementById('status-text');
+            const statusIndicator = document.getElementById('status-indicator');
+
+            switch (currentState) {
+                case 'idle':
+                    logContainer.style.display = 'none';
+                    assetInfo.style.display = 'block';
+                    statusText.textContent = 'AWAITING EXECUTION...';
+                    statusText.className = 'status-text';
+                    statusIndicator.className = 'status-indicator';
+                    break;
+                case 'running':
+                    logContainer.style.display = 'block';
+                    assetInfo.style.display = 'none';
+                    statusText.textContent = 'STREAMING LOGS...';
+                    statusText.className = 'status-text running';
+                    statusIndicator.className = 'status-indicator running';
+                    break;
+                case 'completed':
+                    logContainer.style.display = 'block';
+                    assetInfo.style.display = 'none';
+                    statusText.textContent = 'EXECUTION COMPLETE';
+                    statusText.className = 'status-text completed';
+                    statusIndicator.className = 'status-indicator connected';
+                    break;
+                case 'failed':
+                    logContainer.style.display = 'block';
+                    assetInfo.style.display = 'none';
+                    statusText.textContent = 'EXECUTION FAILED';
+                    statusText.className = 'status-text failed';
+                    statusIndicator.className = 'status-indicator disconnected';
+                    break;
+            }
+        }
+
+        // --- B. WebSocket connection ---
+        let ws = null;
+        let reconnectTimer = null;
+
+        function connectWebSocket() {
+            // Clear any pending reconnect
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const url = `${protocol}//${window.location.host}/ws/asset/${ASSET_KEY}`;
+
+            updateConnectionStatus('connecting');
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                updateConnectionStatus('connected');
+            };
+
+            ws.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage(message);
+            };
+
+            ws.onclose = () => {
+                updateConnectionStatus('disconnected');
+                // Reconnect after 2s
+                reconnectTimer = setTimeout(connectWebSocket, 2000);
+            };
+
+            ws.onerror = () => {
+                updateConnectionStatus('error');
+            };
+        }
+
+        // --- C. Message handler ---
+        function handleMessage(message) {
+            switch (message.type) {
+                case 'replay':
+                    // Replay buffer entries -- process each as if live
+                    if (message.data && message.data.entries) {
+                        for (const entry of message.data.entries) {
+                            handleMessage(entry);
+                        }
+                    }
+                    break;
+
+                case 'asset_start':
+                    // New execution starting -- clear logs and switch to running
+                    clearLogContainer();
+                    setState('running');
+                    break;
+
+                case 'asset_log':
+                    // Log entry -- transition to running if not already, append entry
+                    if (currentState !== 'running') {
+                        setState('running');
+                    }
+                    appendLogEntry(message.data);
+                    break;
+
+                case 'asset_complete':
+                    // Execution finished -- set state based on status
+                    setState(message.data.status);
+                    break;
+            }
+        }
+
+        // --- D. Log entry rendering (XSS-safe with textContent) ---
+        function appendLogEntry(data) {
+            const container = document.getElementById('log-container');
+
+            // Remove the empty message if present
+            const emptyMsg = document.getElementById('log-empty');
+            if (emptyMsg) {
+                emptyMsg.remove();
+            }
+
+            const isAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+
+            // Level badge
+            const levelSpan = document.createElement('span');
+            levelSpan.className = `log-level ${data.level}`;
+            levelSpan.textContent = data.level;
+            entry.appendChild(levelSpan);
+
+            // Timestamp
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'log-timestamp';
+            timeSpan.textContent = formatTimestamp(data.timestamp);
+            entry.appendChild(timeSpan);
+
+            // Message -- USER-PROVIDED STRING, MUST use textContent for XSS safety
+            const msgSpan = document.createElement('span');
+            msgSpan.className = 'log-message';
+            msgSpan.textContent = data.message;
+            entry.appendChild(msgSpan);
+
+            container.appendChild(entry);
+            logCount++;
+
+            // Cap DOM entries at MAX_LOG_ENTRIES to prevent browser slowdown
+            while (logCount > MAX_LOG_ENTRIES && container.firstChild) {
+                container.removeChild(container.firstChild);
+                logCount--;
+            }
+
+            // Auto-scroll only if user was at bottom
+            if (isAtBottom) {
+                entry.scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function formatTimestamp(isoString) {
+            try {
+                const d = new Date(isoString);
+                return d.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            } catch (e) {
+                return isoString || '';
+            }
+        }
+
+        function clearLogContainer() {
+            const container = document.getElementById('log-container');
+            container.innerHTML = '';
+            logCount = 0;
+        }
+
+        // --- E. Connection status indicator ---
+        function updateConnectionStatus(status) {
+            const dot = document.getElementById('connection-dot');
+            const label = document.getElementById('connection-label');
+            if (dot) {
+                dot.className = `connection-dot ${status}`;
+            }
+            if (label) {
+                label.textContent = status.toUpperCase();
+            }
+        }
+
+        // --- F. Initial state check via REST ---
+        async function checkInitialState() {
+            try {
+                const resp = await fetch('/api/execution/status');
+                if (!resp.ok) return;
+                const status = await resp.json();
+                if (status.is_running && status.asset_statuses) {
+                    const assetStatus = status.asset_statuses.find(a => a.id === ASSET_KEY);
+                    if (assetStatus) {
+                        if (assetStatus.status === 'running') {
+                            setState('running');
+                        } else if (assetStatus.status === 'completed' || assetStatus.status === 'failed') {
+                            setState(assetStatus.status);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to check execution status:', e);
+            }
+        }
 
         // =============================================
         // Initialize
         // =============================================
+        // 1. Load asset details (from Plan 01)
         loadAssetDetails();
+        // 2. Check execution status to set initial state
+        checkInitialState().then(() => {
+            // 3. Connect WebSocket AFTER initial state is determined
+            connectWebSocket();
+        });
     </script>
 </body>
 </html>
