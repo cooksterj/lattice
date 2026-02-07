@@ -73,11 +73,11 @@ Plans:
   3. Clicking a running asset on the active runs page navigates to its live logs as a full page with sidebar and back button
   4. Run history page is accessible via the sidebar and displays within the sidebar layout (not a standalone page)
   5. Live logs page has the sidebar, a back button, and streams logs in real time (no popup, no refocus button)
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: TBD
-- [ ] 05-02: TBD
+- [ ] 05-01-PLAN.md — Active Runs page with dual-mode display (live WebSocket + idle REST)
+- [ ] 05-02-PLAN.md — Refactor asset_live.html to full-page layout with back button + visual verification
 
 ### Phase 6: Graph Selection & Failure Recovery
 **Goal**: Users can select a failed asset on the graph and re-execute it plus all downstream assets
