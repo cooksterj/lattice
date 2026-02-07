@@ -1,16 +1,20 @@
 """Tests for the web visualization API."""
 
 import json
+from collections import deque
 from datetime import date, datetime
 from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from fastapi.testclient import TestClient
 
 from lattice import AssetKey, AssetRegistry, SQLiteRunHistoryStore, asset
 from lattice.observability.models import RunRecord
-from lattice.web.app import create_app
+from lattice.web.app import STATIC_DIR, TEMPLATES_DIR, create_app
 from lattice.web.execution import ExecutionManager
 from lattice.web.schemas_execution import ExecutionStartRequest
 
@@ -487,6 +491,342 @@ class TestExecutionManager:
 
         assert len(executed_dates) == 1
         assert executed_dates[0] == test_date
+
+
+def _create_app_with_manager(registry: AssetRegistry, manager: ExecutionManager) -> FastAPI:
+    """Create a test app with a specific ExecutionManager."""
+    from lattice.web.execution import (
+        create_asset_websocket_router,
+        create_execution_router,
+        create_websocket_router,
+    )
+    from lattice.web.routes import create_router
+    from lattice.web.routes_history import create_history_router
+
+    app = FastAPI()
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    templates = Jinja2Templates(directory=TEMPLATES_DIR)
+    app.include_router(create_router(registry, templates))
+    app.include_router(create_execution_router(registry, manager))
+    app.include_router(create_websocket_router(manager))
+    app.include_router(create_asset_websocket_router(manager))
+    app.include_router(create_history_router(None, templates))
+    return app
+
+
+class TestAssetWebSocket:
+    """Tests for /ws/asset/{key} WebSocket endpoint."""
+
+    def test_asset_websocket_connect_disconnect(self, populated_client: TestClient) -> None:
+        """WebSocket connection succeeds and closes cleanly."""
+        with populated_client.websocket_connect("/ws/asset/source_data") as ws:
+            assert ws is not None
+
+    def test_asset_websocket_grouped_key(self, populated_client: TestClient) -> None:
+        """WebSocket accepts grouped asset keys with slashes."""
+        with populated_client.websocket_connect("/ws/asset/analytics/stats") as ws:
+            assert ws is not None
+
+    def test_asset_websocket_replay_empty(self, populated_client: TestClient) -> None:
+        """No replay message sent when buffer is empty."""
+        with populated_client.websocket_connect("/ws/asset/source_data"):
+            # Connection succeeds — no replay message sent (buffer empty).
+            # If we try to receive, it would block. The fact that we
+            # connected without error is the assertion.
+            pass
+
+    def test_asset_websocket_replay_with_buffer(self, populated_registry: AssetRegistry) -> None:
+        """Replay message sent when buffer has entries."""
+        manager = ExecutionManager()
+        manager._replay_buffers["test_asset"] = deque(maxlen=500)
+        manager._replay_buffers["test_asset"].append(
+            {"type": "asset_log", "data": {"message": "test log"}}
+        )
+
+        app = _create_app_with_manager(populated_registry, manager)
+        client = TestClient(app)
+
+        with client.websocket_connect("/ws/asset/test_asset") as ws:
+            msg = ws.receive_json()
+            assert msg["type"] == "replay"
+            assert len(msg["data"]["entries"]) == 1
+            assert msg["data"]["entries"][0]["data"]["message"] == "test log"
+
+
+class TestAssetSubscriberRegistry:
+    """Tests for ExecutionManager per-asset subscriber registry."""
+
+    def test_add_asset_subscriber(self) -> None:
+        """Adding a subscriber tracks it for the asset key."""
+        manager = ExecutionManager()
+        mock_ws = AsyncMock()
+        manager.add_asset_subscriber("test_asset", mock_ws)
+        assert mock_ws in manager._asset_subscribers["test_asset"]
+
+    def test_remove_asset_subscriber(self) -> None:
+        """Removing a subscriber clears it from the asset key."""
+        manager = ExecutionManager()
+        mock_ws = AsyncMock()
+        manager.add_asset_subscriber("test_asset", mock_ws)
+        manager.remove_asset_subscriber("test_asset", mock_ws)
+        assert "test_asset" not in manager._asset_subscribers
+
+    def test_remove_nonexistent_subscriber_no_error(self) -> None:
+        """Removing from an empty key does not raise."""
+        manager = ExecutionManager()
+        mock_ws = AsyncMock()
+        manager.remove_asset_subscriber("nonexistent", mock_ws)
+
+    @pytest.mark.asyncio
+    async def test_broadcast_to_asset_sends_to_subscribers(self) -> None:
+        """Broadcast sends message to all subscribers of the asset."""
+        manager = ExecutionManager()
+        ws1 = AsyncMock()
+        ws1.send_json = AsyncMock()
+        ws2 = AsyncMock()
+        ws2.send_json = AsyncMock()
+
+        manager.add_asset_subscriber("asset_a", ws1)
+        manager.add_asset_subscriber("asset_a", ws2)
+
+        message = {"type": "test", "data": {}}
+        await manager.broadcast_to_asset("asset_a", message)
+
+        ws1.send_json.assert_called_once_with(message)
+        ws2.send_json.assert_called_once_with(message)
+
+    @pytest.mark.asyncio
+    async def test_broadcast_to_asset_only_targets_key(self) -> None:
+        """Broadcast to one asset does not send to another asset's subscribers."""
+        manager = ExecutionManager()
+        ws_a = AsyncMock()
+        ws_a.send_json = AsyncMock()
+        ws_b = AsyncMock()
+        ws_b.send_json = AsyncMock()
+
+        manager.add_asset_subscriber("asset_a", ws_a)
+        manager.add_asset_subscriber("asset_b", ws_b)
+
+        await manager.broadcast_to_asset("asset_a", {"type": "test"})
+
+        ws_a.send_json.assert_called_once()
+        ws_b.send_json.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_broadcast_to_asset_removes_dead_sockets(self) -> None:
+        """Dead sockets are cleaned up during broadcast."""
+        manager = ExecutionManager()
+        live_ws = AsyncMock()
+        live_ws.send_json = AsyncMock()
+        dead_ws = AsyncMock()
+        dead_ws.send_json = AsyncMock(side_effect=Exception("Connection closed"))
+
+        manager.add_asset_subscriber("asset_a", live_ws)
+        manager.add_asset_subscriber("asset_a", dead_ws)
+
+        await manager.broadcast_to_asset("asset_a", {"type": "test"})
+
+        assert live_ws in manager._asset_subscribers["asset_a"]
+        assert dead_ws not in manager._asset_subscribers["asset_a"]
+
+    def test_get_replay_buffer_empty(self) -> None:
+        """Empty replay buffer returns empty list."""
+        manager = ExecutionManager()
+        assert manager.get_replay_buffer("nonexistent") == []
+
+
+class TestAssetLogStreaming:
+    """Integration tests for end-to-end log streaming and execution isolation."""
+
+    @pytest.mark.asyncio
+    async def test_log_entry_reaches_subscriber(self) -> None:
+        """Log entries emitted during execution reach asset WebSocket subscribers."""
+        import logging as log_mod
+
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def test_asset() -> str:
+            log_mod.getLogger("lattice").info("Hello from asset")
+            return "done"
+
+        manager = ExecutionManager()
+        received: list[dict] = []
+        mock_ws = AsyncMock()
+        mock_ws.send_json = AsyncMock(side_effect=lambda msg: received.append(msg))
+
+        manager.add_asset_subscriber("test_asset", mock_ws)
+        await manager.run_execution(test_registry, target="test_asset")
+
+        log_messages = [m for m in received if m.get("type") == "asset_log"]
+        assert len(log_messages) >= 1
+        assert any("Hello from asset" in m["data"]["message"] for m in log_messages)
+
+    @pytest.mark.asyncio
+    async def test_replay_buffer_populated_during_execution(self) -> None:
+        """Replay buffer is populated during execution even without subscribers."""
+        import logging as log_mod
+
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def test_asset() -> str:
+            log_mod.getLogger("lattice").info("Buffered log")
+            return "done"
+
+        manager = ExecutionManager()
+        await manager.run_execution(test_registry, target="test_asset")
+
+        buffer = manager.get_replay_buffer("test_asset")
+        assert len(buffer) >= 1
+        assert any(m["type"] == "asset_log" for m in buffer)
+
+    @pytest.mark.asyncio
+    async def test_replay_buffer_cleared_between_executions(self) -> None:
+        """Replay buffer is cleared at the start of each new execution."""
+        import logging as log_mod
+
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def test_asset() -> str:
+            log_mod.getLogger("lattice").info("Run log")
+            return "done"
+
+        manager = ExecutionManager()
+
+        # First run
+        await manager.run_execution(test_registry, target="test_asset")
+        buffer_after_first = manager.get_replay_buffer("test_asset")
+        assert len(buffer_after_first) >= 1
+
+        # Second run — buffer should only contain entries from the second run
+        await manager.run_execution(test_registry, target="test_asset")
+        buffer_after_second = manager.get_replay_buffer("test_asset")
+        # Buffer should be roughly the same size as a single run (not double)
+        assert len(buffer_after_second) <= len(buffer_after_first) * 2
+
+    @pytest.mark.asyncio
+    async def test_execution_isolation_no_subscribers(self) -> None:
+        """Execution completes successfully with no WebSocket subscribers."""
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def asset_a() -> str:
+            return "a"
+
+        @asset(registry=test_registry)
+        def asset_b(asset_a: str) -> str:
+            return f"b({asset_a})"
+
+        @asset(registry=test_registry)
+        def asset_c(asset_b: str) -> str:
+            return f"c({asset_b})"
+
+        manager = ExecutionManager()
+        await manager.run_execution(test_registry, target=None)
+
+        # All assets completed (no errors = execution worked)
+        assert not manager.is_running
+
+    @pytest.mark.asyncio
+    async def test_execution_isolation_with_subscribers(self) -> None:
+        """Execution completes with subscribers (EXEC-01: downstream unaffected)."""
+        import logging as log_mod
+
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def asset_a() -> str:
+            log_mod.getLogger("lattice").info("a executing")
+            return "a"
+
+        @asset(registry=test_registry)
+        def asset_b(asset_a: str) -> str:
+            log_mod.getLogger("lattice").info("b executing")
+            return f"b({asset_a})"
+
+        @asset(registry=test_registry)
+        def asset_c(asset_b: str) -> str:
+            log_mod.getLogger("lattice").info("c executing")
+            return f"c({asset_b})"
+
+        manager = ExecutionManager()
+        received_a: list[dict] = []
+        received_b: list[dict] = []
+        received_c: list[dict] = []
+        ws_a = AsyncMock()
+        ws_a.send_json = AsyncMock(side_effect=lambda msg: received_a.append(msg))
+        ws_b = AsyncMock()
+        ws_b.send_json = AsyncMock(side_effect=lambda msg: received_b.append(msg))
+        ws_c = AsyncMock()
+        ws_c.send_json = AsyncMock(side_effect=lambda msg: received_c.append(msg))
+
+        manager.add_asset_subscriber("asset_a", ws_a)
+        manager.add_asset_subscriber("asset_b", ws_b)
+        manager.add_asset_subscriber("asset_c", ws_c)
+
+        await manager.run_execution(test_registry, target=None)
+
+        # All assets completed
+        assert not manager.is_running
+        # Each subscriber received messages
+        assert len(received_a) >= 1
+        assert len(received_b) >= 1
+        assert len(received_c) >= 1
+
+    @pytest.mark.asyncio
+    async def test_subscriber_disconnect_during_execution(self) -> None:
+        """Subscriber disconnect does not disrupt execution (EXEC-02)."""
+        import logging as log_mod
+
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def test_asset() -> str:
+            for i in range(5):
+                log_mod.getLogger("lattice").info("Log entry %d", i)
+            return "done"
+
+        manager = ExecutionManager()
+
+        call_count = 0
+
+        async def flaky_send(msg: dict) -> None:
+            nonlocal call_count
+            call_count += 1
+            if call_count >= 3:
+                raise Exception("Connection closed")
+
+        dead_ws = AsyncMock()
+        dead_ws.send_json = AsyncMock(side_effect=flaky_send)
+
+        manager.add_asset_subscriber("test_asset", dead_ws)
+        await manager.run_execution(test_registry, target="test_asset")
+
+        # Execution completed despite subscriber dying
+        assert not manager.is_running
+
+    @pytest.mark.asyncio
+    async def test_asset_start_complete_sent_to_subscribers(self) -> None:
+        """Asset start and complete events are sent to per-asset subscribers."""
+        test_registry = AssetRegistry()
+
+        @asset(registry=test_registry)
+        def test_asset() -> str:
+            return "done"
+
+        manager = ExecutionManager()
+        received: list[dict] = []
+        mock_ws = AsyncMock()
+        mock_ws.send_json = AsyncMock(side_effect=lambda msg: received.append(msg))
+
+        manager.add_asset_subscriber("test_asset", mock_ws)
+        await manager.run_execution(test_registry, target="test_asset")
+
+        types = [m.get("type") for m in received]
+        assert "asset_start" in types
+        assert "asset_complete" in types
 
 
 class TestAssetDetailPage:

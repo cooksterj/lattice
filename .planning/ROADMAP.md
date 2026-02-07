@@ -12,7 +12,7 @@ This roadmap delivers multi-window asset monitoring for Lattice's web UI across 
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Streaming Infrastructure and WebSocket** - Server-side log streaming with per-asset WebSocket subscriptions
+- [x] **Phase 1: Streaming Infrastructure and WebSocket** - Server-side log streaming with per-asset WebSocket subscriptions
 - [ ] **Phase 2: Asset Live Monitoring Page** - Dedicated browser page for real-time log viewing and asset details
 - [ ] **Phase 3: Main Graph Window Integration** - Wire asset monitoring into DAG graph via window.open()
 
@@ -31,9 +31,9 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md -- Callback-extended log handler and per-asset subscriber registry
-- [ ] 01-02-PLAN.md -- Asset-scoped WebSocket endpoint with replay buffer delivery
-- [ ] 01-03-PLAN.md -- Async bridge (sync-to-async log routing) and execution isolation verification
+- [x] 01-01-PLAN.md -- Callback-extended log handler and per-asset subscriber registry
+- [x] 01-02-PLAN.md -- Asset-scoped WebSocket endpoint with replay buffer delivery
+- [x] 01-03-PLAN.md -- Async bridge (sync-to-async log routing) and execution isolation verification
 
 ### Phase 2: Asset Live Monitoring Page
 **Goal**: Users can open a dedicated page showing live execution logs, completion status, and asset details
@@ -73,6 +73,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Streaming Infrastructure and WebSocket | 0/3 | Not started | - |
+| 1. Streaming Infrastructure and WebSocket | 3/3 | Complete | 2026-02-06 |
 | 2. Asset Live Monitoring Page | 0/3 | Not started | - |
 | 3. Main Graph Window Integration | 0/2 | Not started | - |

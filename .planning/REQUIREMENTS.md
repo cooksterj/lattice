@@ -21,8 +21,8 @@
 
 ### Execution Continuity
 
-- [ ] **EXEC-01**: Downstream assets continue executing while user views any asset window
-- [ ] **EXEC-02**: Opening or closing asset windows has no effect on execution state
+- [x] **EXEC-01**: Downstream assets continue executing while user views any asset window
+- [x] **EXEC-02**: Opening or closing asset windows has no effect on execution state
 
 ## v2 Requirements
 
@@ -60,8 +60,8 @@
 | GRAF-01 | Phase 3 | Pending |
 | GRAF-02 | Phase 3 | Pending |
 | GRAF-03 | Phase 3 | Pending |
-| EXEC-01 | Phase 1 | Pending |
-| EXEC-02 | Phase 1 | Pending |
+| EXEC-01 | Phase 1 | Done |
+| EXEC-02 | Phase 1 | Done |
 
 **Coverage:**
 - v1 requirements: 10 total
@@ -70,4 +70,4 @@
 
 ---
 *Requirements defined: 2026-02-06*
-*Last updated: 2026-02-06 after roadmap creation*
+*Last updated: 2026-02-06 after Phase 1 completion*

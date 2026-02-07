@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from lattice.registry import AssetRegistry, get_global_registry
 from lattice.web.execution import (
     ExecutionManager,
+    create_asset_websocket_router,
     create_execution_router,
     create_websocket_router,
 )
@@ -80,6 +81,10 @@ def create_app(
     # Add a WebSocket route (separate router for a path without /api prefix)
     ws_router = create_websocket_router(execution_manager)
     app.include_router(ws_router)
+
+    # Add asset-scoped WebSocket route
+    asset_ws_router = create_asset_websocket_router(execution_manager)
+    app.include_router(asset_ws_router)
 
     # Add history routes
     history_router = create_history_router(history_store, templates)

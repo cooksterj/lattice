@@ -91,6 +91,57 @@ class TestExecutionLogHandler:
         finally:
             logger.removeHandler(handler)
 
+    def test_emit_calls_on_entry_callback(self):
+        received: list = []
+        handler = ExecutionLogHandler(on_entry=lambda entry: received.append(entry))
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_on_entry")
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+
+        try:
+            logger.info("Callback test")
+
+            assert len(received) == 1
+            assert received[0].message == "Callback test"
+            assert received[0].level == "INFO"
+        finally:
+            logger.removeHandler(handler)
+
+    def test_emit_no_callback_by_default(self):
+        handler = ExecutionLogHandler()
+        handler.setFormatter(logging.Formatter("%(message)s"))
+
+        logger = logging.getLogger("test_no_callback")
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+
+        try:
+            logger.info("No callback")
+            assert len(handler.entries) == 1
+        finally:
+            logger.removeHandler(handler)
+
+    def test_on_entry_callback_receives_asset_context(self):
+        received: list = []
+        handler = ExecutionLogHandler(on_entry=lambda entry: received.append(entry))
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        handler.set_current_asset(AssetKey(name="my_asset"))
+
+        logger = logging.getLogger("test_callback_asset")
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(handler)
+
+        try:
+            logger.info("With asset context")
+
+            assert len(received) == 1
+            assert received[0].asset_key is not None
+            assert received[0].asset_key.name == "my_asset"
+        finally:
+            logger.removeHandler(handler)
+
 
 class TestCaptureLogs:
     """Tests for capture_logs context manager."""
@@ -165,3 +216,14 @@ class TestCaptureLogs:
         asset_entries = [e for e in entries if e.asset_key is not None]
         assert len(asset_entries) >= 1
         assert asset_entries[0].asset_key.name == "test_asset"
+
+    def test_capture_logs_with_on_entry_callback(self):
+        received: list = []
+        logger = logging.getLogger("lattice")
+        logger.setLevel(logging.INFO)
+
+        with capture_logs(on_entry=lambda entry: received.append(entry)):
+            logger.info("Callback via capture_logs")
+
+        assert len(received) >= 1
+        assert any("Callback via capture_logs" in e.message for e in received)

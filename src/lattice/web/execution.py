@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+from collections import deque
 from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
@@ -72,6 +74,8 @@ class ExecutionManager:
     and memory usage metrics. Designed for single-server deployment.
     """
 
+    REPLAY_BUFFER_SIZE: int = 500
+
     def __init__(
         self,
         max_concurrency: int = 4,
@@ -87,6 +91,11 @@ class ExecutionManager:
         self._max_concurrency = max_concurrency
         self._history_store = history_store
         self._check_registry = check_registry
+        self._asset_subscribers: dict[str, set[WebSocket]] = {}
+        self._replay_buffers: dict[str, deque[dict[str, Any]]] = {}
+        self._log_queue: asyncio.Queue[Any] | None = None
+        self._drain_task: asyncio.Task[None] | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
 
     @property
     def is_running(self) -> bool:
@@ -146,6 +155,84 @@ class ExecutionManager:
             logger.debug("Removed %d dead WebSocket connections", len(dead_sockets))
         self._websockets -= dead_sockets
 
+    def add_asset_subscriber(self, asset_key: str, ws: WebSocket) -> None:
+        """Register a WebSocket subscriber for a specific asset."""
+        if asset_key not in self._asset_subscribers:
+            self._asset_subscribers[asset_key] = set()
+        self._asset_subscribers[asset_key].add(ws)
+        logger.debug(
+            "Asset subscriber added for %s, total: %d",
+            asset_key,
+            len(self._asset_subscribers[asset_key]),
+        )
+
+    def remove_asset_subscriber(self, asset_key: str, ws: WebSocket) -> None:
+        """Unregister a WebSocket subscriber for a specific asset."""
+        if asset_key in self._asset_subscribers:
+            self._asset_subscribers[asset_key].discard(ws)
+            if not self._asset_subscribers[asset_key]:
+                del self._asset_subscribers[asset_key]
+            logger.debug("Asset subscriber removed for %s", asset_key)
+
+    async def broadcast_to_asset(self, asset_key: str, message: dict[str, Any]) -> None:
+        """Broadcast a message to all subscribers of a specific asset."""
+        subscribers = set(self._asset_subscribers.get(asset_key, ()))
+        dead_sockets: set[WebSocket] = set()
+        for ws in subscribers:
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead_sockets.add(ws)
+        if dead_sockets and asset_key in self._asset_subscribers:
+            self._asset_subscribers[asset_key] -= dead_sockets
+
+    def get_replay_buffer(self, asset_key: str) -> list[dict[str, Any]]:
+        """Get the replay buffer contents for an asset."""
+        return list(self._replay_buffers.get(asset_key, deque()))
+
+    def _on_log_entry_sync(self, entry: Any) -> None:
+        """Synchronous callback invoked by ExecutionLogHandler.emit().
+
+        Safe to call from any thread. Enqueues the entry onto the
+        asyncio event loop for async processing via call_soon_threadsafe.
+        """
+        if self._log_queue is None or self._loop is None:
+            return
+        with contextlib.suppress(RuntimeError):
+            self._loop.call_soon_threadsafe(self._log_queue.put_nowait, entry)
+
+    async def _drain_log_queue(self) -> None:
+        """Async task that drains the log queue and routes entries to subscribers."""
+        assert self._log_queue is not None
+        while True:
+            entry = await self._log_queue.get()
+            if entry is None:
+                break  # Sentinel to stop draining
+            await self._route_log_entry(entry)
+
+    async def _route_log_entry(self, entry: Any) -> None:
+        """Route a log entry to the correct asset's subscribers and replay buffer."""
+        asset_key = getattr(entry, "asset_key", None)
+        if asset_key is None:
+            return
+        asset_key_str = str(asset_key)
+        message: dict[str, Any] = {
+            "type": "asset_log",
+            "data": {
+                "asset_key": asset_key_str,
+                "level": entry.level,
+                "message": entry.message,
+                "timestamp": entry.timestamp.isoformat(),
+                "logger_name": entry.logger_name,
+            },
+        }
+        # Store in replay buffer
+        if asset_key_str not in self._replay_buffers:
+            self._replay_buffers[asset_key_str] = deque(maxlen=self.REPLAY_BUFFER_SIZE)
+        self._replay_buffers[asset_key_str].append(message)
+        # Send to subscribers
+        await self.broadcast_to_asset(asset_key_str, message)
+
     async def _broadcast_asset_start(self, key: AssetKey) -> None:
         """Callback for when an asset starts execution."""
         await self.broadcast({"type": "asset_start", "data": {"asset_id": str(key)}})
@@ -162,6 +249,7 @@ class ExecutionManager:
             },
         }
         await self.broadcast(message)
+        await self.broadcast_to_asset(str(result.key), message)
 
     async def run_execution(
         self,
@@ -242,6 +330,12 @@ class ExecutionManager:
             self._peak_rss_mb = 0.0
             self._is_running = True
 
+            # Set up async log streaming bridge
+            self._log_queue = asyncio.Queue()
+            self._replay_buffers = {}  # Clear for new execution
+            self._loop = asyncio.get_running_loop()
+            self._drain_task = asyncio.create_task(self._drain_log_queue())
+
             total_dates = len(dates_to_execute) if dates_to_execute else 1
             total_completed = 0
             total_failed = 0
@@ -275,7 +369,7 @@ class ExecutionManager:
 
                 # Execute with log capture — handler must exist before
                 # the callback is defined so it can be bound via default arg
-                with capture_logs("lattice") as log_handler:
+                with capture_logs("lattice", on_entry=self._on_log_entry_sync) as log_handler:
                     # Create callbacks that update observability context
                     # Use default argument to bind at definition time (avoids B023)
                     async def on_asset_start_with_tracking(
@@ -286,6 +380,13 @@ class ExecutionManager:
                         tracker.set_current_asset(key)
                         handler.set_current_asset(key)
                         await self._broadcast_asset_start(key)
+                        await self.broadcast_to_asset(
+                            str(key),
+                            {
+                                "type": "asset_start",
+                                "data": {"asset_key": str(key)},
+                            },
+                        )
 
                     executor = AsyncExecutor(
                         io_manager=io_manager,
@@ -417,6 +518,17 @@ class ExecutionManager:
             )
 
         finally:
+            # Shut down async log streaming bridge
+            # Yield to let pending call_soon_threadsafe callbacks execute
+            # before sending the sentinel, so all log entries are drained.
+            await asyncio.sleep(0)
+            if self._log_queue is not None:
+                self._log_queue.put_nowait(None)  # Sentinel to stop drain task
+            if self._drain_task is not None:
+                await self._drain_task
+            self._log_queue = None
+            self._drain_task = None
+            self._loop = None
             self.stop_execution()
 
 
@@ -553,5 +665,50 @@ def create_websocket_router(manager: ExecutionManager) -> APIRouter:
             pass
         finally:
             manager.remove_websocket(websocket)
+
+    return router
+
+
+def create_asset_websocket_router(manager: ExecutionManager) -> APIRouter:
+    """
+    Create a router for per-asset WebSocket endpoints.
+
+    Parameters
+    ----------
+    manager : ExecutionManager
+        The execution state manager.
+
+    Returns
+    -------
+    APIRouter
+        Router with asset-scoped WebSocket endpoint.
+    """
+    router = APIRouter()
+
+    @router.websocket("/ws/asset/{key:path}")
+    async def asset_websocket(websocket: WebSocket, key: str) -> None:
+        """WebSocket for per-asset real-time log streaming."""
+        await websocket.accept()
+        manager.add_asset_subscriber(key, websocket)
+
+        try:
+            # Send replay buffer catch-up
+            replay = manager.get_replay_buffer(key)
+            if replay:
+                await websocket.send_json(
+                    {
+                        "type": "replay",
+                        "data": {"entries": replay},
+                    }
+                )
+
+            # Keep-alive loop — detects disconnects
+            while True:
+                await websocket.receive_text()
+
+        except WebSocketDisconnect:
+            pass
+        finally:
+            manager.remove_asset_subscriber(key, websocket)
 
     return router

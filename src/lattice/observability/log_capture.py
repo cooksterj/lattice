@@ -6,7 +6,7 @@ associating them with the assets that produced them.
 """
 
 import logging
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -27,11 +27,20 @@ class ExecutionLogHandler(logging.Handler):
         The captured log entries.
     """
 
-    def __init__(self) -> None:
-        """Initialize the handler with an empty entry list."""
+    def __init__(self, on_entry: Callable[[LogEntry], None] | None = None) -> None:
+        """Initialize the handler with an empty entry list.
+
+        Parameters
+        ----------
+        on_entry : callable or None
+            Optional callback invoked synchronously for each captured log entry.
+            Receives the LogEntry as its sole argument. The caller is responsible
+            for bridging to async if needed.
+        """
         super().__init__()
         self._entries: list[LogEntry] = []
         self._current_asset: AssetKey | None = None
+        self._on_entry = on_entry
 
     def set_current_asset(self, key: AssetKey | None) -> None:
         """
@@ -61,6 +70,8 @@ class ExecutionLogHandler(logging.Handler):
             asset_key=self._current_asset,
         )
         self._entries.append(entry)
+        if self._on_entry is not None:
+            self._on_entry(entry)
 
     @property
     def entries(self) -> list[LogEntry]:
@@ -84,6 +95,7 @@ class ExecutionLogHandler(logging.Handler):
 def capture_logs(
     logger_name: str = "lattice",
     level: int = logging.DEBUG,
+    on_entry: Callable[[LogEntry], None] | None = None,
 ) -> Generator[ExecutionLogHandler, None, None]:
     """
     Context manager to capture logs during execution.
@@ -98,6 +110,9 @@ def capture_logs(
         Name of the logger to capture from. Defaults to "lattice".
     level : int
         Minimum log level to capture. Defaults to DEBUG.
+    on_entry : callable or None
+        Optional callback invoked synchronously for each captured log entry.
+        Forwarded to the underlying ExecutionLogHandler.
 
     Yields
     ------
@@ -112,13 +127,13 @@ def capture_logs(
     >>> logs = handler.entries
     """
     logger = logging.getLogger(logger_name)
-    handler = ExecutionLogHandler()
+    handler = ExecutionLogHandler(on_entry=on_entry)
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter("%(message)s"))
 
     # Store original level to restore later
     original_level = logger.level
-    if logger.level > level:
+    if logger.getEffectiveLevel() > level:
         logger.setLevel(level)
 
     logger.addHandler(handler)
