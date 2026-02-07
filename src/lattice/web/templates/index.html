@@ -1,18 +1,9 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LATTICE // Asset Graph</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
-          rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css?v=9">
-</head>
-<body class="font-mono">
+{% extends "base.html" %}
+{% block title %}Asset Graph{% endblock %}
+{% block head_extra %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+{% endblock %}
+{% block content %}
 <div class="flex h-screen relative z-10">
     <!-- Main Graph Area -->
     <div class="flex-1 relative">
@@ -108,13 +99,7 @@
 <!-- Tooltip -->
 <div id="tooltip" class="tooltip fixed z-50 px-4 py-3 pointer-events-none opacity-0 transition-opacity duration-150">
 </div>
-
-<!-- Corner decorations -->
-<div class="corner-decor top-left"></div>
-<div class="corner-decor top-right"></div>
-<div class="corner-decor bottom-left"></div>
-<div class="corner-decor bottom-right"></div>
-
+{% endblock %}
+{% block scripts %}
 <script src="/static/js/graph.js?v=16"></script>
-</body>
-</html>
+{% endblock %}

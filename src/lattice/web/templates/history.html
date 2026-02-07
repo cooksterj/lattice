@@ -1,428 +1,420 @@
-<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LATTICE // Run History</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Mono:wght@400;700&display=swap"
-          rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/styles.css?v=9">
-    <style>
-        body {
-            overflow: auto;
-        }
+{% extends "base.html" %}
+{% block title %}Run History{% endblock %}
+{% block head_extra %}
+<style>
+    body {
+        overflow: auto;
+    }
 
-        .history-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 6rem 2rem 2rem;
-        }
+    .history-container {
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 6rem 2rem 2rem;
+    }
 
-        .section-title {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 0.15em;
-            color: var(--neon-cyan);
-            text-shadow: 0 0 10px var(--neon-cyan-glow);
-            margin-bottom: 1rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
+    .section-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.15em;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 10px var(--neon-cyan-glow);
+        margin-bottom: 1rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
 
-        .section-title::before {
-            content: '//';
-            color: var(--neon-pink);
-        }
+    .section-title::before {
+        content: '//';
+        color: var(--neon-pink);
+    }
 
-        .data-table {
-            width: 100%;
-            border-collapse: collapse;
-            background: rgba(18, 18, 26, 0.6);
-            border: 1px solid var(--border-dim);
-        }
+    .data-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: rgba(18, 18, 26, 0.6);
+        border: 1px solid var(--border-dim);
+    }
 
-        .light .data-table {
-            background: rgba(250, 250, 252, 0.8);
-        }
+    .light .data-table {
+        background: rgba(250, 250, 252, 0.8);
+    }
 
-        .data-table th {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            text-transform: uppercase;
-            color: var(--neon-cyan);
-            background: rgba(90, 158, 170, 0.08);
-            padding: 0.75rem 1rem;
-            text-align: left;
-            border-bottom: 1px solid var(--border-glow);
-        }
+    .data-table th {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--neon-cyan);
+        background: rgba(90, 158, 170, 0.08);
+        padding: 0.75rem 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border-glow);
+    }
 
-        .data-table td {
-            padding: 0.75rem 1rem;
-            font-size: 0.85rem;
-            border-bottom: 1px solid var(--border-dim);
-            color: var(--text-primary);
-        }
+    .data-table td {
+        padding: 0.75rem 1rem;
+        font-size: 0.85rem;
+        border-bottom: 1px solid var(--border-dim);
+        color: var(--text-primary);
+    }
 
-        .data-table tr:hover td {
-            background: rgba(90, 158, 170, 0.05);
-        }
+    .data-table tr:hover td {
+        background: rgba(90, 158, 170, 0.05);
+    }
 
-        .status-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.375rem;
-            padding: 0.25rem 0.625rem;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.05em;
-            border-radius: 2px;
-        }
+    .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        padding: 0.25rem 0.625rem;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.05em;
+        border-radius: 2px;
+    }
 
-        .status-badge.completed {
-            background: rgba(90, 158, 170, 0.15);
-            color: var(--neon-cyan);
-            border: 1px solid rgba(90, 158, 170, 0.3);
-        }
+    .status-badge.completed {
+        background: rgba(90, 158, 170, 0.15);
+        color: var(--neon-cyan);
+        border: 1px solid rgba(90, 158, 170, 0.3);
+    }
 
-        .status-badge.failed {
-            background: rgba(168, 70, 94, 0.15);
-            color: var(--neon-pink);
-            border: 1px solid rgba(168, 70, 94, 0.3);
-        }
+    .status-badge.failed {
+        background: rgba(168, 70, 94, 0.15);
+        color: var(--neon-pink);
+        border: 1px solid rgba(168, 70, 94, 0.3);
+    }
 
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
 
-        .stat-card {
-            background: rgba(18, 18, 26, 0.8);
-            border: 1px solid var(--border-dim);
-            padding: 1.25rem;
-            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-        }
+    .stat-card {
+        background: rgba(18, 18, 26, 0.8);
+        border: 1px solid var(--border-dim);
+        padding: 1.25rem;
+        clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+    }
 
-        .light .stat-card {
-            background: rgba(250, 250, 252, 0.9);
-        }
+    .light .stat-card {
+        background: rgba(250, 250, 252, 0.9);
+    }
 
-        .stat-card-label {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            letter-spacing: 0.1em;
-            margin-bottom: 0.5rem;
-        }
+    .stat-card-label {
+        font-size: 0.7rem;
+        color: var(--text-secondary);
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+    }
 
-        .stat-card-value {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: var(--neon-cyan);
-            text-shadow: 0 0 20px var(--neon-cyan-glow);
-        }
+    .stat-card-value {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--neon-cyan);
+        text-shadow: 0 0 20px var(--neon-cyan-glow);
+    }
 
-        .stat-card-value.pink {
-            color: var(--neon-pink);
-            text-shadow: 0 0 20px var(--neon-pink-glow);
-        }
+    .stat-card-value.pink {
+        color: var(--neon-pink);
+        text-shadow: 0 0 20px var(--neon-pink-glow);
+    }
 
-        .stat-card-value.yellow {
-            color: var(--neon-yellow);
-            text-shadow: 0 0 20px rgba(184, 158, 74, 0.4);
-        }
+    .stat-card-value.yellow {
+        color: var(--neon-yellow);
+        text-shadow: 0 0 20px rgba(184, 158, 74, 0.4);
+    }
 
-        .run-id-link {
-            color: var(--neon-yellow);
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+    .run-id-link {
+        color: var(--neon-yellow);
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-        .run-id-link:hover {
-            text-shadow: 0 0 10px rgba(184, 158, 74, 0.4);
-        }
+    .run-id-link:hover {
+        text-shadow: 0 0 10px rgba(184, 158, 74, 0.4);
+    }
 
-        .nav-link {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid transparent;
-            transition: all 0.2s ease;
-        }
+    .nav-link {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.75rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-secondary);
+        text-decoration: none;
+        padding: 0.5rem 1rem;
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+    }
 
-        .nav-link:hover {
-            color: var(--neon-cyan);
-            border-color: var(--border-dim);
-        }
+    .nav-link:hover {
+        color: var(--neon-cyan);
+        border-color: var(--border-dim);
+    }
 
-        .nav-link.active {
-            color: var(--neon-cyan);
-            border-color: var(--neon-cyan);
-            background: rgba(90, 158, 170, 0.1);
-        }
+    .nav-link.active {
+        color: var(--neon-cyan);
+        border-color: var(--neon-cyan);
+        background: rgba(90, 158, 170, 0.1);
+    }
 
-        .filter-bar {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
+    .filter-bar {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+        flex-wrap: wrap;
+    }
 
-        .filter-select {
-            padding: 0.5rem 1rem;
-            background: rgba(18, 18, 26, 0.8);
-            border: 1px solid var(--border-dim);
-            color: var(--text-primary);
-            font-family: 'Space Mono', monospace;
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+    .filter-select {
+        padding: 0.5rem 1rem;
+        background: rgba(18, 18, 26, 0.8);
+        border: 1px solid var(--border-dim);
+        color: var(--text-primary);
+        font-family: 'Space Mono', monospace;
+        font-size: 0.8rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-        .light .filter-select {
-            background: rgba(250, 250, 252, 0.9);
-        }
+    .light .filter-select {
+        background: rgba(250, 250, 252, 0.9);
+    }
 
-        .filter-select:hover,
-        .filter-select:focus {
-            border-color: var(--neon-cyan);
-            outline: none;
-        }
+    .filter-select:hover,
+    .filter-select:focus {
+        border-color: var(--neon-cyan);
+        outline: none;
+    }
 
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: var(--text-secondary);
-        }
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--text-secondary);
+    }
 
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
+    .empty-state-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
 
-        /* Modal styles */
-        .modal-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 100;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
+    /* Modal styles */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
 
-        .modal-overlay.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
+    .modal-overlay.active {
+        opacity: 1;
+        pointer-events: auto;
+    }
 
-        .modal-content {
-            background: var(--bg-surface);
-            border: 1px solid var(--border-glow);
-            width: 90%;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
-            clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
-            box-shadow: 0 0 60px var(--neon-cyan-glow);
-        }
+    .modal-content {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-glow);
+        width: 90%;
+        max-width: 800px;
+        max-height: 80vh;
+        overflow-y: auto;
+        clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+        box-shadow: 0 0 60px var(--neon-cyan-glow);
+    }
 
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 1.25rem 1.5rem;
-            border-bottom: 1px solid var(--border-dim);
-            background: linear-gradient(to right, rgba(90, 158, 170, 0.1), transparent);
-        }
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border-dim);
+        background: linear-gradient(to right, rgba(90, 158, 170, 0.1), transparent);
+    }
 
-        .modal-title {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-primary);
-        }
+    .modal-title {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        color: var(--text-primary);
+    }
 
-        .modal-close {
-            background: transparent;
-            border: 1px solid var(--border-dim);
-            color: var(--text-secondary);
-            padding: 0.5rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+    .modal-close {
+        background: transparent;
+        border: 1px solid var(--border-dim);
+        color: var(--text-secondary);
+        padding: 0.5rem;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-        .modal-close:hover {
-            color: var(--neon-pink);
-            border-color: var(--neon-pink);
-        }
+    .modal-close:hover {
+        color: var(--neon-pink);
+        border-color: var(--neon-pink);
+    }
 
-        .modal-body {
-            padding: 1.5rem;
-        }
+    .modal-body {
+        padding: 1.5rem;
+    }
 
-        .detail-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.75rem 0;
-            border-bottom: 1px solid var(--border-dim);
-        }
+    .detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.75rem 0;
+        border-bottom: 1px solid var(--border-dim);
+    }
 
-        .detail-row:last-child {
-            border-bottom: none;
-        }
+    .detail-row:last-child {
+        border-bottom: none;
+    }
 
-        .detail-key {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            letter-spacing: 0.1em;
-        }
+    .detail-key {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        letter-spacing: 0.1em;
+    }
 
-        .detail-val {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.85rem;
-            color: var(--text-primary);
-        }
+    .detail-val {
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.85rem;
+        color: var(--text-primary);
+    }
 
-        .tab-bar {
-            display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--border-dim);
-            margin-top: 1.5rem;
-        }
+    .tab-bar {
+        display: flex;
+        gap: 0;
+        border-bottom: 1px solid var(--border-dim);
+        margin-top: 1.5rem;
+    }
 
-        .tab-btn {
-            padding: 0.75rem 1.25rem;
-            background: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
-            color: var(--text-secondary);
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
+    .tab-btn {
+        padding: 0.75rem 1.25rem;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        color: var(--text-secondary);
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.1em;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
 
-        .tab-btn:hover {
-            color: var(--neon-cyan);
-        }
+    .tab-btn:hover {
+        color: var(--neon-cyan);
+    }
 
-        .tab-btn.active {
-            color: var(--neon-cyan);
-            border-bottom-color: var(--neon-cyan);
-        }
+    .tab-btn.active {
+        color: var(--neon-cyan);
+        border-bottom-color: var(--neon-cyan);
+    }
 
-        .tab-content {
-            display: none;
-            padding: 1rem 0;
-        }
+    .tab-content {
+        display: none;
+        padding: 1rem 0;
+    }
 
-        .tab-content.active {
-            display: block;
-        }
+    .tab-content.active {
+        display: block;
+    }
 
-        .log-entry {
-            display: flex;
-            gap: 0.75rem;
-            padding: 0.5rem;
-            font-size: 0.8rem;
-            border-bottom: 1px solid var(--border-dim);
-        }
+    .log-entry {
+        display: flex;
+        gap: 0.75rem;
+        padding: 0.5rem;
+        font-size: 0.8rem;
+        border-bottom: 1px solid var(--border-dim);
+    }
 
-        .log-level {
-            font-weight: 600;
-            width: 60px;
-            flex-shrink: 0;
-        }
+    .log-level {
+        font-weight: 600;
+        width: 60px;
+        flex-shrink: 0;
+    }
 
-        .log-level.INFO { color: var(--neon-cyan); }
-        .log-level.WARNING { color: var(--neon-yellow); }
-        .log-level.ERROR { color: var(--neon-pink); }
-        .log-level.DEBUG { color: var(--text-secondary); }
+    .log-level.INFO { color: var(--neon-cyan); }
+    .log-level.WARNING { color: var(--neon-yellow); }
+    .log-level.ERROR { color: var(--neon-pink); }
+    .log-level.DEBUG { color: var(--text-secondary); }
 
-        .log-asset {
-            color: var(--neon-purple);
-            flex-shrink: 0;
-        }
+    .log-asset {
+        color: var(--neon-purple);
+        flex-shrink: 0;
+    }
 
-        .log-message {
-            color: var(--text-primary);
-            word-break: break-word;
-        }
+    .log-message {
+        color: var(--text-primary);
+        word-break: break-word;
+    }
 
-        .check-entry {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.625rem;
-            border-bottom: 1px solid var(--border-dim);
-        }
+    .check-entry {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.625rem;
+        border-bottom: 1px solid var(--border-dim);
+    }
 
-        .check-icon {
-            font-size: 1rem;
-        }
+    .check-icon {
+        font-size: 1rem;
+    }
 
-        .check-icon.passed { color: var(--neon-cyan); }
-        .check-icon.failed { color: var(--neon-pink); }
+    .check-icon.passed { color: var(--neon-cyan); }
+    .check-icon.failed { color: var(--neon-pink); }
 
-        .check-name {
-            font-weight: 600;
-            color: var(--text-primary);
-        }
+    .check-name {
+        font-weight: 600;
+        color: var(--text-primary);
+    }
 
-        .check-asset {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-        }
+    .check-asset {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
 
-        .asset-entry {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.625rem;
-            border-bottom: 1px solid var(--border-dim);
-        }
+    .asset-entry {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.625rem;
+        border-bottom: 1px solid var(--border-dim);
+    }
 
-        .asset-status-icon {
-            font-size: 1rem;
-        }
+    .asset-status-icon {
+        font-size: 1rem;
+    }
 
-        .asset-status-icon.completed { color: var(--neon-cyan); }
-        .asset-status-icon.failed { color: var(--neon-pink); }
-        .asset-status-icon.skipped { color: var(--text-secondary); }
+    .asset-status-icon.completed { color: var(--neon-cyan); }
+    .asset-status-icon.failed { color: var(--neon-pink); }
+    .asset-status-icon.skipped { color: var(--text-secondary); }
 
-        .asset-name {
-            flex: 1;
-            color: var(--text-primary);
-        }
+    .asset-name {
+        flex: 1;
+        color: var(--text-primary);
+    }
 
-        .asset-duration {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-        }
-    </style>
-</head>
-<body class="font-mono">
+    .asset-duration {
+        color: var(--text-secondary);
+        font-size: 0.8rem;
+    }
+</style>
+{% endblock %}
+{% block body_class %}{% endblock %}
+{% block content %}
     <!-- Header -->
     <header class="header fixed top-0 left-0 right-0 z-50 p-4 flex items-center justify-between">
         <div class="flex items-center gap-4">
@@ -575,287 +567,281 @@
             </div>
         </div>
     </div>
+{% endblock %}
+{% block scripts %}
+<script>
+    // Theme toggle
+    const themeToggle = document.getElementById('theme-toggle');
+    const html = document.documentElement;
 
-    <!-- Corner decorations -->
-    <div class="corner-decor top-left"></div>
-    <div class="corner-decor top-right"></div>
-    <div class="corner-decor bottom-left"></div>
-    <div class="corner-decor bottom-right"></div>
+    function updateThemeIcons() {
+        const isDark = html.classList.contains('dark');
+        themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
+        themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
+    }
 
-    <script>
-        // Theme toggle
-        const themeToggle = document.getElementById('theme-toggle');
-        const html = document.documentElement;
-
-        function updateThemeIcons() {
-            const isDark = html.classList.contains('dark');
-            themeToggle.querySelector('.sun').classList.toggle('hidden', isDark);
-            themeToggle.querySelector('.moon').classList.toggle('hidden', !isDark);
-        }
-
-        themeToggle.addEventListener('click', () => {
-            html.classList.toggle('dark');
-            html.classList.toggle('light');
-            localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
-            updateThemeIcons();
-        });
-
-        // Load saved theme
-        const savedTheme = localStorage.getItem('theme');
-        if (savedTheme === 'light') {
-            html.classList.remove('dark');
-            html.classList.add('light');
-        }
+    themeToggle.addEventListener('click', () => {
+        html.classList.toggle('dark');
+        html.classList.toggle('light');
+        localStorage.setItem('theme', html.classList.contains('dark') ? 'dark' : 'light');
         updateThemeIcons();
+    });
 
-        // API helpers
-        async function fetchJSON(url) {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP ${response.status}`);
-            return response.json();
-        }
+    // Load saved theme
+    const savedTheme = localStorage.getItem('theme');
+    if (savedTheme === 'light') {
+        html.classList.remove('dark');
+        html.classList.add('light');
+    }
+    updateThemeIcons();
 
-        function formatDate(isoString) {
-            const d = new Date(isoString);
-            return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
+    // API helpers
+    async function fetchJSON(url) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+    }
 
-        function formatDuration(ms) {
-            if (ms < 1000) return `${ms.toFixed(1)}ms`;
-            return `${(ms / 1000).toFixed(2)}s`;
-        }
+    function formatDate(isoString) {
+        const d = new Date(isoString);
+        return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    }
 
-        // Load summary data
-        async function loadSummary() {
-            try {
-                const summary = await fetchJSON('/api/history/summary');
+    function formatDuration(ms) {
+        if (ms < 1000) return `${ms.toFixed(1)}ms`;
+        return `${(ms / 1000).toFixed(2)}s`;
+    }
 
-                // Update stats
-                document.getElementById('stat-total').textContent = summary.total_runs;
-                document.getElementById('stat-passed').textContent = summary.total_passed;
-                document.getElementById('stat-failed').textContent = summary.total_failed;
-                const rate = summary.total_runs > 0
-                    ? Math.round((summary.total_passed / summary.total_runs) * 100)
-                    : 0;
-                document.getElementById('stat-rate').textContent = `${rate}%`;
+    // Load summary data
+    async function loadSummary() {
+        try {
+            const summary = await fetchJSON('/api/history/summary');
 
-                // Update asset table
-                const assetTbody = document.getElementById('asset-tbody');
-                if (summary.asset_summaries.length === 0) {
-                    assetTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No asset data available</td></tr>';
-                } else {
-                    assetTbody.innerHTML = summary.asset_summaries.map(a => `
-                        <tr>
-                            <td>${a.asset_key}</td>
-                            <td>${a.total_runs}</td>
-                            <td>${a.passed_count}</td>
-                            <td>${a.failed_count}</td>
-                            <td>${a.last_run_at ? formatDate(a.last_run_at) : '-'}</td>
-                            <td>${a.avg_duration_ms ? formatDuration(a.avg_duration_ms) : '-'}</td>
-                        </tr>
-                    `).join('');
-                }
+            // Update stats
+            document.getElementById('stat-total').textContent = summary.total_runs;
+            document.getElementById('stat-passed').textContent = summary.total_passed;
+            document.getElementById('stat-failed').textContent = summary.total_failed;
+            const rate = summary.total_runs > 0
+                ? Math.round((summary.total_passed / summary.total_runs) * 100)
+                : 0;
+            document.getElementById('stat-rate').textContent = `${rate}%`;
 
-                // Update partition table
-                const partTbody = document.getElementById('partition-tbody');
-                if (summary.partition_summaries.length === 0) {
-                    partTbody.innerHTML = '<tr><td colspan="5" class="empty-state">No partition data available</td></tr>';
-                } else {
-                    partTbody.innerHTML = summary.partition_summaries.map(p => `
-                        <tr>
-                            <td>${p.partition_key}</td>
-                            <td>${p.total_runs}</td>
-                            <td>${p.completed_count}</td>
-                            <td>${p.failed_count}</td>
-                            <td>${formatDuration(p.total_duration_ms)}</td>
-                        </tr>
-                    `).join('');
-                }
-            } catch (e) {
-                console.error('Failed to load summary:', e);
-            }
-        }
-
-        // Load runs list
-        async function loadRuns(status = null) {
-            try {
-                let url = '/api/history/runs?limit=50';
-                if (status) url += `&status=${status}`;
-
-                const data = await fetchJSON(url);
-                const tbody = document.getElementById('runs-tbody');
-
-                if (data.runs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No runs found</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.runs.map(r => `
+            // Update asset table
+            const assetTbody = document.getElementById('asset-tbody');
+            if (summary.asset_summaries.length === 0) {
+                assetTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No asset data available</td></tr>';
+            } else {
+                assetTbody.innerHTML = summary.asset_summaries.map(a => `
                     <tr>
-                        <td>
-                            <span class="run-id-link" data-run-id="${r.run_id}">${r.run_id}</span>
-                        </td>
-                        <td>${formatDate(r.started_at)}</td>
-                        <td>${r.partition_key || '-'}</td>
-                        <td>
-                            <span class="status-badge ${r.status}">
-                                ${r.status === 'completed' ? '✓' : '✗'} ${r.status.toUpperCase()}
-                            </span>
-                        </td>
-                        <td>${r.completed_count}/${r.total_assets}</td>
-                        <td>${formatDuration(r.duration_ms)}</td>
+                        <td>${a.asset_key}</td>
+                        <td>${a.total_runs}</td>
+                        <td>${a.passed_count}</td>
+                        <td>${a.failed_count}</td>
+                        <td>${a.last_run_at ? formatDate(a.last_run_at) : '-'}</td>
+                        <td>${a.avg_duration_ms ? formatDuration(a.avg_duration_ms) : '-'}</td>
                     </tr>
                 `).join('');
-
-                // Add click handlers
-                document.querySelectorAll('.run-id-link').forEach(el => {
-                    el.addEventListener('click', () => showRunDetails(el.dataset.runId));
-                });
-            } catch (e) {
-                console.error('Failed to load runs:', e);
             }
+
+            // Update partition table
+            const partTbody = document.getElementById('partition-tbody');
+            if (summary.partition_summaries.length === 0) {
+                partTbody.innerHTML = '<tr><td colspan="5" class="empty-state">No partition data available</td></tr>';
+            } else {
+                partTbody.innerHTML = summary.partition_summaries.map(p => `
+                    <tr>
+                        <td>${p.partition_key}</td>
+                        <td>${p.total_runs}</td>
+                        <td>${p.completed_count}</td>
+                        <td>${p.failed_count}</td>
+                        <td>${formatDuration(p.total_duration_ms)}</td>
+                    </tr>
+                `).join('');
+            }
+        } catch (e) {
+            console.error('Failed to load summary:', e);
         }
+    }
 
-        // Show run details modal
-        async function showRunDetails(runId) {
-            try {
-                const run = await fetchJSON(`/api/history/runs/${runId}`);
-                const modal = document.getElementById('run-modal');
-                const body = document.getElementById('modal-body');
+    // Load runs list
+    async function loadRuns(status = null) {
+        try {
+            let url = '/api/history/runs?limit=50';
+            if (status) url += `&status=${status}`;
 
-                body.innerHTML = `
-                    <div class="detail-row">
-                        <span class="detail-key">RUN ID</span>
-                        <span class="detail-val">${run.run_id}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-key">STATUS</span>
-                        <span class="detail-val">
-                            <span class="status-badge ${run.status}">
-                                ${run.status === 'completed' ? '✓' : '✗'} ${run.status.toUpperCase()}
-                            </span>
+            const data = await fetchJSON(url);
+            const tbody = document.getElementById('runs-tbody');
+
+            if (data.runs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No runs found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.runs.map(r => `
+                <tr>
+                    <td>
+                        <span class="run-id-link" data-run-id="${r.run_id}">${r.run_id}</span>
+                    </td>
+                    <td>${formatDate(r.started_at)}</td>
+                    <td>${r.partition_key || '-'}</td>
+                    <td>
+                        <span class="status-badge ${r.status}">
+                            ${r.status === 'completed' ? '&#10003;' : '&#10007;'} ${r.status.toUpperCase()}
                         </span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-key">STARTED</span>
-                        <span class="detail-val">${formatDate(run.started_at)}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-key">COMPLETED</span>
-                        <span class="detail-val">${formatDate(run.completed_at)}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-key">DURATION</span>
-                        <span class="detail-val">${formatDuration(run.duration_ms)}</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-key">ASSETS</span>
-                        <span class="detail-val">${run.completed_count}/${run.total_assets} completed, ${run.failed_count} failed</span>
-                    </div>
-                    ${run.target ? `
-                    <div class="detail-row">
-                        <span class="detail-key">TARGET</span>
-                        <span class="detail-val">${run.target}</span>
-                    </div>
-                    ` : ''}
-                    ${run.partition_key ? `
-                    <div class="detail-row">
-                        <span class="detail-key">PARTITION</span>
-                        <span class="detail-val">${run.partition_key}</span>
-                    </div>
-                    ` : ''}
+                    </td>
+                    <td>${r.completed_count}/${r.total_assets}</td>
+                    <td>${formatDuration(r.duration_ms)}</td>
+                </tr>
+            `).join('');
 
-                    <div class="tab-bar">
-                        <button class="tab-btn active" data-tab="assets">ASSETS</button>
-                        <button class="tab-btn" data-tab="checks">CHECKS</button>
-                        <button class="tab-btn" data-tab="logs">LOGS</button>
-                        <button class="tab-btn" data-tab="lineage">LINEAGE</button>
-                    </div>
-
-                    <div class="tab-content active" id="tab-assets">
-                        ${run.asset_results.length === 0 ? '<p class="empty-state">No asset results</p>' :
-                        run.asset_results.map(a => `
-                            <div class="asset-entry">
-                                <span class="asset-status-icon ${a.status}">${
-                                    a.status === 'completed' ? '✓' :
-                                    a.status === 'failed' ? '✗' : '○'
-                                }</span>
-                                <span class="asset-name">${a.key}</span>
-                                <span class="asset-duration">${a.duration_ms ? formatDuration(a.duration_ms) : '-'}</span>
-                            </div>
-                            ${a.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${a.error}</div>` : ''}
-                        `).join('')}
-                    </div>
-
-                    <div class="tab-content" id="tab-checks">
-                        ${run.check_results.length === 0 ? '<p class="empty-state">No checks run</p>' :
-                        run.check_results.map(c => `
-                            <div class="check-entry">
-                                <span class="check-icon ${c.passed ? 'passed' : 'failed'}">${c.passed ? '✓' : '✗'}</span>
-                                <span class="check-name">${c.check_name}</span>
-                                <span class="check-asset">on ${c.asset_key}</span>
-                            </div>
-                            ${c.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${c.error}</div>` : ''}
-                        `).join('')}
-                    </div>
-
-                    <div class="tab-content" id="tab-logs">
-                        ${run.logs.length === 0 ? '<p class="empty-state">No logs captured</p>' :
-                        run.logs.map(l => `
-                            <div class="log-entry">
-                                <span class="log-level ${l.level}">${l.level}</span>
-                                ${l.asset_key ? `<span class="log-asset">[${l.asset_key}]</span>` : ''}
-                                <span class="log-message">${l.message}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <div class="tab-content" id="tab-lineage">
-                        ${run.lineage.length === 0 ? '<p class="empty-state">No lineage events</p>' :
-                        run.lineage.map(e => `
-                            <div class="log-entry">
-                                <span class="log-level ${e.event_type === 'read' ? 'INFO' : 'WARNING'}">${e.event_type.toUpperCase()}</span>
-                                <span class="log-message">${e.asset_key}${e.source_asset ? ` (from ${e.source_asset})` : ''}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                `;
-
-                // Tab switching
-                body.querySelectorAll('.tab-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        body.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                        body.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                        btn.classList.add('active');
-                        document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
-                    });
-                });
-
-                modal.classList.add('active');
-            } catch (e) {
-                console.error('Failed to load run details:', e);
-            }
+            // Add click handlers
+            document.querySelectorAll('.run-id-link').forEach(el => {
+                el.addEventListener('click', () => showRunDetails(el.dataset.runId));
+            });
+        } catch (e) {
+            console.error('Failed to load runs:', e);
         }
+    }
 
-        // Modal close
-        document.getElementById('modal-close').addEventListener('click', () => {
+    // Show run details modal
+    async function showRunDetails(runId) {
+        try {
+            const run = await fetchJSON(`/api/history/runs/${runId}`);
+            const modal = document.getElementById('run-modal');
+            const body = document.getElementById('modal-body');
+
+            body.innerHTML = `
+                <div class="detail-row">
+                    <span class="detail-key">RUN ID</span>
+                    <span class="detail-val">${run.run_id}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-key">STATUS</span>
+                    <span class="detail-val">
+                        <span class="status-badge ${run.status}">
+                            ${run.status === 'completed' ? '&#10003;' : '&#10007;'} ${run.status.toUpperCase()}
+                        </span>
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-key">STARTED</span>
+                    <span class="detail-val">${formatDate(run.started_at)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-key">COMPLETED</span>
+                    <span class="detail-val">${formatDate(run.completed_at)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-key">DURATION</span>
+                    <span class="detail-val">${formatDuration(run.duration_ms)}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-key">ASSETS</span>
+                    <span class="detail-val">${run.completed_count}/${run.total_assets} completed, ${run.failed_count} failed</span>
+                </div>
+                ${run.target ? `
+                <div class="detail-row">
+                    <span class="detail-key">TARGET</span>
+                    <span class="detail-val">${run.target}</span>
+                </div>
+                ` : ''}
+                ${run.partition_key ? `
+                <div class="detail-row">
+                    <span class="detail-key">PARTITION</span>
+                    <span class="detail-val">${run.partition_key}</span>
+                </div>
+                ` : ''}
+
+                <div class="tab-bar">
+                    <button class="tab-btn active" data-tab="assets">ASSETS</button>
+                    <button class="tab-btn" data-tab="checks">CHECKS</button>
+                    <button class="tab-btn" data-tab="logs">LOGS</button>
+                    <button class="tab-btn" data-tab="lineage">LINEAGE</button>
+                </div>
+
+                <div class="tab-content active" id="tab-assets">
+                    ${run.asset_results.length === 0 ? '<p class="empty-state">No asset results</p>' :
+                    run.asset_results.map(a => `
+                        <div class="asset-entry">
+                            <span class="asset-status-icon ${a.status}">${
+                                a.status === 'completed' ? '&#10003;' :
+                                a.status === 'failed' ? '&#10007;' : '&#9675;'
+                            }</span>
+                            <span class="asset-name">${a.key}</span>
+                            <span class="asset-duration">${a.duration_ms ? formatDuration(a.duration_ms) : '-'}</span>
+                        </div>
+                        ${a.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${a.error}</div>` : ''}
+                    `).join('')}
+                </div>
+
+                <div class="tab-content" id="tab-checks">
+                    ${run.check_results.length === 0 ? '<p class="empty-state">No checks run</p>' :
+                    run.check_results.map(c => `
+                        <div class="check-entry">
+                            <span class="check-icon ${c.passed ? 'passed' : 'failed'}">${c.passed ? '&#10003;' : '&#10007;'}</span>
+                            <span class="check-name">${c.check_name}</span>
+                            <span class="check-asset">on ${c.asset_key}</span>
+                        </div>
+                        ${c.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${c.error}</div>` : ''}
+                    `).join('')}
+                </div>
+
+                <div class="tab-content" id="tab-logs">
+                    ${run.logs.length === 0 ? '<p class="empty-state">No logs captured</p>' :
+                    run.logs.map(l => `
+                        <div class="log-entry">
+                            <span class="log-level ${l.level}">${l.level}</span>
+                            ${l.asset_key ? `<span class="log-asset">[${l.asset_key}]</span>` : ''}
+                            <span class="log-message">${l.message}</span>
+                        </div>
+                    `).join('')}
+                </div>
+
+                <div class="tab-content" id="tab-lineage">
+                    ${run.lineage.length === 0 ? '<p class="empty-state">No lineage events</p>' :
+                    run.lineage.map(e => `
+                        <div class="log-entry">
+                            <span class="log-level ${e.event_type === 'read' ? 'INFO' : 'WARNING'}">${e.event_type.toUpperCase()}</span>
+                            <span class="log-message">${e.asset_key}${e.source_asset ? ` (from ${e.source_asset})` : ''}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            // Tab switching
+            body.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    body.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    body.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+                });
+            });
+
+            modal.classList.add('active');
+        } catch (e) {
+            console.error('Failed to load run details:', e);
+        }
+    }
+
+    // Modal close
+    document.getElementById('modal-close').addEventListener('click', () => {
+        document.getElementById('run-modal').classList.remove('active');
+    });
+
+    document.getElementById('run-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'run-modal') {
             document.getElementById('run-modal').classList.remove('active');
-        });
+        }
+    });
 
-        document.getElementById('run-modal').addEventListener('click', (e) => {
-            if (e.target.id === 'run-modal') {
-                document.getElementById('run-modal').classList.remove('active');
-            }
-        });
+    // Status filter
+    document.getElementById('status-filter').addEventListener('change', (e) => {
+        loadRuns(e.target.value || null);
+    });
 
-        // Status filter
-        document.getElementById('status-filter').addEventListener('change', (e) => {
-            loadRuns(e.target.value || null);
-        });
-
-        // Initial load
-        loadSummary();
-        loadRuns();
-    </script>
-</body>
-</html>
+    // Initial load
+    loadSummary();
+    loadRuns();
+</script>
+{% endblock %}
