@@ -7,11 +7,11 @@
 
 ### Asset Window
 
-- [ ] **AWIN-01**: User can see live log entries streaming in real-time as an asset executes
-- [ ] **AWIN-02**: User sees a success/failure banner with duration when an asset completes execution
-- [ ] **AWIN-03**: User can click a button to refocus the main graph window
-- [ ] **AWIN-04**: User can click a link to open run history in a separate browser window
-- [ ] **AWIN-05**: User can see asset details (dependencies, type, group) when no execution is running
+- [x] **AWIN-01**: User can see live log entries streaming in real-time as an asset executes
+- [x] **AWIN-02**: User sees a success/failure banner with duration when an asset completes execution
+- [x] **AWIN-03**: User can click a button to refocus the main graph window
+- [x] **AWIN-04**: User can click a link to open run history in a separate browser window
+- [x] **AWIN-05**: User can see asset details (dependencies, type, group) when no execution is running
 
 ### Graph Integration
 
@@ -52,11 +52,11 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| AWIN-01 | Phase 2 | Pending |
-| AWIN-02 | Phase 2 | Pending |
-| AWIN-03 | Phase 2 | Pending |
-| AWIN-04 | Phase 2 | Pending |
-| AWIN-05 | Phase 2 | Pending |
+| AWIN-01 | Phase 2 | Done |
+| AWIN-02 | Phase 2 | Done |
+| AWIN-03 | Phase 2 | Done |
+| AWIN-04 | Phase 2 | Done |
+| AWIN-05 | Phase 2 | Done |
 | GRAF-01 | Phase 3 | Pending |
 | GRAF-02 | Phase 3 | Pending |
 | GRAF-03 | Phase 3 | Pending |
@@ -70,4 +70,4 @@
 
 ---
 *Requirements defined: 2026-02-06*
-*Last updated: 2026-02-06 after Phase 1 completion*
+*Last updated: 2026-02-07 after Phase 2 completion*
