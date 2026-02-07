@@ -1,282 +1,265 @@
-# Pitfalls: Multi-Window Asset Monitoring with WebSocket Streaming
+# Pitfalls Research: Sidebar Navigation, Partial DAG Re-Execution, and Failure Recovery
 
-**Project:** Lattice Web UI -- Multi-Window Asset Monitoring
-**Analysis Date:** 2026-02-06
-**Dimension:** Technical pitfalls for real-time multi-window web UI with WebSocket streaming
+**Domain:** Adding sidebar navigation, partial re-execution, and failure recovery to existing DAG orchestration web UI
+**Researched:** 2026-02-07
+**Confidence:** HIGH (based on direct codebase analysis and domain experience)
 
 ---
 
-## P1: Popup Blockers Silently Swallow `window.open()` Calls
+## Critical Pitfalls
 
-**What goes wrong:** Modern browsers block `window.open()` unless it is called synchronously inside a direct user-gesture handler (e.g., a `click` event). If the call is deferred -- wrapped in `await`, placed inside a `setTimeout`, or triggered after an async fetch -- the browser treats it as a programmatic popup and blocks it silently. The call returns `null` instead of a window reference, and no error is thrown. The user clicks an asset node and nothing visible happens.
+### Pitfall 1: Stale Upstream Data During Partial Re-Execution
+
+**What goes wrong:**
+When re-executing from a failed asset downstream, the system must load the outputs of upstream assets that already completed successfully in the previous run. But the current `MemoryIOManager` is ephemeral -- it creates a fresh instance per execution (line 364 of `execution.py`: `base_io_manager = MemoryIOManager()`). After the first run completes, all intermediate results are garbage-collected. When the user triggers a partial re-execution starting from the failed asset, the executor needs the outputs of the successfully-completed upstream assets as inputs, but those outputs no longer exist.
+
+The system has two paths to this failure: (1) the IOManager has no data, so `io_manager.load(dep_key)` raises a `KeyError`, and every asset in the partial run fails immediately; or (2) the IOManager happens to have stale data from a different run, producing silently incorrect results.
+
+**Why it happens:**
+The `Executor` and `AsyncExecutor` were designed for full-pipeline execution where every asset runs and produces its output before any downstream consumer reads it. Partial re-execution breaks this assumption -- it assumes some assets already have stored outputs from a prior run.
+
+**How to avoid:**
+1. For partial re-execution, the executor must first load the results of all upstream assets that are NOT being re-executed. This means either: (a) persisting intermediate results from the original run (e.g., keeping the `MemoryIOManager` instance alive between runs), or (b) re-executing all upstream dependencies before the failed asset even in "partial" mode (which is what `ExecutionPlan.resolve()` with `include_downstream=True` already does -- it includes upstream deps of the target).
+2. The `ExecutionPlan.resolve(registry, target=failed_asset, include_downstream=True)` path already resolves the target's upstream dependencies PLUS all downstream. This is the correct approach -- it re-runs the failed asset's upstream deps to regenerate their outputs, then runs the failed asset and everything downstream. The partial saving is that assets which are NOT upstream or downstream of the failed asset are skipped.
+3. Do NOT try to cache IOManager results between runs. The simpler and more correct approach is: re-execute upstream deps + failed asset + downstream. The user saves time by not re-running unrelated branches of the DAG.
+4. Clearly communicate in the UI which assets will be re-executed (the full subgraph, not just "failed + downstream").
 
 **Warning signs:**
-- `window.open()` returns `null` in testing on Chrome or Firefox but works in Safari (Safari is more permissive)
-- The feature works locally but fails for users who have stricter popup settings
-- Opening works on first click but fails on second click (some browsers allow one popup per gesture)
-- Works when DevTools is open (some browsers relax popup rules during development)
+- `KeyError` or missing data errors when loading dependencies during partial re-execution
+- Assets complete instantly with wrong output values (loaded from stale cache)
+- Test passes when running full pipeline but fails when running partial re-execution
 
-**Why this matters for Lattice specifically:** The current `graph.js` click handler on nodes (`line 522-524`) does `window.location.href = '/asset/' + ...` synchronously, which works fine. Switching to `window.open()` in the same synchronous handler will work. But if the implementation first fetches asset data or checks execution status before opening the window, the async gap will trigger the blocker.
-
-**Prevention strategy:**
-1. Call `window.open()` synchronously inside the D3 node click handler, before any async operations
-2. Always capture and check the return value: `const win = window.open(...); if (!win) { /* show fallback UI */ }`
-3. Provide a visible fallback when blocked: display a toast notification with a direct link the user can click, or open in the current tab with a "back to graph" button
-4. Store the window reference in a `Map<assetId, Window>` so subsequent clicks can focus an existing window (`win.focus()`) rather than opening duplicates
-5. Test with Chrome's built-in popup blocker enabled (Settings > Privacy > Site Settings > Pop-ups and redirects)
-
-**Phase mapping:** Must be addressed in the first implementation phase when converting the click handler from navigation to window.open. This is a gating issue -- if window.open fails silently, the entire feature appears broken.
+**Phase to address:**
+Must be designed in the phase that implements `ExecutionStartRequest` changes for partial re-execution. This is the foundational correctness issue.
 
 ---
 
-## P2: WebSocket Connections Accumulate Without Cleanup Across Window Lifecycle
+### Pitfall 2: Ambiguous "Failed Asset" Selection on Graph After Multiple Runs
 
-**What goes wrong:** Each asset window opens its own WebSocket connection to `/ws/execution`. When the user closes a window, the browser initiates a TCP close handshake, but the server-side `execution_websocket()` function (line 531-556 of `execution.py`) only removes the socket from the set when `WebSocketDisconnect` is raised during the `while True` loop's `asyncio.sleep(0.5)`. There is a race window: if the window is closed between a successful `send_json` and the next sleep cycle, the dead socket persists in `_websockets` until the next broadcast attempt fails. Meanwhile, the server-side coroutine keeps running, consuming an asyncio task slot.
+**What goes wrong:**
+The graph currently shows asset status from the most recent execution via CSS classes (`status-running`, `status-completed`, `status-failed`). After an execution with failures, the user sees red (failed) nodes. But if the user runs a new partial execution from a failed asset and THAT also fails at a different asset, the graph now shows a mix of statuses from two different runs. The user cannot tell which failures are from which run, and clicking a "failed" asset may re-execute from a different failure point than intended.
+
+Worse: if the partial re-execution succeeds for the originally-failed asset but fails at a downstream asset, the graph shows the originally-failed asset as "completed" (from the partial run) and a new downstream asset as "failed". The user may not realize the upstream asset was re-executed -- they see a different failure landscape than expected.
+
+**Why it happens:**
+The graph status visualization (`updateAssetStatus` in graph.js) overwrites per-asset statuses as they arrive via WebSocket, with no concept of "which run" a status belongs to. Each new execution clears statuses (line 995: `this.executionState.assetStatuses.clear()`) but only for assets that actually execute in the new run. Assets outside the partial execution scope retain their status from the previous run.
+
+**How to avoid:**
+1. When starting a partial re-execution, clear ALL asset statuses on the graph first, not just the ones in the current execution scope. Assets outside the execution scope should show "not part of this run" (neutral/default), not their status from a prior run.
+2. Alternatively, visually distinguish "in scope" vs. "out of scope" assets during partial execution. Dim/gray-out assets that are not being re-executed, and only color-code the assets that are part of the current run.
+3. Add a "run scope" indicator to the graph UI: when a partial execution is active, show which assets are included (highlighted border) vs. excluded (dimmed).
+4. Store the execution scope (set of asset keys being re-executed) client-side so the graph can differentiate between "completed in this run" and "completed in a prior run".
 
 **Warning signs:**
-- `len(self._websockets)` grows over time even after windows are closed (observable via the debug logs already in place)
-- asyncio task count increases monotonically during a session
-- Server becomes sluggish after opening and closing many asset windows
-- `RuntimeError: WebSocket is already closed` appears in server logs during broadcast
+- User clicks "Execute from failed" but the wrong subgraph re-executes because they selected the wrong failed asset
+- Graph shows green (completed) for assets that were NOT re-executed in the current run
+- User confusion about which run produced which status
 
-**Why this matters for Lattice specifically:** The current code has exactly one WebSocket connection (from the main graph page). Adding N asset windows means N+1 connections. A user monitoring 5-8 assets during a pipeline run is realistic. If they close and reopen windows during a long execution, orphaned connections accumulate. The `broadcast()` method (line 132-147) iterates all sockets, so dead ones cause failed sends and get cleaned up reactively -- but only on the next broadcast, and only for sockets that raise exceptions (not for those that silently buffer).
-
-**Prevention strategy:**
-1. Add a `beforeunload` handler in each asset window's JavaScript that sends a WebSocket close frame before the page unloads: `window.addEventListener('beforeunload', () => ws.close(1000, 'window_closed'));`
-2. On the server side, add a heartbeat mechanism: if the WebSocket loop does not receive a pong within 10 seconds, forcibly close and remove the socket
-3. Track open connections with metadata (asset_id, opened_at) so they can be inspected and debugged
-4. Add a maximum connection limit per client (e.g., 20 WebSocket connections total) to prevent runaway accumulation
-5. Close the server-side coroutine explicitly when `WebSocketDisconnect` occurs (the current code does this with the `finally` block, but verify the asyncio task is actually cancelled)
-
-**Phase mapping:** Must be designed into the WebSocket endpoint from the start. The `beforeunload` handler should be in the first implementation. Server-side heartbeat can be a follow-up hardening task.
+**Phase to address:**
+Must be addressed in the phase that changes graph click behavior to select/highlight. The visual differentiation between "current run scope" and "prior run results" is essential for the re-execution UX.
 
 ---
 
-## P3: Memory Leak from Unbounded Log Entry Accumulation in ExecutionLogHandler
+### Pitfall 3: WebSocket Connection Destroyed on Every Full-Page Navigation
 
-**What goes wrong:** The `ExecutionLogHandler` (in `log_capture.py`) stores every log entry in `self._entries` as a Python list that grows without bound during execution. When log entries are broadcast to asset windows via WebSocket, the entries are serialized to JSON and sent. But the handler itself keeps all entries in memory for the duration of the `capture_logs()` context manager (which spans the entire execution). For a pipeline with many assets producing verbose logs during a date-range backfill (e.g., 30 days x 10 assets x 50 log lines = 15,000 entries), this list consumes significant memory and slows down iteration when building the `RunResult`.
+**What goes wrong:**
+The current architecture uses separate HTML templates for each page (index.html, history.html, asset_detail.html, asset_live.html). Each page loads independently with its own `<script>` block. Navigating between pages causes a full page reload, which destroys:
+- All JavaScript state (the `LatticeGraph` instance, execution state, WebSocket connections)
+- The WebSocket connection to `/ws/execution`
+- Any in-progress asset status tracking on the graph
+
+When v2 introduces a persistent sidebar on ALL pages, the sidebar needs to show active run status and icons that reflect live execution state. But every time the user navigates to a different page (e.g., clicks "Run History" in the sidebar), the page reloads, the WebSocket drops, and the sidebar loses its live state. The sidebar arrives in its default "no execution" state until a new WebSocket connection is established and catches up.
+
+**Why it happens:**
+Jinja2 template inheritance gives shared HTML structure (sidebar, header), but JavaScript state does not survive full-page navigation. Each page gets a fresh JavaScript execution context. This is fundamentally different from SPA frameworks where navigation preserves state.
+
+**How to avoid:**
+1. Accept that WebSocket state is lost on navigation and design for rapid reconnection. Each page's JavaScript should: (a) check execution status via REST (`/api/execution/status`) immediately on load, (b) connect to WebSocket for live updates, (c) render the sidebar state based on the REST response while waiting for WebSocket to connect. This gives instant sidebar state without waiting for WebSocket.
+2. Use `sessionStorage` or `localStorage` to cache the last-known execution state. On page load, read cached state to populate the sidebar immediately, then update when REST/WebSocket data arrives. This eliminates the flash of "idle" sidebar during page transitions.
+3. Keep the sidebar JavaScript in a shared file (e.g., `sidebar.js`) loaded by the base template. This shared script handles WebSocket connection, sidebar rendering, and state caching. Page-specific scripts handle only page-specific behavior.
+4. Do NOT try to prevent full-page navigation (e.g., with History API / SPA routing). The project constraint requires Jinja2 templates with full-page navigation. Fighting this constraint leads to fragile, half-SPA code.
 
 **Warning signs:**
-- Server RSS grows proportionally to execution duration and log volume
-- Memory panel on the graph page shows steadily increasing RSS that does not flatten after assets complete
-- Backfill runs (date ranges) show dramatically higher memory than single-date runs
-- `handler.entries` property (line 74) calls `.copy()` which doubles memory at the point of use
+- Sidebar flickers or shows "no active run" briefly when navigating between pages during execution
+- WebSocket reconnection takes 1-2 seconds after navigation, during which sidebar is stale
+- Users report "execution stopped" when they navigate, even though execution continues server-side
+- WebSocket connection count spikes on server during rapid navigation (connect/disconnect churn)
 
-**Why this matters for Lattice specifically:** The current implementation stores logs only for post-mortem (after execution, logs go into SQLite). Adding real-time log streaming means logs must flow through two paths: (1) WebSocket to the browser for live display, and (2) the list for eventual persistence. If both paths accumulate independently, memory doubles. Furthermore, the `_entries.copy()` call on line 74 means every time logs are accessed (e.g., for each partition in a date range), a full copy is made.
-
-**Prevention strategy:**
-1. Stream log entries to WebSocket consumers immediately upon capture (extend `emit()` to also enqueue to an async broadcast queue)
-2. For persistence, write log entries to SQLite in batches during execution rather than accumulating the entire list
-3. If the full list must be kept, impose a cap (e.g., last 10,000 entries per execution) and drop oldest entries with a warning
-4. Remove the `.copy()` in the `entries` property -- return a read-only view or the list directly if callers do not mutate it
-5. For date-range backfills, clear the handler between partitions (the current code already creates a fresh `capture_logs()` context per partition via the `with` statement on line 278 of `execution.py`, but verify this is preserved when adding streaming)
-
-**Phase mapping:** Must be addressed when implementing the real-time log streaming feature. The decision about whether to stream-then-discard vs. accumulate-and-stream affects the entire log pipeline architecture.
+**Phase to address:**
+Must be addressed in the first phase when implementing the sidebar and base template. The WebSocket + REST fallback pattern must be established before any page-specific features are built on top of it.
 
 ---
 
-## P4: Race Condition Between Window Opening and Execution State
+### Pitfall 4: Template Inheritance Block Conflicts When Adding Sidebar to Existing Pages
 
-**What goes wrong:** A user clicks an asset node to open its window. The window opens, connects via WebSocket, and requests the current state. But between the click and the WebSocket connection completing (which involves a TCP handshake, HTTP upgrade, and server accept), the asset may transition from "running" to "completed". The window misses the `asset_start` and `asset_complete` messages that were broadcast before it connected. The user sees an empty log view with no indication that the asset already finished.
+**What goes wrong:**
+The current templates (index.html, history.html, asset_detail.html, asset_live.html) are completely independent HTML documents with no shared base template. Each has its own `<html>`, `<head>`, `<body>`, header, corner decorations, theme toggle, and inline `<style>` blocks. Introducing a base template with a shared sidebar requires refactoring ALL existing templates to extend the base.
+
+The common mistake: defining the base template's blocks too coarsely (e.g., one giant `{% block content %}`) or too finely (dozens of tiny blocks). Too coarse means child templates cannot customize the sidebar or header per-page. Too fine means every child template must override many blocks, and forgetting one causes subtle layout breaks. Another mistake: duplicating the sidebar HTML in each template instead of using inheritance, leading to N copies that drift apart.
+
+Additionally, the current inline `<style>` blocks in each template (e.g., asset_live.html has ~420 lines of inline CSS) will conflict with base template styles. CSS specificity battles between base and child template styles produce mysterious visual bugs.
+
+**Why it happens:**
+The v1 templates were designed as independent pages opened in separate windows. There was no need for shared structure because each page was a self-contained document. Adding shared structure after the fact requires careful refactoring.
+
+**How to avoid:**
+1. Define the base template with these specific blocks: `{% block title %}`, `{% block head_extra %}` (for page-specific CSS/meta), `{% block content %}` (main page area), `{% block scripts %}` (page-specific JS), and `{% block sidebar_extra %}` (for page-specific sidebar content, if any).
+2. Extract all shared CSS into `styles.css` (already partially done) and move inline styles from each template into either the shared stylesheet or page-specific CSS files.
+3. Move the duplicated header, theme toggle, and corner decoration markup into the base template. Each child template should only contain its page-specific content.
+4. Refactor one template at a time, starting with the simplest (history.html), then asset_detail.html, then index.html (most complex due to D3 graph), then asset_live.html (being replaced with full-page view).
+5. Test each template after refactoring before moving to the next. CSS regressions from specificity changes are the most common breakage.
 
 **Warning signs:**
-- Asset window shows "waiting for execution" even though the asset has already completed
-- Log entries from before the WebSocket connection are missing from the live view
-- The main graph shows an asset as completed (green) but its window shows it as idle
-- Intermittent: sometimes works (slow assets), sometimes misses (fast assets)
+- Visual regression in existing pages after introducing the base template (elements shifted, colors wrong, fonts changed)
+- Template renders but sidebar is missing on one page (forgot to extend base)
+- JavaScript errors on page load because a script relies on DOM elements that moved to the base template
+- `{% block %}` name collision between base and child template
 
-**Why this matters for Lattice specifically:** The current `ExecutionManager.broadcast()` is fire-and-forget to currently-connected sockets. There is no replay mechanism. The `/api/execution/status` endpoint returns current state but not historical log entries for a specific asset. A user opening a window for an asset that is currently executing will miss all log entries emitted before the WebSocket connected.
-
-**Prevention strategy:**
-1. When a new asset window WebSocket connects, send the current execution state as the first message ("state snapshot"): which asset is running, what its status is, and the last N log entries for the requested asset
-2. Add an asset-scoped log buffer on the server: `dict[AssetKey, deque[LogEntry]]` with a max size (e.g., 500 entries per asset). New WebSocket connections for that asset receive the buffered entries immediately
-3. Include a sequence number in each WebSocket message so the client can detect if it missed messages
-4. The client should fetch `/api/execution/status` via REST on connect and reconcile with subsequent WebSocket messages
-5. Consider a two-phase connection: (a) REST fetch for current state + recent logs, then (b) WebSocket for live updates going forward
-
-**Phase mapping:** Must be designed into the WebSocket protocol from the start. The server-side log buffer should be implemented alongside the per-asset WebSocket endpoint. Retrofitting replay is significantly harder than building it in.
+**Phase to address:**
+Must be the FIRST implementation task in the sidebar phase. All subsequent features (sidebar content, page-specific behavior) depend on the base template being correctly established.
 
 ---
 
-## P5: Cross-Window Reference Management Creates Zombie Windows
+### Pitfall 5: Downstream Propagation Scope Computation Errors in `ExecutionPlan.resolve()`
 
-**What goes wrong:** The main window stores references to opened asset windows via `window.open()`. If the main window navigates away (e.g., user clicks "HISTORY" nav link on line 43 of `index.html`), reloads, or crashes, all stored window references are lost. The asset windows remain open but the main window can no longer find them. The next time the user clicks the same asset, a duplicate window opens. Now two windows compete for the same WebSocket messages (if keyed by asset), or the user has orphaned windows consuming resources.
+**What goes wrong:**
+The `ExecutionPlan.resolve()` method with `include_downstream=True` includes: (1) all upstream dependencies of the target, (2) the target itself, and (3) all downstream dependents of the target. This is correct for "re-execute from this asset and everything downstream." But there are edge cases:
+
+- **Diamond dependencies**: If asset D depends on both B and C, and B depends on A, re-executing from B should include B, C (only if C also depends on something being re-executed), and D. But `get_all_downstream(B)` returns {D} (correct), and `get_all_upstream(B)` returns {A} (correct). The plan executes A, B, D. But D also depends on C, and C's output is from the previous run (or missing). If the IOManager does not have C's output, D fails.
+- **Shared upstream**: If the failed asset B has an upstream dep A that is also an upstream dep of unrelated asset E, re-executing from B will re-execute A. If A's output changes (e.g., reads live data), E's next full pipeline run will see different data than B's partial re-run saw. This is a consistency issue, not a crash, but it can be confusing.
+
+**Why it happens:**
+`get_all_downstream()` correctly traverses the reverse adjacency graph. But `get_all_upstream()` for the target only traverses the forward adjacency graph from the target upward. It does not account for OTHER upstream dependencies of downstream assets that are not in the re-execution scope.
+
+**How to avoid:**
+1. When computing the re-execution scope for "from failed asset + downstream", the correct algorithm is:
+   - Start with the target (failed asset)
+   - Add all downstream dependents of the target
+   - For EACH asset in this set, add ALL of their upstream dependencies (not just the target's upstream)
+   - This ensures that every asset in the scope has all its inputs available
+2. The current `ExecutionPlan.resolve(target=X, include_downstream=True)` already does this: it unions `get_all_upstream(target)`, `{target}`, and `get_all_downstream(target)`. BUT it does NOT compute the upstream deps of the downstream assets. If a downstream asset depends on something outside the target's upstream tree, that dependency is missing from the plan.
+3. Fix: after computing downstream set, iterate each downstream asset and add its upstream dependencies to the execution scope. Then topologically sort the full set.
+4. Write explicit tests for diamond-shaped DAGs where the re-execution target is one branch of the diamond.
 
 **Warning signs:**
-- Multiple windows open for the same asset after navigating away and back
-- `window.open()` with the same window name parameter opens a new window instead of focusing the existing one (because the reference was lost)
-- Users report "too many windows" after extended use
-- WebSocket connection count on server keeps growing
+- Partial re-execution fails with "dependency not found" for assets that depend on branches outside the re-execution scope
+- Test DAGs with linear chains pass, but diamond-shaped DAGs fail
+- Inconsistent asset outputs when partial re-runs produce different upstream data than the original run
 
-**Why this matters for Lattice specifically:** The main graph page at `/` is a full SPA-style page. Navigating to `/history` or `/asset/{key}` causes a full page reload (these are separate Jinja2 templates, not SPA routes). Any JavaScript state in `graph.js` -- including the `LatticeGraph` instance and any window references stored on it -- is destroyed on navigation.
-
-**Prevention strategy:**
-1. Use the `name` parameter of `window.open(url, name)` with a deterministic name derived from the asset ID (e.g., `lattice_asset_${assetId.replace(/\//g, '_')}`). Browsers will reuse an existing window with the same name instead of creating a new one
-2. On the asset window side, detect if the opener window is gone (`window.opener === null || window.opener.closed`) and show a "main window closed" indicator instead of breaking
-3. Store the set of open asset window names in `localStorage` so that after navigation, the main window can reclaim references using `window.open('', existingName)`
-4. Add a `beforeunload` handler on the main window that either closes all child windows or warns the user
-5. In the asset window's WebSocket handler, if the connection drops, show a reconnection UI rather than leaving a stale window
-
-**Phase mapping:** The `window.open()` name parameter should be used from the first implementation. The localStorage tracking of open windows is a follow-up improvement. The opener detection in asset windows should be part of the initial asset window template.
+**Phase to address:**
+Must be addressed in the phase that implements the partial re-execution backend. Requires unit tests with diamond-shaped DAGs before integration.
 
 ---
 
-## P6: High-Volume Log Output Overwhelms the Browser DOM
+### Pitfall 6: Graph Click Behavior Change Breaks Drag Interaction
 
-**What goes wrong:** During execution, an asset might produce hundreds of log entries per second (e.g., a data processing asset logging each batch). Each log entry arrives via WebSocket and gets appended to the DOM. At ~50 entries/second, after 60 seconds the DOM has 3,000 new elements. The browser spends increasing time on layout recalculation, repainting, and garbage collection. Scrolling becomes janky. Eventually the tab becomes unresponsive or the browser suggests killing it.
+**What goes wrong:**
+The current graph.js has click handlers on nodes (line 526-529) that call `this.openAssetWindow(d.id)`. This is being replaced with select/highlight behavior. D3's drag behavior also uses click-like events. The current code already handles this with `if (event.defaultPrevented) return;` on line 527 to distinguish drags from clicks. But changing the click handler to "select and show execution controls" introduces a new interaction: the user must be able to (1) drag nodes, (2) single-click to select/highlight for re-execution, and (3) click empty space to deselect.
+
+The pitfall: if the new click handler performs any asynchronous work (e.g., fetching asset details for the sidebar info panel), the handler may fire twice on double-click, or the selection state may become inconsistent if the user clicks a different node before the first click's async work completes. Additionally, the existing sidebar (right-side asset detail panel in index.html, lines 87-105) already has open/close behavior tied to node clicks via `selectNode()`. The new "select for re-execution" behavior must coexist with or replace this.
+
+**Why it happens:**
+The v1 click handler was simple: open a window (synchronous, fire-and-forget). The v2 click handler must manage selection state, update sidebar content, and potentially update the Execute button context -- all of which involve state transitions that can conflict with rapid clicking or drag interactions.
+
+**How to avoid:**
+1. Keep the click handler synchronous. Selection state (which node is selected) should update immediately on click. Any async work (fetching details, updating sidebar) happens after the synchronous state update.
+2. Use a single `selectedAsset` state variable on the `LatticeGraph` instance. Clicking a node sets it; clicking empty space clears it. The Execute button reads this state to determine "full pipeline" vs. "from selected asset".
+3. Remove the v1 `openAssetWindow()` call entirely. Replace with `this.selectAsset(d.id)` that updates visual highlighting and the Execute button label.
+4. Debounce or guard against rapid clicks: if the user clicks node A then immediately clicks node B, the selection should switch cleanly to B without intermediate states from A's async operations leaking through.
+5. Explicitly handle the interaction between drag-end and click. The current `event.defaultPrevented` check works, but verify it still works after changing the click handler.
 
 **Warning signs:**
-- Asset window becomes sluggish after ~30 seconds of log streaming
-- Chrome DevTools Performance tab shows long "Recalculate Style" and "Layout" tasks
-- Memory usage of the browser tab grows linearly without bound
-- Scroll position jumps erratically when new entries are appended
-- CPU usage spikes on the client machine
+- Dragging a node also selects it (drag-end triggers click handler)
+- Double-clicking a node causes two selection state changes
+- Clicking rapidly between nodes shows details for the wrong asset
+- The Execute button shows stale context after clicking a different node
 
-**Why this matters for Lattice specifically:** The existing `asset_detail.html` renders logs as individual `<div class="log-entry">` elements (lines 361-388). This pattern works for historical logs (finite, loaded once) but will fail for live streaming. The demo assets in the examples directory may produce moderate log volumes, but real-world assets (which this framework is modeled after) routinely produce thousands of log lines during execution.
-
-**Prevention strategy:**
-1. Implement a virtual scrolling / windowed rendering approach: only render the visible log entries plus a small buffer above and below. Libraries like this can be implemented in vanilla JS with ~100 lines
-2. Cap the in-browser log buffer at a fixed size (e.g., 5,000 entries). When the cap is hit, discard the oldest entries and show a "N earlier entries truncated" indicator
-3. Batch DOM updates: instead of appending each log entry as it arrives, collect entries in a JavaScript array and flush to the DOM on a `requestAnimationFrame` cadence (max 60 updates/second regardless of message rate)
-4. Use `DocumentFragment` for batch insertions to minimize reflows
-5. Add a pause/resume button that stops auto-scrolling and DOM updates while the user is reading, with a badge showing "N new entries" that arrived while paused
-6. Consider auto-scroll behavior: only auto-scroll to bottom if the user is already at the bottom. If they have scrolled up to read, hold position and show a "jump to bottom" indicator
-
-**Phase mapping:** The batched rendering and DOM cap should be part of the initial log streaming implementation. Virtual scrolling can be a follow-up optimization if the cap proves insufficient. The pause/resume and scroll behavior should be designed upfront even if implemented incrementally.
+**Phase to address:**
+Must be addressed in the phase that changes graph click behavior from window.open to select/highlight.
 
 ---
 
-## P7: Per-Asset WebSocket Multiplexing vs. Separate Connections
+## Technical Debt Patterns
 
-**What goes wrong:** Two common approaches exist: (A) one WebSocket per asset window, each connecting to `/ws/asset/{asset_id}`, or (B) a single shared WebSocket connection with message routing by asset ID. Both have distinct failure modes.
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Duplicating sidebar HTML in each template instead of using base template inheritance | Faster initial implementation, no refactoring of existing templates | N copies drift apart; sidebar changes require editing every template | Never -- template inheritance is the correct approach from the start |
+| Using `localStorage` as the only source of sidebar execution state | No WebSocket needed for sidebar on non-graph pages | Stale state if another tab modifies execution state; localStorage is synchronous and blocks rendering | Only as a cache layer on top of REST + WebSocket, never as sole source |
+| Re-executing the entire pipeline instead of implementing proper partial execution | Simpler implementation, no scope computation issues | User frustration with unnecessary re-execution; defeats the purpose of the feature | Acceptable for MVP if partial execution scope computation is flagged as follow-up |
+| Keeping v1 popup window code alongside v2 sidebar code during migration | Both approaches work during transition | Two navigation paradigms confuse users; duplicated WebSocket connection patterns | Only during a single migration phase; must be removed before phase completion |
 
-Approach A (separate connections): Each window has its own connection. The server must manage N+1 WebSocket connections (1 main + N asset windows). Browser limits vary but most allow 6 concurrent WebSocket connections per origin (in older browsers) or ~256 in modern browsers. With many open asset windows, connection limits could be hit. Each connection also has its own TCP overhead and keepalive cost. The server's `_websockets` set grows linearly.
+## Integration Gotchas
 
-Approach B (shared connection via BroadcastChannel or SharedWorker): More efficient but significantly more complex. Cross-window communication via `BroadcastChannel` API requires all windows to be on the same origin (true here) and the same browser (true). But if the main window's WebSocket drops, all asset windows lose their data source. The single point of failure is the main window.
+| Integration | Common Mistake | Correct Approach |
+|-------------|----------------|------------------|
+| Jinja2 base template + D3 graph page | Putting D3 initialization in the base template script block, causing it to run on non-graph pages | Keep D3 initialization in a page-specific `{% block scripts %}` that only index.html overrides |
+| Sidebar WebSocket + execution WebSocket | Creating two WebSocket connections on the graph page (one for sidebar, one for execution graph updates) | Use a single WebSocket connection on the graph page that feeds both the sidebar and the graph; other pages use only the sidebar WebSocket |
+| `/api/execution/start` with `target` + `include_downstream` | Sending `target=assetId` without `include_downstream=True`, causing only upstream + target to execute (missing downstream) | Always send `include_downstream=True` when executing from a failed asset; the API already supports this parameter |
+| Existing `selectNode()` sidebar + new selection behavior | Calling `selectNode()` (which opens the right sidebar with asset details) AND the new select-for-execution behavior on the same click | Replace `selectNode()` entirely; the v2 click handler should update execution context (sidebar icon badge, Execute button label) without opening a detail panel |
+| Cache buster on `graph.js` | Forgetting to bump the `?v=N` parameter in index.html when modifying graph.js | Move to a hash-based cache buster or increment on every change; the MEMORY.md already documents this as a lesson learned from v1 |
 
-**Warning signs:**
-- With Approach A: server logs show many concurrent WebSocket connections; asyncio event loop becomes saturated with send tasks
-- With Approach B: closing the main window kills log streaming in all asset windows; `BroadcastChannel` messages arrive out of order under load
+## Performance Traps
 
-**Why this matters for Lattice specifically:** The current server architecture has a single `_websockets: set[WebSocket]` that broadcasts all messages to all connections. There is no per-asset filtering. If N asset windows connect, each receives every asset's updates and must filter client-side. This is wasteful: a window for asset A receives log entries for assets B, C, D, etc.
+| Trap | Symptoms | Prevention | When It Breaks |
+|------|----------|------------|----------------|
+| Sidebar WebSocket polling on every page | Every page load creates a WebSocket connection for sidebar state; rapid navigation creates connect/disconnect churn | Use REST for initial state, WebSocket only if user stays on page >1 second | >10 page navigations per minute during active execution |
+| Re-executing all upstream assets on partial re-run with deep DAG | Partial re-execution from leaf node re-executes entire pipeline because everything is upstream | Show the re-execution scope in UI before user confirms; let user understand what will run | DAGs with >20 assets where failed asset is deep in the graph |
+| DOM updates for sidebar run history during execution | Sidebar shows live list of running/completed assets, updated on every WebSocket message; DOM thrashing during rapid asset completion | Batch sidebar updates on `requestAnimationFrame`; update at most 2x per second | >10 assets completing per second in parallel execution |
 
-**Prevention strategy:**
-1. Recommended approach: separate WebSocket per asset window, with server-side filtering. Create a new endpoint `/ws/asset/{asset_id}` that only sends messages relevant to that asset. This keeps the architecture simple and each window independent
-2. On the server side, maintain a mapping: `dict[str, set[WebSocket]]` keyed by asset ID. The broadcast method checks which asset the message is about and sends only to subscribed sockets
-3. Keep the existing `/ws/execution` endpoint for the main graph window (broadcasts all asset status changes, memory updates)
-4. Set a reasonable limit (e.g., 50 concurrent WebSocket connections) and return HTTP 503 if exceeded
-5. Document in the UI that each asset window maintains its own connection; closing a window frees a connection slot
+## UX Pitfalls
 
-**Phase mapping:** The decision between Approach A and B must be made before implementation begins -- it affects the WebSocket endpoint design, the JavaScript client architecture, and the server-side connection management. Recommend deciding during roadmap/architecture phase.
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Execute button always says "EXECUTE" regardless of selection state | User cannot tell if clicking Execute will run full pipeline or partial re-execution | Context-aware label: "EXECUTE ALL" when nothing selected, "EXECUTE FROM [asset]" when failed asset selected |
+| No confirmation before partial re-execution | User accidentally re-executes from wrong asset, running a large portion of the pipeline unnecessarily | Show a confirmation with the list of assets that will be re-executed (the scope), let user confirm or cancel |
+| Sidebar navigation loses scroll position | User scrolling through run history in sidebar, clicks an entry, navigates to detail page, hits back -- sidebar scroll position is lost | Use `sessionStorage` to save sidebar scroll position per page; restore on navigation |
+| Active runs page shows nothing when idle | User navigates to Active Runs page when no execution is running, sees empty page with no context | Show the last completed run's results when idle, with clear "IDLE -- LAST RUN:" header; transition to live view when execution starts |
+| Failed asset not visually distinct enough for re-execution | User cannot easily find which asset(s) failed after a run | Add persistent failure indicators (red border, icon) that survive WebSocket disconnect; combine with filter/search if many assets |
 
----
+## "Looks Done But Isn't" Checklist
 
-## P8: WebSocket Reconnection Storms After Server Restart
+- [ ] **Sidebar on all pages:** Verify sidebar appears on index.html, history.html, asset_detail.html, and any new full-page views. Common miss: forgetting to extend the base template on one page.
+- [ ] **WebSocket reconnection after navigation:** Navigate away from graph page during execution, navigate back. Verify WebSocket reconnects and graph shows current execution state (not stale or empty).
+- [ ] **Partial re-execution with diamond DAG:** Test re-execution from a node that has downstream dependents with OTHER upstream dependencies outside the re-execution scope. Verify those other upstream deps are included in the scope.
+- [ ] **Execute button context after deselection:** Select a failed asset, verify Execute button says "EXECUTE FROM [asset]". Click empty space to deselect. Verify Execute button reverts to "EXECUTE ALL".
+- [ ] **Sidebar state during execution:** Start execution, navigate to history page, verify sidebar shows active run icon/indicator. Navigate back to graph, verify graph shows current execution progress.
+- [ ] **v1 popup code fully removed:** Search codebase for `window.open`, `assetWindows`, `openAssetWindow`, `showPopupBlockedNotice`, `refocusMainWindow`, `lattice_graph` window name. All should be removed or repurposed.
+- [ ] **Existing WebSocket endpoints still work:** Verify `/ws/execution` and `/ws/asset/{key}` endpoints still function correctly after refactoring. These are consumed by the new sidebar and full-page views.
+- [ ] **Theme toggle works on all pages:** After introducing base template, verify dark/light toggle works consistently across all pages (localStorage theme is read on load, toggle updates all pages).
 
-**What goes wrong:** The existing `connectExecutionWebSocket()` in `graph.js` (line 986-990) has an unconditional reconnect: if the WebSocket closes while `isRunning` is true, it retries after 1 second. When the server restarts (e.g., during development with `--reload`, or a crash), all N+1 WebSocket connections drop simultaneously. Every window attempts to reconnect at the same time. The server, still starting up, may reject connections or accept them and immediately drop them. All clients retry again, creating a thundering herd. The server's asyncio event loop is flooded with connection accept/reject cycles.
+## Recovery Strategies
 
-**Warning signs:**
-- Server logs show rapid-fire "WebSocket client connected" / "WebSocket client disconnected" messages
-- Uvicorn reload takes noticeably longer when many windows are open
-- CPU spike on server during restart with multiple clients
-- Clients all reconnect at the exact same moment (visible in browser DevTools network tab)
+| Pitfall | Recovery Cost | Recovery Steps |
+|---------|---------------|----------------|
+| Stale upstream data in partial re-execution | LOW | Fall back to full pipeline re-execution; add logging that clearly shows which assets were re-executed vs. skipped |
+| Template inheritance CSS regressions | MEDIUM | Diff screenshots before/after refactoring; use browser DevTools to trace specificity conflicts; fix one template at a time |
+| WebSocket state loss on navigation | LOW | REST endpoint provides ground truth; WebSocket is optimization layer. If WebSocket fails, sidebar shows state from last REST poll |
+| Diamond DAG scope computation bug | HIGH | If users encounter this, the partial re-execution produces wrong results. Must fix the scope computation algorithm and re-test all DAG shapes |
+| Graph click behavior regression (drag vs. click) | LOW | Revert to v1 click handler if v2 handler breaks drag; the `event.defaultPrevented` guard is the key mechanism to preserve |
+| Execute button fires wrong execution type | MEDIUM | Add server-side validation: if `target` is specified, verify it exists and is in a valid state (failed or completed from prior run) before starting execution |
 
-**Why this matters for Lattice specifically:** During development, `uvicorn --reload` restarts the server on every file change. With 5+ asset windows open, each restart triggers 6+ simultaneous reconnection attempts. The current 1-second fixed retry in `graph.js` means all clients are synchronized.
+## Pitfall-to-Phase Mapping
 
-**Prevention strategy:**
-1. Use exponential backoff with jitter for WebSocket reconnection: start at 1 second, double each retry, cap at 30 seconds, add random jitter of 0-1 seconds
-2. Limit maximum reconnection attempts (e.g., 10 attempts) and then show a "connection lost -- click to reconnect" UI instead of retrying forever
-3. Each asset window should independently manage its reconnection, not coordinate with the main window
-4. On the server side, add a connection rate limiter: if more than 20 new WebSocket connections arrive within 2 seconds, queue them with a brief delay
-5. During reconnection, show a visible "reconnecting..." indicator in each window so the user knows the system is recovering
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| P1: Stale upstream data in partial re-execution | Backend re-execution phase | Unit test: partial re-execution on linear and diamond DAGs |
+| P2: Ambiguous failed asset selection | Graph click behavior change phase | Manual test: run, fail, partial re-run, verify visual state is clear |
+| P3: WebSocket destroyed on navigation | Sidebar + base template phase | Navigate during execution, verify sidebar state on every page |
+| P4: Template inheritance block conflicts | Sidebar + base template phase (FIRST task) | Visual regression test on all 4 existing pages after base template extraction |
+| P5: Downstream scope computation errors | Backend re-execution phase | Unit tests with diamond, fan-out, and fan-in DAG topologies |
+| P6: Graph click behavior breaks drag | Graph click behavior change phase | Manual test: drag node, click node, drag-then-release, double-click |
 
-**Phase mapping:** Reconnection logic should be built into the JavaScript WebSocket client from the start. Exponential backoff with jitter is a one-time implementation that prevents problems throughout the lifecycle.
+## Sources
 
----
-
-## P9: Log Streaming Interferes with Asset Execution Performance
-
-**What goes wrong:** The `ExecutionLogHandler.emit()` method is called synchronously from within the asset function's thread. If `emit()` is extended to broadcast log entries via WebSocket (which is an async operation), there are two risks: (1) blocking the asset function's execution thread while waiting for the async broadcast, or (2) if using `asyncio.create_task()` to avoid blocking, creating a backlog of unsent messages that consumes memory.
-
-The current `execution.py` broadcasts asset status changes from async callbacks (`_broadcast_asset_start`, `_broadcast_asset_complete`). But log entries are captured by a synchronous logging handler. Bridging sync logging to async WebSocket sends requires careful thread/async boundary management.
-
-**Warning signs:**
-- Asset execution times increase when log streaming is enabled vs. disabled
-- `asyncio.Queue` grows without bound when log production rate exceeds WebSocket send rate
-- `RuntimeWarning: coroutine was never awaited` in server logs
-- Dead WebSocket connections cause `broadcast()` to block on failed sends, which backs up the log queue
-
-**Why this matters for Lattice specifically:** The `AsyncExecutor` runs asset functions via `asyncio.to_thread()` for sync assets (line implied by the executor architecture). The logging handler's `emit()` is called in that thread. Calling `await broadcast()` from a non-async context requires `asyncio.run_coroutine_threadsafe()` or a queue-based approach. Getting this wrong either blocks execution or loses log entries.
-
-**Prevention strategy:**
-1. Use an `asyncio.Queue` as the bridge: `emit()` puts log entries onto the queue (thread-safe via `loop.call_soon_threadsafe(queue.put_nowait, entry)`). A separate async task reads from the queue and broadcasts to relevant WebSocket connections
-2. Set a maximum queue size (e.g., 10,000 entries). If the queue is full, drop the oldest entry and increment a "dropped logs" counter that is periodically sent to clients
-3. Never call `await` from within the logging handler -- it runs in the executor's worker thread, not the asyncio event loop thread
-4. Batch log broadcasts: instead of one WebSocket message per log entry, collect entries for 100ms and send them as an array. This reduces WebSocket frame overhead and browser message handling
-5. Add a configuration flag to disable log streaming (keep only file/SQLite capture) for performance-sensitive deployments
-
-**Phase mapping:** This is the core technical challenge of the log streaming feature. The sync-to-async bridge design must be settled before any implementation begins. Recommend prototyping the queue-based approach in isolation before integrating with the full system.
-
----
-
-## P10: Browser Tab Throttling Delays WebSocket Messages in Background Windows
-
-**What goes wrong:** Modern browsers aggressively throttle background tabs and windows. When an asset window is not focused (the user is looking at the main graph or another asset window), the browser may: (1) reduce `setTimeout`/`setInterval` frequency to once per second, (2) defer `requestAnimationFrame` callbacks entirely, (3) throttle WebSocket message processing, and (4) suspend the page entirely after 5 minutes of inactivity (Chrome's "Tab Freeze" feature).
-
-When the user switches back to a throttled asset window, the WebSocket receive buffer may have accumulated hundreds of messages. The client suddenly processes them all at once, causing a visible lag and a burst of DOM updates.
-
-**Warning signs:**
-- Asset window shows a burst of log entries when the user switches to it, rather than a smooth stream
-- Timestamps on displayed log entries are clustered instead of evenly spaced
-- The "auto-scroll to bottom" behavior jumps erratically when the window regains focus
-- WebSocket `onmessage` handler logs show message timestamps bunched together
-
-**Why this matters for Lattice specifically:** The entire use case is multi-window monitoring. By definition, only one window is focused at a time. Every other window is in the background and subject to throttling. If the user opens 5 asset windows, 4 are always throttled.
-
-**Prevention strategy:**
-1. Design the client to tolerate message batches: when processing received messages, do not perform DOM updates for each individual message. Instead, accumulate messages and render on the next `requestAnimationFrame`
-2. Include server-side timestamps in each message (not client-side). When rendering, use the server timestamp for ordering and display, not the client receive time
-3. Add a "catch-up" mode: when a window regains focus (detected via `document.visibilitychange` event), fetch any missed state from the REST API and reconcile
-4. Accept that background windows will have delayed updates. Do not try to fight browser throttling -- design the UX around it (e.g., show a "last updated X seconds ago" indicator)
-5. Consider using `Web Workers` for WebSocket management if real-time updates in background windows are critical -- Workers are not subject to the same throttling as the main thread
-
-**Phase mapping:** The `requestAnimationFrame`-based rendering and visibility change handling should be in the initial implementation. Web Worker optimization is an advanced follow-up only if background accuracy is critical.
+- Direct codebase analysis: `src/lattice/web/execution.py`, `src/lattice/executor.py`, `src/lattice/plan.py`, `src/lattice/graph.py`, `src/lattice/web/static/js/graph.js`, all templates
+- [Dagster re-run from failure issue #12423](https://github.com/dagster-io/dagster/issues/12423) -- documents edge cases with partial re-execution in DAG frameworks
+- [Dagster failed runs re-execution issue #11883](https://github.com/dagster-io/dagster/issues/11883) -- reconciliation sensor failed runs cannot be re-executed
+- [WebSocket Reconnection Strategies](https://oneuptime.com/blog/post/2026-01-27-websocket-reconnection/view) -- lifecycle and state recovery patterns
+- [How to Handle WebSocket Reconnection Logic](https://oneuptime.com/blog/post/2026-01-24-websocket-reconnection-logic/view) -- exponential backoff and state restoration
+- [Jinja2 Template Inheritance Documentation](https://jinja.palletsprojects.com/en/stable/templates/) -- block scoping, super(), and child template patterns
+- [Jinja2 Template Inheritance API](https://tedboy.github.io/jinja2/templ9.html) -- block variable scoping pitfalls
+- v1.0 pitfalls analysis (prior `.planning/research/PITFALLS.md`) -- P4 (replay buffer), P7 (per-asset WebSocket), P9 (sync-to-async bridge) all still relevant but already solved in v1
 
 ---
-
-## P11: Shared ExecutionManager State Corruption with Per-Asset WebSocket Endpoints
-
-**What goes wrong:** The current `ExecutionManager` has a single `_websockets: set[WebSocket]` and a single `broadcast()` method. Adding per-asset WebSocket endpoints means the manager must track which WebSocket belongs to which asset. If this mapping is implemented as a `dict[str, set[WebSocket]]`, concurrent modifications (connections arriving and leaving while broadcasts are in progress) can cause `RuntimeError: Set changed size during iteration` or, worse, silently skip sockets.
-
-The existing broadcast already handles dead sockets by collecting them in a separate set and removing after iteration (lines 139-147). But with multiple dictionaries being modified concurrently by different asyncio tasks, the single-threaded-but-interleaved nature of asyncio means a `broadcast()` to asset A can be interrupted by a new connection arriving for asset B, modifying the shared data structure.
-
-**Warning signs:**
-- Intermittent `RuntimeError: dictionary changed size during iteration` errors during high-connection-churn periods
-- Some asset windows stop receiving updates while others continue working
-- Adding a new WebSocket connection causes a brief pause in message delivery to other connections
-
-**Why this matters for Lattice specifically:** All WebSocket handling runs on the single asyncio event loop. There is no threading concern, but `await` points in the broadcast loop (the `await ws.send_json()` call) yield control, allowing other coroutines to modify the connection registry.
-
-**Prevention strategy:**
-1. Take a snapshot of the connection set before iterating: `sockets = set(self._asset_websockets.get(asset_id, ()))` then iterate the snapshot
-2. Alternatively, use `asyncio.Lock` around connection registry modifications and broadcast iterations (not around individual sends, which would serialize all sends)
-3. Keep the per-asset socket registry as a separate class (`AssetConnectionManager`) to encapsulate the concurrency logic away from the execution broadcast logic
-4. Write explicit tests that simulate concurrent connect/disconnect/broadcast operations using `asyncio.gather()`
-
-**Phase mapping:** Must be addressed in the WebSocket endpoint implementation phase. The connection registry design is foundational and cannot be safely retrofitted.
-
----
-
-## Summary by Implementation Phase
-
-| Phase | Pitfalls to Address | Priority |
-|-------|---------------------|----------|
-| **Architecture/Design** | P7 (multiplexing decision), P9 (sync-to-async bridge design), P4 (replay protocol) | Critical -- these are architectural decisions that cannot be deferred |
-| **Window Management** | P1 (popup blockers), P5 (cross-window references), P8 (reconnection storms) | High -- user-facing failures |
-| **WebSocket Infrastructure** | P2 (connection cleanup), P11 (state corruption), P4 (state replay) | High -- reliability |
-| **Log Streaming** | P3 (memory leaks), P6 (DOM performance), P9 (execution interference) | High -- the core feature |
-| **Polish/Hardening** | P10 (background throttling), P8 (reconnection backoff) | Medium -- quality of experience |
-
----
-
-*Analysis based on: existing codebase at `src/lattice/web/`, `src/lattice/observability/`, and PROJECT.md requirements*
+*Pitfalls research for: Lattice v2.0 Sidebar Navigation, Partial DAG Re-Execution, and Failure Recovery*
+*Researched: 2026-02-07*

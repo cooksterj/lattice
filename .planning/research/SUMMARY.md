@@ -1,299 +1,298 @@
 # Project Research Summary
 
-**Project:** Lattice Multi-Window Real-Time Asset Monitoring
-**Domain:** DAG Orchestration Web UI (Multi-Window Browser Architecture)
-**Researched:** 2026-02-06
+**Project:** Lattice v2.0 - Sidebar Navigation, Full-Page Views, and Failure Recovery
+**Domain:** DAG orchestration web UI refactoring
+**Researched:** 2026-02-07
 **Confidence:** HIGH
 
 ## Executive Summary
 
-This project adds dedicated browser windows for real-time asset monitoring to Lattice's existing DAG orchestration UI. Users can click any asset node on the main graph to open a separate window showing live log streaming, asset details, and run history without navigating away from the graph or disrupting pipeline execution. The multi-window approach is genuinely novel in the DAG orchestration space — major tools like Dagster, Airflow, and Prefect use single-page application patterns with panels/sidebars, making Lattice's approach a legitimate differentiator for users who want multi-screen monitoring.
+Lattice v2.0 transforms the popup-based navigation model into a professional sidebar-driven full-page architecture. The research confirms that **no new dependencies are needed** -- the existing stack (FastAPI, Jinja2, vanilla JS, D3.js, WebSocket, Tailwind CDN, SQLite) fully supports the upgrade. The core changes are structural: Jinja2 template inheritance for the persistent sidebar, removal of `window.open()` popup logic, and graph click behavior shifting from "open window" to "select and highlight for re-execution."
 
-The recommended implementation leverages four browser APIs that are all Baseline Widely Available: `window.open()` for window creation, `BroadcastChannel` for cross-window coordination, per-window `WebSocket` connections for real-time data, and the Page Visibility API for connection optimization. The existing stack (FastAPI, Jinja2, vanilla JavaScript, WebSocket) is fully sufficient — no new frameworks or libraries are needed. The architecture extends Lattice's existing ExecutionManager/WebSocket broadcast infrastructure with asset-scoped subscription channels and a streaming log handler that routes log entries to subscribing windows in real time.
+The recommended approach leverages existing infrastructure extensively. The WebSocket execution feed, per-asset log streaming, replay buffers, and ExecutionPlan resolution with `include_downstream=True` already exist and require no modification. The heaviest architectural work is establishing Jinja2 base template inheritance across 4 existing templates, followed by building a new Active Runs page and implementing visual downstream highlighting on the graph. The partial re-execution feature is already supported server-side -- the gap is purely UI wiring.
 
-The critical risks are: (1) popup blockers silently swallowing `window.open()` calls if not invoked synchronously in click handlers, (2) WebSocket connections accumulating without cleanup across window lifecycle, (3) memory leaks from unbounded log accumulation during long executions, and (4) race conditions where windows miss execution state if they connect after an asset completes. All four have clear prevention strategies and must be addressed in initial implementation phases, not retrofitted later.
+The key risk is template refactoring creating CSS regressions and WebSocket state loss on navigation. Mitigation: refactor templates one at a time starting with the simplest (history.html), use REST+WebSocket dual-layer for sidebar state resilience, and design downstream scope computation to include all necessary upstream dependencies (avoiding stale data pitfalls). The research identifies 6 critical pitfalls with specific prevention strategies, all addressable during phased implementation.
 
 ## Key Findings
 
 ### Recommended Stack
 
-The existing Lattice stack is fully capable of supporting multi-window asset monitoring. No new technologies are required. The solution uses four browser APIs that are Baseline Widely Available and safe for production use in 2026.
+**No new dependencies required.** All v2.0 features are achievable with the existing stack. The changes are architectural (template structure, navigation patterns, graph interaction) rather than technological.
 
-**Core technologies:**
-- **window.open() with named windows**: Window creation with `popup` feature flag and asset-scoped names (`lattice-asset-{assetId}`) to prevent duplicates and reuse existing windows
-- **BroadcastChannel API**: Cross-window coordination for execution lifecycle events (started, complete) without requiring window reference tracking. Baseline since March 2022.
-- **Per-window WebSocket connections**: Each asset window connects to `/ws/asset/{asset_key}` for asset-scoped log streaming. Server-side filtering prevents wasted bandwidth.
-- **Page Visibility API**: Optimize resources by disconnecting WebSocket when windows are minimized or in background, reconnecting when visible again.
+**Core technologies (unchanged):**
+- **Jinja2 3.1.x (existing)** — Template inheritance (`{% extends %}` / `{% block %}`) provides sidebar-on-every-page pattern without duplication
+- **Tailwind CSS CDN 3.x (existing)** — Already loaded; provides `fixed`, `flex`, `w-16`, `transition` utilities needed for sidebar layout
+- **D3.js v7 (existing)** — All APIs for node selection, multi-node highlighting, and downstream traversal already available
+- **FastAPI 0.115.x (existing)** — Route patterns support new full-page routes with no changes
+- **WebSocket infrastructure (existing)** — `/ws/execution` and `/ws/asset/{key}` endpoints provide all necessary real-time data for sidebar and active runs page
 
-**Explicitly rejected alternatives:**
-- SharedWorker (limited browser support, adds complexity for no benefit in single-user tool)
-- iframe-based windows (violates project constraint, adds DOM complexity)
-- React/Vue for child windows (violates tech stack constraint, unnecessary for log viewer)
-- localStorage polling for coordination (inefficient hack from pre-BroadcastChannel era)
+**New patterns (zero-dependency):**
+- **Inline SVG icons** — 3-4 hand-coded SVG icons for sidebar (graph, history, active runs, back arrow). No icon library needed; consistent with existing inline SVG pattern
+- **History API** — Built-in browser API for back-button semantics (optional enhancement, not required for basic navigation)
+- **ExecutionPlan.resolve() extension** — `include_downstream=True` already exists; partial re-execution is already supported
 
-**Critical decision:** Per-window WebSocket with server-side filtering. Each window maintains its own connection to `/ws/asset/{key}`. The server routes log entries only to relevant subscribers. This is simpler and more robust than a shared WebSocket with client-side filtering or a SharedWorker-based message bus.
+**Explicitly rejected:**
+- Icon libraries (Lucide, Feather, FontAwesome) — overkill for 3-4 icons
+- htmx or Alpine.js — introduces paradigm shift; vanilla JS is sufficient
+- SPA routers (page.js, Navigo) — full-page server-rendered navigation is the correct pattern
+- React/Vue/Svelte — prohibited by project constraints
 
 ### Expected Features
 
-Research surveyed Dagster, Apache Airflow, Prefect, and dbt Cloud to identify table stakes vs. competitive differentiators. None of the major tools provide native multi-window monitoring — all use SPA patterns with panels/sidebars.
-
 **Must have (table stakes):**
-- Asset window shows live execution state during runs (WebSocket subscription)
-- Log viewing per-asset post-execution (already exists via run history modal)
-- Success/failure status indication on asset window (banner with duration)
-- Asset metadata display (dependencies, type, checks — already exists in asset_detail.html)
-- Run history per-asset (already exists via `/api/history/assets/` endpoint)
-- Main graph stays functional during monitoring (no shared blocking state)
-- Node status colors on graph during execution (already implemented)
+- **Persistent sidebar on all pages** — Every orchestration tool uses this pattern; users expect to reach any view without browser back
+- **Icon-only collapsed sidebar** — Narrow rail (48-56px) preserves graph space; Dagster moved to this approach for the same reason
+- **Active runs page showing live asset statuses** — During execution: running/queued/completed list. When idle: last completed run summary
+- **Run history full page** — Already exists; needs sidebar integration
+- **Full-page live logs (replace popup)** — Users expect full-page log streaming, not popup windows
+- **Back button / browser history support** — Standard anchor tags; full-page loads work naturally
+- **Graph click = select/highlight (no popup)** — Prerequisite for re-execute-from-here flow
+- **Remove v1 popup infrastructure** — Clean removal of ~100 lines: `openAssetWindow()`, `showPopupBlockedNotice()`, `assetWindows` Map, window name tracking
 
-**Should have (competitive differentiators):**
-- Dedicated browser windows (not tabs/panels) — no major tool does this natively
-- Live log streaming during execution to independent windows — Dagster/Prefect stream logs but within their SPA, not across windows
-- Zero-disruption monitoring (opening/closing windows has no execution side effects) — unique benefit of multi-window architecture
-- Run history in its own window (side-by-side comparison of current vs past runs)
-- Window-to-window communication ("refocus main graph" button via `window.opener.focus()`)
-- Auto-transition from live logs to completion state (state machine: streaming -> complete)
+**Should have (competitive advantage):**
+- **Failed asset re-execution with visual downstream highlighting** — Click failed node, see blast radius (all downstream highlighted), click Execute to re-run from that point. Dagster has "re-execute from failure" but operates on whole run, not visual graph selection
+- **Visual downstream propagation on graph** — Show "blast radius" in distinct color before execution
+- **Active runs page dual mode** — Live during execution, last-completed when idle (most tools show "no active runs" when idle)
+- **Clickable running assets navigate to live logs** — Seamless monitoring workflow from active runs page
 
-**Explicitly excluded (anti-features):**
-- Drag-and-drop window arrangement (let OS window manager handle positioning)
-- Multi-user concurrent monitoring (out of scope for single-user dev tool)
-- Mobile-responsive asset windows (desktop browser only)
-- Full SPA with client-side routing (violates Jinja2+vanilla JS constraint)
-- Persistent window layout memory (adds complexity for minimal value)
-- Real-time log search/filtering in asset window (defer to v2)
-
-**Feature dependency chain:**
-Browser windows (foundation) -> Live execution state -> Live log streaming -> Auto-transition to completion
+**Defer (v2+):**
+- Log search/filter in live view
+- Run comparison view (diff two runs)
+- Keyboard shortcuts for navigation
+- Graph minimap/overview panel
 
 ### Architecture Approach
 
-The design extends the existing ExecutionManager/WebSocket broadcast infrastructure with asset-scoped subscription channels and real-time log streaming. The architecture maintains clean separation between server-side log capture, subscription routing, and client-side rendering.
+The architecture extends the existing template-per-page model with Jinja2 inheritance. A new `base.html` template owns the shared shell (sidebar, header, theme toggle, fonts, corner decorations). All pages extend it via `{% extends "base.html" %}` and override content blocks. The sidebar is pure CSS/Tailwind (no JavaScript needed for layout), with client-side polling for active run indicator.
 
 **Major components:**
-1. **Asset Log Streaming Service** (server-side) — Extends ExecutionLogHandler to invoke callback per log entry. Captures logs in real time and makes them available for streaming. Integrates with existing log capture pipeline.
-2. **Subscription-Aware WebSocket Router** (server-side) — New endpoint `/ws/asset/{asset_key}` that maintains `dict[str, set[WebSocket]]` mapping assets to subscribers. Filters broadcast messages so each window receives only relevant updates.
-3. **ExecutionManager Extensions** (server-side) — Wires streaming log handler and subscription router into execution lifecycle. Adds `add_asset_subscriber()`, `broadcast_to_asset()`, and `_on_log_entry()` callback.
-4. **Asset Window Page & Template** (client-side) — New route `/asset/{key}/live` with Jinja2 template and JavaScript. WebSocket connection management, log rendering, status display, refocus main window button.
-5. **Main Graph Window Modifications** (client-side) — Change click handler from navigation (`window.location.href`) to `window.open()`. Optional window reference tracking to reuse existing windows.
-6. **Asset Window REST Routes** (server-side) — Serve live monitoring page, reuse existing `/api/assets/{key}` and `/api/history/assets/{key}` endpoints.
 
-**Build order (dependency chain):**
-1. Server-side log streaming infrastructure (StreamingLogHandler + ExecutionManager subscriber registry)
-2. Asset-scoped WebSocket endpoint (`/ws/asset/{key}`)
-3. Asset live monitoring page (template + JavaScript + route)
-4. Main graph window integration (modify graph.js click handler)
+1. **Jinja2 Base Template (`base.html`)** — Shared shell with 4 blocks: `{% block title %}`, `{% block head_extra %}`, `{% block content %}`, `{% block scripts %}`. Sidebar defined once, inherited by all pages. Eliminates ~80 lines of duplicated boilerplate per template.
 
-**Critical design decisions:**
-- Per-window WebSocket (not shared) — browser windows cannot share connections, per-window is simpler and more reliable
-- Server-side filtering (not client-side) — prevents wasting bandwidth broadcasting all logs to all windows
-- Separate live view route (`/asset/{key}/live`) — distinct from historical run detail page (`/asset/{key}`)
-- Callback-based log streaming (not polling) — natural extension of existing `emit()` synchronous path
+2. **Sidebar Navigation** — Narrow vertical icon rail (left side, always visible). Contains 3 icons: graph (home), run history, active runs. Active run indicator (pulsing dot) when execution is running, driven by polling `GET /api/execution/status` every 3 seconds. No WebSocket needed for sidebar (avoids connection churn on navigation).
 
-**Threading/async considerations:**
-`ExecutionLogHandler.emit()` is synchronous (called from asset function's thread). Bridging to async WebSocket broadcast requires `asyncio.Queue` as sync-to-async bridge. `emit()` enqueues via `loop.call_soon_threadsafe()`, separate async task drains queue and broadcasts. This prevents blocking asset execution while sending WebSocket messages.
+3. **Active Runs Page (`/runs/active`)** — New full page + route. Consumes existing `/ws/execution` WebSocket for real-time updates during execution. When idle, fetches `GET /api/history/runs?limit=1` for last completed run. No new API endpoints needed.
+
+4. **Graph Click Behavior** — Replace `this.openAssetWindow(d.id)` with `this.selectNodeForReexecution(d)`. Visually highlight selected node + downstream (yellow border + dashed border for downstream). Execute button becomes context-aware: "EXECUTE ALL" when nothing selected, "EXECUTE FROM [asset]" when node selected. Passes `target=selectedNodeId` + `include_downstream=true` to existing API.
+
+5. **Partial Re-Execution** — Already supported. `ExecutionPlan.resolve(target, include_downstream=True)` includes target's upstream + target + target's downstream. Frontend just needs to wire graph selection to POST body. Backend requires no changes.
+
+6. **Full-Page Navigation** — Standard `<a href="...">` links. Browser back button works naturally with server-rendered pages. Each view has unique URL. No SPA complexity, no History API required (optional for preserving graph selection state across back-button).
 
 ### Critical Pitfalls
 
-Research identified 11 pitfalls across architecture, window management, WebSocket infrastructure, log streaming, and UX polish. Top 5 by criticality:
+1. **Stale Upstream Data During Partial Re-Execution** — When re-running from failed asset, `MemoryIOManager` is ephemeral (created fresh per execution). Upstream assets' outputs from prior run are unavailable. **Avoid by:** Using existing `include_downstream=True` which re-runs upstream too (ensures data availability). Accept this cost for v2.0; optimize later.
 
-1. **Popup blockers silently swallow window.open() calls** — Modern browsers block `window.open()` unless called synchronously in user-gesture handler. Deferred calls (after await, setTimeout, async fetch) return null with no error. Prevention: Call `window.open()` synchronously in D3 node click handler before any async operations. Capture and check return value, provide visible fallback when blocked. Phase: Must address in first implementation phase.
+2. **Ambiguous Failed Asset Selection After Multiple Runs** — Graph shows mixed statuses from different runs. User cannot tell which failures are from which run. **Avoid by:** Clearing ALL asset statuses when starting partial execution, or dimming assets outside execution scope. Store execution scope client-side to differentiate "completed in this run" vs "prior run."
 
-2. **WebSocket connections accumulate without cleanup** — When user closes window, dead socket may persist in `_websockets` until next broadcast attempt fails. Race window between window close and WebSocket disconnect handling. Prevention: Add `beforeunload` handler in each window to send close frame. Add server-side heartbeat mechanism. Track connections with metadata for debugging. Phase: Must be designed into WebSocket endpoint from the start.
+3. **WebSocket Connection Destroyed on Full-Page Navigation** — Every navigation reloads page, drops WebSocket, loses JavaScript state. Sidebar arrives in default state until reconnection. **Avoid by:** Using REST (`/api/execution/status`) for immediate sidebar state on load, WebSocket for live updates. Cache state in `sessionStorage` to eliminate flash-of-idle during navigation.
 
-3. **Memory leak from unbounded log entry accumulation** — `ExecutionLogHandler` stores all log entries in `self._entries` list that grows without bound. For verbose assets during backfills (30 days x 10 assets x 50 lines = 15,000 entries), memory consumption is significant. Prevention: Stream log entries to WebSocket immediately, write to SQLite in batches during execution, impose cap (last 10,000 entries) with warning if needed. Phase: Must address when implementing real-time log streaming.
+4. **Template Inheritance Block Conflicts** — Current templates are standalone with duplicated headers, CSS, and inline styles. Refactoring to extend base template risks CSS specificity conflicts and visual regressions. **Avoid by:** Refactoring one template at a time, starting with simplest (history.html). Extract shared CSS to `styles.css`, keep page-specific styles in `{% block head_extra %}`. Test visually after each template conversion.
 
-4. **Race condition between window opening and execution state** — User opens window after asset starts executing. Window connects via WebSocket but misses `asset_start` and earlier log entries that were broadcast before connection established. Prevention: Server-side log buffer per asset (`dict[AssetKey, deque[LogEntry]]` with max 500 entries). New connections receive buffered entries immediately. Include sequence numbers in messages for gap detection. Phase: Must be designed into WebSocket protocol from the start.
+5. **Downstream Scope Computation Errors (Diamond DAG)** — When re-executing from node B in a diamond dependency (A -> B -> D, A -> C -> D), the scope includes B + D (downstream of B) + A (upstream of B), but misses C. D depends on C, but C is outside the re-execution scope, causing missing data. **Avoid by:** For each downstream asset, include ALL its upstream deps (not just target's upstream). Verify with unit tests on diamond-shaped DAGs.
 
-5. **High-volume log output overwhelms browser DOM** — Assets producing hundreds of log entries per second cause browser tab to become sluggish/unresponsive as DOM grows (3,000+ elements after 60 seconds at 50 entries/sec). Prevention: Cap in-browser log buffer at 5,000 entries, discard oldest. Batch DOM updates via `requestAnimationFrame` (max 60 updates/sec). Use `DocumentFragment` for insertions. Add pause/resume button. Virtual scrolling as follow-up if needed. Phase: Must be part of initial log streaming implementation.
-
-**Additional notable pitfalls:**
-- Cross-window reference management (main window reload loses window references — use named windows with `window.open(url, name)` for reuse)
-- Per-asset WebSocket multiplexing decision (separate connections with server-side filtering recommended over shared connection with client-side filtering)
-- WebSocket reconnection storms after server restart (exponential backoff with jitter, not fixed 1-second retry)
-- Log streaming interferes with execution performance (use `asyncio.Queue` as sync-to-async bridge, never await in logging handler)
-- Browser tab throttling delays messages in background windows (design for batches, use server timestamps, show "last updated X seconds ago")
-- Shared ExecutionManager state corruption (take snapshot of connection set before iterating to avoid RuntimeError during concurrent modifications)
+6. **Graph Click Behavior Breaks Drag Interaction** — D3 drag behavior conflicts with new click-to-select. Changing click handler risks triggering selection on drag-end or double-click. **Avoid by:** Preserving `if (event.defaultPrevented) return;` guard, keeping click handler synchronous (selection state updates immediately), debouncing rapid clicks.
 
 ## Implications for Roadmap
 
-Based on research, the implementation naturally decomposes into four phases following the dependency chain identified in architecture analysis. The build order reflects what must exist before each subsequent component can function.
+Based on research, the work naturally splits into 4 phases, ordered by dependency chain:
 
-### Phase 1: Server-Side Log Streaming Infrastructure
-**Rationale:** All downstream components depend on the server being able to capture logs in real time and route them to per-asset channels. Without this foundation, the WebSocket endpoint has nothing to send and the client has nothing to display.
+### Phase 1: Template Inheritance Foundation (Sidebar on All Pages)
+
+**Rationale:** Every subsequent change depends on sidebar navigation existing. Building base template first establishes the framework. This is highest-risk phase (touches all 4 existing templates), so it must be completed before any feature work.
 
 **Delivers:**
-- `StreamingLogHandler` class with callback support for real-time log entry emission
-- `ExecutionManager._asset_subscribers: dict[str, set[WebSocket]]` registry
-- `ExecutionManager.add_asset_subscriber()`, `remove_asset_subscriber()`, `broadcast_to_asset()` methods
-- `ExecutionManager._on_log_entry()` callback wired into streaming handler
-- Integration of streaming handler into `run_execution()` method
+- `base.html` base template with sidebar, header, theme toggle, shared CSS/JS
+- All 4 existing templates converted to extend base.html
+- Sidebar icon rail with 3 navigation icons (graph, history, active runs)
+- Client-side polling for active run indicator
+- Removal of duplicated boilerplate (~80 lines per template)
 
-**Addresses:**
-- Foundation for feature D2 (live log streaming)
-- Prevents pitfall P3 (memory leaks) by designing stream-then-store instead of accumulate-and-stream
-- Prevents pitfall P9 (execution interference) by implementing asyncio.Queue as sync-to-async bridge
+**Addresses (from FEATURES.md):**
+- Persistent sidebar on all pages (table stakes)
+- Icon-only collapsed sidebar (table stakes)
+- Back button / browser history support (table stakes)
 
-**Avoids:**
-- P9 (log streaming interfering with execution) — asyncio.Queue bridge ensures emit() never blocks on WebSocket sends
-- P3 (unbounded memory growth) — design decision point for streaming vs accumulation
+**Avoids (from PITFALLS.md):**
+- Pitfall 4: Template inheritance block conflicts (addressed by refactoring one template at a time)
+- Pitfall 3: WebSocket state loss (mitigated by REST+polling for sidebar)
 
-**Stack elements:** Python logging, asyncio.Queue, existing ExecutionLogHandler foundation
-
-**Research flags:** None (standard patterns, well-understood async bridging)
+**Phase complexity:** MEDIUM-HIGH (template refactoring is delicate, CSS regressions likely)
 
 ---
 
-### Phase 2: Asset-Scoped WebSocket Endpoint
-**Rationale:** With log streaming infrastructure in place, need WebSocket endpoint that subscribing clients can connect to. Server-side filtering prevents wasting bandwidth broadcasting all logs to all windows.
+### Phase 2: Graph Click Selection and Execute Context
+
+**Rationale:** Core UX change that replaces popup windows. Must come after Phase 1 (sidebar navigation in place). Enables the failure recovery workflow. Lower risk than Phase 1 because graph.js is already well-tested.
 
 **Delivers:**
-- New endpoint `/ws/asset/{asset_key}` with path-parameter-based subscription
-- `create_asset_websocket_router(manager)` function in execution.py
-- On connect: extract asset_key from path, call `manager.add_asset_subscriber(key, ws)`
-- On disconnect: call `manager.remove_asset_subscriber(key, ws)` in finally block
-- Keep-alive loop similar to existing `/ws/execution` endpoint
-- Registration of router in `create_app()`
+- Graph click handler changed from `openAssetWindow()` to `selectNodeForReexecution()`
+- Visual selection highlight on clicked node
+- Downstream node highlighting (shows execution blast radius)
+- Context-aware Execute button ("EXECUTE ALL" vs "EXECUTE FROM [asset]")
+- `startExecution()` wiring to pass `target` + `include_downstream` when node selected
+- Removal of v1 popup code (~100 lines: `openAssetWindow`, `showPopupBlockedNotice`, window tracking)
 
-**Addresses:**
-- Feature F1 (live execution state in window) — foundation for receiving status updates
-- Feature D2 (live log streaming) — transport layer for log entries
-- Prevents pitfall P4 (race condition) by implementing log replay buffer
-- Prevents pitfall P2 (connection cleanup) by adding explicit disconnect handling
+**Addresses (from FEATURES.md):**
+- Graph click = select/highlight (table stakes)
+- Failed asset re-execution with visual highlighting (differentiator)
+- Visual downstream propagation on graph (differentiator)
+- Remove v1 popup infrastructure (table stakes)
 
-**Avoids:**
-- P2 (connection accumulation) — beforeunload handler + server-side disconnect handling
-- P4 (missed execution state) — server-side log buffer with replay on connect
-- P11 (state corruption) — snapshot connection set before iterating during broadcast
+**Uses (from STACK.md):**
+- D3.js node selection and CSS class application (already exists)
+- Existing `ExecutionStartRequest.target` + `include_downstream` fields
 
-**Stack elements:** FastAPI WebSocket, existing ExecutionManager pattern, BroadcastChannel (client coordination, next phase)
+**Implements (from ARCHITECTURE.md):**
+- Component 4: Graph Click Behavior Change
+- Component 5: Partial DAG Re-Execution (frontend wiring only; backend already works)
 
-**Research flags:** Moderate (replay buffer implementation needs careful testing)
+**Avoids (from PITFALLS.md):**
+- Pitfall 6: Graph click breaks drag (preserve `event.defaultPrevented` guard)
+- Pitfall 2: Ambiguous failed asset selection (clear selection state on new execution start)
+
+**Phase complexity:** MEDIUM (well-defined, existing patterns, minimal backend)
 
 ---
 
-### Phase 3: Asset Live Monitoring Page
-**Rationale:** With WebSocket endpoint available, build the client-side window that connects to it. This is where users actually see live logs and execution state.
+### Phase 3: Active Runs Page and Live Logs Refactor
+
+**Rationale:** Depends on Phases 1 (sidebar navigation) and 2 (execution infrastructure). Provides the "what's running now" view that sidebar links to. Completes the monitoring workflow.
 
 **Delivers:**
-- New template `src/lattice/web/templates/asset_live.html`
-- New JavaScript (inline or `asset_live.js`) with WebSocket connection management
-- New route `GET /asset/{key}/live` in routes.py
-- Asset info panel (populated via existing `GET /api/assets/{key}`)
-- Live log stream container with scrolling behavior
-- Status banner (idle / running / completed / failed)
-- "Focus Main Window" button (via `window.opener.focus()`)
-- "View Run History" link (opens `/asset/{key}` in new window)
+- New `runs_active.html` template extending base.html
+- `GET /runs/active` route in routes.py
+- Real-time asset status list via `/ws/execution` WebSocket (reuses existing endpoint)
+- Idle state showing last completed run (fetches from `/api/history/runs?limit=1`)
+- Clickable assets navigate to live logs or detail pages
+- `asset_live.html` refactored from popup to full-page (remove refocus button, add back link)
 
-**Addresses:**
-- Feature F1 (live execution state) — WebSocket connection and state rendering
-- Feature D2 (live log streaming) — log container with append-only rendering
-- Feature F3 (status banner) — completion indicator with duration
-- Feature D6 (auto-transition) — state machine: streaming -> complete
-- Feature D5 (window communication) — refocus main graph button
-- Feature D4 (run history window) — link to open history in separate window
+**Addresses (from FEATURES.md):**
+- Active runs page showing live asset statuses (table stakes)
+- Active runs idle/last-run mode (differentiator)
+- Full-page live logs (table stakes)
+- Clickable running assets navigate to live logs (differentiator)
 
-**Avoids:**
-- P6 (DOM overwhelm) — cap log buffer at 5,000 entries, batch DOM updates via requestAnimationFrame
-- P10 (background throttling) — use server timestamps, design for message batches
-- P1 (popup blockers) — for history link, same synchronous pattern as main window
+**Uses (from STACK.md):**
+- Existing `/ws/execution` WebSocket (no new endpoints)
+- Existing `asset_live.html` template (891 lines of WebSocket/log logic stays intact)
+- Existing history API endpoints
 
-**Stack elements:** Jinja2 templates, vanilla JavaScript, WebSocket API, Page Visibility API
+**Implements (from ARCHITECTURE.md):**
+- Component 3: Active Runs Page
+- Component 7: Live Logs Page Refactor
 
-**Research flags:** High (log rendering performance needs careful implementation and testing)
+**Avoids (from PITFALLS.md):**
+- Pitfall 3: WebSocket state loss on navigation (REST for initial load, WebSocket for updates)
+
+**Phase complexity:** MEDIUM (leverages existing infrastructure, mostly template work)
 
 ---
 
-### Phase 4: Main Graph Window Integration
-**Rationale:** With live monitoring page functional, wire it into the existing graph UI by changing node click behavior from navigation to window.open().
+### Phase 4: Polish, Cleanup, and Testing
+
+**Rationale:** Final integration and removal of any remaining v1 artifacts. Ensures clean codebase before release.
 
 **Delivers:**
-- Modified click handler in `graph.js`: `window.open('/asset/' + key + '/live', 'lattice-asset-' + key, 'popup,width=800,height=600')`
-- Window tracking map: `this.assetWindows = new Map()` to reuse/focus existing windows
-- Check if window already open: if exists and not closed, focus it instead of opening new
-- Window sizing parameters (reasonable defaults, user can resize)
+- Remove any remaining popup-related CSS/JS
+- Active nav link highlighting (current page indicator in sidebar)
+- Cache buster version bumps on CSS and JS files
+- Comprehensive testing on all navigation paths
+- Visual regression testing on all pages
+- Diamond DAG unit tests for partial re-execution scope
 
-**Addresses:**
-- Feature D1 (dedicated browser windows) — the core multi-window paradigm
-- Feature D3 (zero-disruption monitoring) — windows are purely observational
-- Feature F6 (main graph stays functional) — no navigation, graph remains active
+**Addresses (from FEATURES.md):**
+- All cleanup tasks for table stakes features
 
-**Avoids:**
-- P1 (popup blockers) — synchronous call in click handler, before any async operations
-- P5 (zombie windows) — named windows with asset-scoped names for reuse
-- P8 (reconnection storms) — each window manages own connection independently
+**Implements (from ARCHITECTURE.md):**
+- Component 6: Active Run Indicator in Sidebar (CSS polish)
+- All testing considerations from architecture doc
 
-**Stack elements:** window.open() API, existing D3.js graph infrastructure
+**Avoids (from PITFALLS.md):**
+- Pitfall 5: Downstream scope computation errors (unit tests for diamond DAGs)
+- All "Looks Done But Isn't" checklist items
 
-**Research flags:** None (straightforward browser API usage)
+**Phase complexity:** LOW (integration and testing, no new features)
 
 ---
 
 ### Phase Ordering Rationale
 
-The four-phase structure reflects hard dependencies between components:
-- Phase 1 must complete before Phase 2 (WebSocket endpoint needs streaming infrastructure to have data to send)
-- Phase 2 must complete before Phase 3 (client window needs endpoint to connect to)
-- Phase 3 must complete before Phase 4 (main graph needs live monitoring page to exist for window.open to load)
+- **Phase 1 first:** Template inheritance is foundational. Every subsequent feature depends on sidebar existing. Highest risk, so must be stabilized before proceeding.
+- **Phase 2 before Phase 3:** Graph click selection is the core UX change. Active runs page can be built independently, but the execution flow (select -> execute) should be working first for better testing.
+- **Phase 3 after sidebar + graph:** Active runs page consumes data from execution infrastructure. By Phase 3, both sidebar and graph are working, providing context for integration testing.
+- **Phase 4 last:** Cleanup and polish after all features are integrated.
 
-This order naturally addresses critical pitfalls at the correct architectural layer:
-- P9 (execution interference) and P3 (memory leaks) are addressed in Phase 1's log streaming design
-- P2 (connection cleanup), P4 (race conditions), P11 (state corruption) are addressed in Phase 2's WebSocket endpoint
-- P6 (DOM overwhelm), P10 (background throttling) are addressed in Phase 3's client-side rendering
-- P1 (popup blockers), P5 (zombie windows) are addressed in Phase 4's window management
-
-The grouping also allows incremental testing:
-- Phase 1 can be unit tested with mock WebSockets
-- Phase 2 can be integration tested by connecting a test client
-- Phase 3 can be manually tested by directly opening the URL
-- Phase 4 completes the user-facing feature flow
+**Dependency chain verified:**
+```
+Phase 1 (base template)
+    |
+    +-- enables --> Phase 2 (graph selection)
+    |                    |
+    +-- enables --> Phase 3 (active runs page)
+                         |
+                         v
+                    Phase 4 (polish)
+```
 
 ### Research Flags
 
-**Phases needing deeper research during planning:**
-- **Phase 2 (WebSocket endpoint):** Replay buffer implementation is moderately complex. Needs design decisions around buffer size, sequence numbering, and catch-up protocol. Recommend prototyping the replay mechanism in isolation before integrating.
-- **Phase 3 (Asset window):** Log rendering performance is the highest-risk area. Recommend researching/testing virtual scrolling libraries or windowed rendering approaches if initial cap-and-batch implementation proves insufficient under high log volumes.
+**Phases with standard patterns (skip deep research):**
+- **Phase 1:** Jinja2 template inheritance is well-documented. All integration points verified in codebase. Standard patterns apply.
+- **Phase 2:** D3.js selection and graph interaction are established patterns. Existing codebase has similar logic (`selectNode()`, `highlightConnections()`).
+- **Phase 3:** WebSocket consumption and template rendering follow existing patterns from v1. Minimal novelty.
 
-**Phases with standard patterns (skip research-phase):**
-- **Phase 1 (Log streaming):** asyncio.Queue as sync-to-async bridge is well-documented pattern. Callback-based handler extension is straightforward Python logging API usage.
-- **Phase 4 (Graph integration):** window.open() is basic browser API. Named windows pattern is well-established.
+**Phases needing careful design (not research, but design validation):**
+- **Phase 1:** Template refactoring requires visual regression testing after each template conversion. Consider screenshot diffing.
+- **Phase 2:** Downstream scope computation needs unit tests on diamond DAGs before integration. Edge case validation.
+
+**No phases need `/gsd:research-phase`** — all patterns are established, all integration points mapped.
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All recommended browser APIs are Baseline Widely Available. FastAPI/WebSocket patterns already proven in existing codebase. No new frameworks or libraries required. |
-| Features | HIGH | Surveyed 4 major DAG orchestration tools (Dagster, Airflow, Prefect, dbt Cloud). Clear table stakes vs differentiators. Multi-window approach is genuinely novel in this space. |
-| Architecture | HIGH | Component boundaries align with existing codebase structure. Build order reflects hard dependencies. Server-side patterns extend existing ExecutionManager design. Client-side uses proven browser APIs. |
-| Pitfalls | HIGH | Analyzed 11 pitfalls across 5 categories. Each has clear warning signs, prevention strategies, and phase mapping. Pitfalls are drawn from real-world WebSocket/multi-window experience and browser constraints. |
+| Stack | HIGH | All recommendations verified against existing codebase. No new dependencies needed. Every integration point checked. |
+| Features | HIGH | Table stakes list validated against Dagster/Airflow/Prefect. Competitor analysis confirms expectations. Existing infrastructure verified (WebSocket, history API, ExecutionPlan). |
+| Architecture | HIGH | All file paths, line numbers, and integration points verified via direct code inspection. Template inheritance pattern is standard Jinja2. WebSocket endpoints already exist and work. |
+| Pitfalls | HIGH | All 6 critical pitfalls mapped to specific codebase patterns. Prevention strategies are concrete and testable. Sources include official issue trackers (Dagster, Airflow) documenting similar problems. |
 
 **Overall confidence:** HIGH
 
-Research is comprehensive and actionable. Stack decisions are validated against browser compatibility data (MDN, Baseline Widely Available). Architecture extends existing patterns rather than introducing new paradigms. Feature analysis is grounded in competitive tool survey. Pitfalls are specific and mapped to implementation phases.
-
 ### Gaps to Address
 
-**Gap 1: Log replay protocol details** — Research identifies the need for a replay buffer with sequence numbering but does not specify the exact protocol. During Phase 2 planning, need to decide: (1) JSON schema for sequence-numbered messages, (2) client request format for "give me entries since sequence N", (3) buffer eviction policy when cap is reached. Recommend prototyping the protocol before full implementation.
+**Minor gaps (acceptable for v2.0):**
 
-**Gap 2: Virtual scrolling threshold** — Research recommends cap-and-batch rendering initially, with virtual scrolling as follow-up optimization if needed. Need to establish actual performance threshold (e.g., "if profiling shows >100ms render time or >500MB browser memory, implement virtual scrolling"). This can only be determined through load testing during Phase 3.
+- **Downstream scope computation optimization:** Current approach re-runs upstream dependencies even when their outputs are available. This is correct but potentially inefficient for deep DAGs. **Handle during:** Phase 2 implementation. Accept the current behavior; flag for v2.1 optimization if users report performance issues.
 
-**Gap 3: BroadcastChannel message protocol** — STACK.md defines channel names and message types but not the full protocol (e.g., when should asset windows post to the window coordination channel? What should main window do when it receives window_opened messages?). During Phase 3 planning, need to specify the full message exchange protocol and lifecycle hooks.
+- **Virtual scrolling for log entries:** The 2000-entry DOM cap is a known limitation. If users hit this regularly, virtual scrolling is needed. **Handle during:** Phase 3 testing. Monitor user feedback; add virtual scrolling in v2.x if needed.
 
-**Gap 4: Connection limit enforcement** — PITFALLS.md mentions setting a limit (e.g., 50 concurrent WebSocket connections) but does not specify where to enforce it (server-wide? per-client IP? per-session?) or how to communicate the limit to users. During Phase 2 implementation, need to decide enforcement level and error response (HTTP 503? WebSocket close with reason code?).
+- **CSS specificity conflicts during template refactoring:** Moving inline styles to shared stylesheet may cause specificity battles. **Handle during:** Phase 1 execution. Test each template conversion visually before proceeding to next template. Use browser DevTools to trace conflicts.
+
+**No critical gaps.** All research areas have sufficient confidence for roadmap creation and implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- **MDN Web Docs (BroadcastChannel, window.open, postMessage, WebSocket, Page Visibility API, SharedWorker, window.opener, window.name)** — Browser API specifications and Baseline Widely Available status. All recommended APIs confirmed as Baseline since March 2022 or earlier.
-- **Existing Lattice codebase analysis** — Reviewed `src/lattice/web/execution.py` (ExecutionManager, WebSocket broadcast pattern), `src/lattice/observability/log_capture.py` (ExecutionLogHandler), `src/lattice/web/static/js/graph.js` (node click handlers), `src/lattice/web/templates/` (Jinja2 template structure). Existing patterns directly inform extension points.
-- **Dagster webserver UI, Apache Airflow 2.x Grid/Graph views, Prefect Cloud + OSS UI, dbt Cloud IDE + Run monitoring** — Surveyed feature sets for table stakes vs differentiators. Confirmed none offer native multi-window monitoring.
+- Lattice codebase: `src/lattice/web/` (all routes, templates, WebSocket infrastructure, executor, graph module) — direct code inspection, all line numbers verified
+- [Jinja2 Template Inheritance Documentation](https://jinja.palletsprojects.com/en/stable/templates/) — official docs on extends, block, include
+- [FastAPI Templates Documentation](https://fastapi.tiangolo.com/advanced/templates/) — official FastAPI Jinja2 integration
+- [D3.js Selections](https://d3js.org/d3-selection/selecting) — D3 selection API for node highlighting
+- [MDN History API](https://developer.mozilla.org/en-US/docs/Web/API/History_API/Working_with_the_History_API) — pushState/popstate reference
 
 ### Secondary (MEDIUM confidence)
-- **AsyncIO threading patterns** — sync-to-async bridge via asyncio.Queue and call_soon_threadsafe is documented pattern but implementation details need verification during Phase 1.
-- **Browser popup blocker behavior** — Behavior varies slightly across browsers (Safari more permissive than Chrome/Firefox) but synchronous-call-in-gesture-handler is universally safe approach.
+- [Dagster UI documentation](https://docs.dagster.io/concepts/webserver/ui) — sidebar navigation structure, asset catalog, runs page
+- [Dagster re-execute from failure issue #12423](https://github.com/dagster-io/dagster/issues/12423) — limitations of step-level vs asset-level re-execution
+- [Dagster experimental UI navigation discussion](https://github.com/dagster-io/dagster/discussions/21370) — sidebar vs top-nav tradeoffs
+- [Airflow re-run tasks (Astronomer)](https://docs.astronomer.io/learn/rerunning-dags) — "Clear" action with downstream checkbox
+- [Airflow UI overview](https://airflow.apache.org/docs/apache-airflow/stable/ui.html) — Grid View and Graph View for task monitoring
+- [Prefect dashboard documentation](https://docs.prefect.io/orchestration/ui/dashboard.html) — flow run monitoring patterns
 
-### Tertiary (LOW confidence, needs validation)
-- **Connection limits** — Browser WebSocket connection limits vary (older browsers: 6 per origin, modern: 256+). Exact limits need testing during Phase 2. Recommend establishing conservative limit (50 connections) to be safe.
+### Tertiary (LOW confidence, informational only)
+- [Tailwind CSS Sidebar Layouts](https://tailwindcss.com/plus/ui-blocks/application-ui/application-shells/sidebar) — official Tailwind sidebar patterns
+- [WebSocket Reconnection Strategies](https://oneuptime.com/blog/post/2026-01-27-websocket-reconnection/view) — lifecycle and state recovery patterns
+- [shadcn/ui sidebar component](https://ui.shadcn.com/docs/components/radix/sidebar) — collapsible sidebar patterns
 
 ---
-*Research completed: 2026-02-06*
+*Research completed: 2026-02-07*
 *Ready for roadmap: yes*
