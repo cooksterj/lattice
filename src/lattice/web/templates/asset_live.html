@@ -866,11 +866,9 @@
 
         // --- G. Action buttons ---
         function refocusMainWindow() {
-            if (window.opener && !window.opener.closed) {
-                window.opener.focus();
-            } else {
-                window.open('/', '_blank');
-            }
+            // window.open with a named target focuses that window (user-gesture context)
+            // Hash-only change avoids reloading the graph page
+            window.open('/#refocus', 'lattice_graph');
         }
 
         function openRunHistory() {
@@ -887,10 +885,7 @@
             // 3. Connect WebSocket AFTER initial state is determined
             connectWebSocket();
         });
-        // 4. Update refocus button tooltip if not opened from graph
-        if (!window.opener || window.opener.closed) {
-            document.getElementById('btn-refocus').title = 'Opens graph in new tab (not opened from graph)';
-        }
+        // 4. Refocus button uses BroadcastChannel (works regardless of window.opener)
     </script>
 </body>
 </html>

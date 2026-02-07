@@ -25,6 +25,7 @@ class LatticeGraph {
 
         // Window tracking for asset live monitoring (GRAF-02)
         this.assetWindows = new Map();
+        window.name = 'lattice_graph';
 
         // Execution state
         this.executionState = {
