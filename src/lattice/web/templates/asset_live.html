@@ -265,9 +265,15 @@
         .log-entry {
             display: flex;
             gap: 0.75rem;
-            padding: 0.35rem 0.5rem;
-            border-bottom: 1px solid var(--border-dim);
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
             line-height: 1.5;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            font-family: 'Space Mono', monospace;
+        }
+
+        .light .log-entry {
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
         }
 
         .log-entry:last-child {
@@ -275,27 +281,59 @@
         }
 
         .log-level {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
             font-weight: 600;
-            width: 55px;
-            flex-shrink: 0;
+            letter-spacing: 0.05em;
+            min-width: 4.5rem;
             text-align: right;
+            flex-shrink: 0;
+            padding-top: 0.15rem;
         }
 
-        .log-level.INFO { color: var(--neon-cyan); }
-        .log-level.WARNING { color: var(--neon-yellow); }
-        .log-level.ERROR { color: var(--neon-pink); }
         .log-level.DEBUG { color: var(--text-secondary); }
+        .log-level.INFO { color: var(--neon-cyan); }
+        .log-level.WARNING { color: var(--neon-amber, #f59e0b); }
+        .log-level.ERROR { color: var(--neon-red, #ef4444); }
+        .log-level.CRITICAL { color: #ff0000; font-weight: 700; }
 
         .log-timestamp {
             color: var(--text-secondary);
             font-size: 0.75rem;
             flex-shrink: 0;
-            width: 80px;
+            min-width: 5.5rem;
         }
 
         .log-message {
             color: var(--text-primary);
             word-break: break-word;
+            flex: 1;
+        }
+
+        /* Connection status indicator */
+        .connection-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+        .connection-dot.connected { background: var(--neon-green, #22c55e); }
+        .connection-dot.disconnected { background: var(--neon-red, #ef4444); }
+        .connection-dot.connecting { background: var(--neon-amber, #f59e0b); animation: connPulse 1s infinite; }
+        .connection-dot.error { background: var(--neon-red, #ef4444); }
+
+        @keyframes connPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .connection-label {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.6rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
         }
 
         .log-empty {
@@ -405,6 +443,10 @@
         <div class="status-bar">
             <div id="status-indicator" class="status-indicator"></div>
             <div id="status-text" class="status-text">AWAITING EXECUTION...</div>
+            <div style="margin-left: auto; display: flex; align-items: center;">
+                <span id="connection-dot" class="connection-dot disconnected"></span>
+                <span id="connection-label" class="connection-label">DISCONNECTED</span>
+            </div>
         </div>
 
         <!-- Log container (hidden in idle state, shown when running) -->
