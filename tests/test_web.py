@@ -1,12 +1,15 @@
 """Tests for the web visualization API."""
 
-from datetime import date
+import json
+from datetime import date, datetime
+from pathlib import Path
 from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from lattice import AssetKey, AssetRegistry, asset
+from lattice import AssetKey, AssetRegistry, SQLiteRunHistoryStore, asset
+from lattice.observability.models import RunRecord
 from lattice.web.app import create_app
 from lattice.web.execution import ExecutionManager
 from lattice.web.schemas_execution import ExecutionStartRequest
@@ -46,6 +49,58 @@ def populated_client(populated_registry: AssetRegistry) -> TestClient:
     """Create a test client with populated registry."""
     app = create_app(populated_registry)
     return TestClient(app)
+
+
+@pytest.fixture
+def history_store(tmp_path: Path) -> SQLiteRunHistoryStore:
+    """Create a file-based history store for cross-thread test client access."""
+    return SQLiteRunHistoryStore(tmp_path / "test_runs.db")
+
+
+@pytest.fixture
+def history_client(
+    populated_registry: AssetRegistry, history_store: SQLiteRunHistoryStore
+) -> TestClient:
+    """Create a test client with populated registry and history store."""
+    app = create_app(populated_registry, history_store=history_store)
+    return TestClient(app)
+
+
+def _make_run_record(
+    run_id: str = "run-001",
+    status: str = "completed",
+    asset_results: list[dict] | None = None,
+    check_results: list[dict] | None = None,
+    logs: list[dict] | None = None,
+    partition_key: str | None = None,
+) -> RunRecord:
+    """Helper to create a RunRecord for testing."""
+    if asset_results is None:
+        asset_results = [
+            {"key": "source_data", "status": "completed", "duration_ms": 100.0},
+            {"key": "processed", "status": "completed", "duration_ms": 200.0},
+            {"key": "analytics/stats", "status": "completed", "duration_ms": 150.0},
+        ]
+    if check_results is None:
+        check_results = []
+    if logs is None:
+        logs = []
+
+    return RunRecord(
+        run_id=run_id,
+        started_at=datetime(2024, 1, 15, 10, 0, 0),
+        completed_at=datetime(2024, 1, 15, 10, 0, 1),
+        status=status,
+        duration_ms=1000.0,
+        total_assets=len(asset_results),
+        completed_count=sum(1 for a in asset_results if a["status"] == "completed"),
+        failed_count=sum(1 for a in asset_results if a["status"] == "failed"),
+        partition_key=partition_key,
+        logs_json=json.dumps(logs),
+        lineage_json="[]",
+        check_results_json=json.dumps(check_results),
+        asset_results_json=json.dumps(asset_results),
+    )
 
 
 class TestHealthEndpoint:
@@ -432,3 +487,168 @@ class TestExecutionManager:
 
         assert len(executed_dates) == 1
         assert executed_dates[0] == test_date
+
+
+class TestAssetDetailPage:
+    """Tests for /asset/{key} page endpoint."""
+
+    def test_asset_detail_page_returns_html(self, populated_client: TestClient) -> None:
+        """Asset detail page returns HTML for a valid asset."""
+        response = populated_client.get("/asset/source_data")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "LATTICE" in response.text
+        assert "source_data" in response.text
+
+    def test_asset_detail_page_grouped_asset(self, populated_client: TestClient) -> None:
+        """Asset detail page works for grouped assets (group/name path)."""
+        response = populated_client.get("/asset/analytics/stats")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "analytics/stats" in response.text
+
+    def test_asset_detail_page_nonexistent(self, populated_client: TestClient) -> None:
+        """Asset detail page returns 200 for nonexistent asset (JS handles not-found)."""
+        response = populated_client.get("/asset/does_not_exist")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+
+
+class TestAssetHistoryAPI:
+    """Tests for /api/history/assets/{key} endpoint."""
+
+    def test_asset_history_empty(self, history_client: TestClient) -> None:
+        """Returns empty history when no runs exist."""
+        response = history_client.get("/api/history/assets/source_data")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["asset_key"] == "source_data"
+        assert data["total_runs"] == 0
+        assert data["passed_count"] == 0
+        assert data["failed_count"] == 0
+        assert data["avg_duration_ms"] is None
+        assert data["runs"] == []
+
+    def test_asset_history_with_runs(
+        self,
+        history_client: TestClient,
+        history_store: SQLiteRunHistoryStore,
+    ) -> None:
+        """Returns runs filtered to a specific asset."""
+        record = _make_run_record(
+            run_id="run-001",
+            asset_results=[
+                {"key": "source_data", "status": "completed", "duration_ms": 100.0},
+                {"key": "processed", "status": "completed", "duration_ms": 200.0},
+            ],
+            check_results=[
+                {"check_name": "check_1", "asset_key": "source_data", "passed": True},
+            ],
+        )
+        history_store.save(record)
+
+        response = history_client.get("/api/history/assets/source_data")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["asset_key"] == "source_data"
+        assert data["total_runs"] == 1
+        assert data["passed_count"] == 1
+        assert data["failed_count"] == 0
+        assert data["avg_duration_ms"] == 100.0
+
+        assert len(data["runs"]) == 1
+        run = data["runs"][0]
+        assert run["run_id"] == "run-001"
+        assert run["asset_status"] == "completed"
+        assert run["asset_duration_ms"] == 100.0
+        assert run["checks_passed"] == 1
+        assert run["checks_total"] == 1
+
+    def test_asset_history_nonexistent_asset(
+        self,
+        history_client: TestClient,
+        history_store: SQLiteRunHistoryStore,
+    ) -> None:
+        """Returns empty list for an asset that was never executed."""
+        record = _make_run_record(
+            run_id="run-001",
+            asset_results=[
+                {"key": "source_data", "status": "completed", "duration_ms": 100.0},
+            ],
+        )
+        history_store.save(record)
+
+        response = history_client.get("/api/history/assets/nonexistent_asset")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_runs"] == 0
+        assert data["runs"] == []
+
+    def test_asset_history_grouped_asset(
+        self,
+        history_client: TestClient,
+        history_store: SQLiteRunHistoryStore,
+    ) -> None:
+        """Returns history for a grouped asset (group/name key)."""
+        record = _make_run_record(
+            run_id="run-001",
+            asset_results=[
+                {"key": "analytics/stats", "status": "completed", "duration_ms": 150.0},
+            ],
+        )
+        history_store.save(record)
+
+        response = history_client.get("/api/history/assets/analytics/stats")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["asset_key"] == "analytics/stats"
+        assert data["total_runs"] == 1
+        assert data["passed_count"] == 1
+
+    def test_asset_history_multiple_runs(
+        self,
+        history_client: TestClient,
+        history_store: SQLiteRunHistoryStore,
+    ) -> None:
+        """Returns multiple runs and correct aggregated stats."""
+        # Run 1: completed
+        history_store.save(
+            _make_run_record(
+                run_id="run-001",
+                asset_results=[
+                    {"key": "source_data", "status": "completed", "duration_ms": 100.0},
+                ],
+            )
+        )
+        # Run 2: failed
+        history_store.save(
+            _make_run_record(
+                run_id="run-002",
+                status="failed",
+                asset_results=[
+                    {"key": "source_data", "status": "failed", "duration_ms": 50.0},
+                ],
+            )
+        )
+
+        response = history_client.get("/api/history/assets/source_data")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_runs"] == 2
+        assert data["passed_count"] == 1
+        assert data["failed_count"] == 1
+        assert data["avg_duration_ms"] == 75.0  # (100 + 50) / 2
+
+    def test_asset_history_no_store(self, populated_client: TestClient) -> None:
+        """Returns empty result when no history store is configured."""
+        response = populated_client.get("/api/history/assets/source_data")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_runs"] == 0
+        assert data["runs"] == []

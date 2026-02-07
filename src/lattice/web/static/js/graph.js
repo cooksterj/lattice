@@ -3,13 +3,13 @@
  * D3.js force-directed graph with interactive features
  */
 
-// Neon Grid color palette for asset groups
+// Muted mission control palette for asset groups
 const GROUP_COLORS = {
-    default: {start: '#7b2cbf', end: '#3c096c', stroke: '#9d4edd'},    // Purple
-    analytics: {start: '#05d9e8', end: '#01949a', stroke: '#05d9e8'},  // Cyan
-    data: {start: '#ff2a6d', end: '#b5179e', stroke: '#ff2a6d'},       // Pink
-    ml: {start: '#f6ff00', end: '#d4af00', stroke: '#f6ff00'},         // Yellow
-    etl: {start: '#ff6b35', end: '#f72585', stroke: '#ff6b35'},        // Orange-Pink
+    default: {start: '#8068a8', end: '#2e2048', stroke: '#9680b8'},    // Brighter Purple
+    analytics: {start: '#68b5c2', end: '#24545e', stroke: '#7ec8d4'},  // Brighter Teal
+    data: {start: '#c45270', end: '#6e2038', stroke: '#d46a86'},       // Brighter Rose
+    ml: {start: '#d0b454', end: '#6e5c20', stroke: '#dcc468'},         // Brighter Amber
+    etl: {start: '#cf7a56', end: '#6e3420', stroke: '#d99070'},        // Brighter Coral
 };
 
 class LatticeGraph {
@@ -88,30 +88,30 @@ class LatticeGraph {
         const defs = this.svg.append('defs');
 
         // === EDGE GRADIENTS ===
-        // Main edge gradient: purple to cyan (follows data flow direction)
+        // Main edge gradient: dusty purple to muted teal
         const edgeGradient = defs.append('linearGradient')
             .attr('id', 'edge-gradient')
             .attr('gradientUnits', 'userSpaceOnUse');
         edgeGradient.append('stop')
             .attr('offset', '0%')
-            .attr('stop-color', '#7b2cbf');
+            .attr('stop-color', '#8068a8');
         edgeGradient.append('stop')
             .attr('offset', '50%')
-            .attr('stop-color', '#9d4edd');
+            .attr('stop-color', '#9680b8');
         edgeGradient.append('stop')
             .attr('offset', '100%')
-            .attr('stop-color', '#05d9e8');
+            .attr('stop-color', '#68b5c2');
 
-        // Highlighted edge gradient: pink to cyan
+        // Highlighted edge gradient: dusty rose to muted teal
         const edgeGradientHighlight = defs.append('linearGradient')
             .attr('id', 'edge-gradient-highlight')
             .attr('gradientUnits', 'userSpaceOnUse');
         edgeGradientHighlight.append('stop')
             .attr('offset', '0%')
-            .attr('stop-color', '#ff2a6d');
+            .attr('stop-color', '#c45270');
         edgeGradientHighlight.append('stop')
             .attr('offset', '100%')
-            .attr('stop-color', '#05d9e8');
+            .attr('stop-color', '#68b5c2');
 
         // === GLOW FILTERS ===
         // Edge glow filter
@@ -155,8 +155,8 @@ class LatticeGraph {
         // Diamond/chevron shape for futuristic feel
         arrow.append('path')
             .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
-            .attr('fill', '#05d9e8')
-            .attr('filter', 'drop-shadow(0 0 3px #05d9e8)');
+            .attr('fill', '#68b5c2')
+            .attr('filter', 'drop-shadow(0 0 2px rgba(104,181,194,0.4))');
 
         // Highlighted arrow
         const arrowHighlight = defs.append('marker')
@@ -169,8 +169,8 @@ class LatticeGraph {
             .attr('orient', 'auto');
         arrowHighlight.append('path')
             .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
-            .attr('fill', '#05d9e8')
-            .attr('filter', 'drop-shadow(0 0 6px #05d9e8)');
+            .attr('fill', '#68b5c2')
+            .attr('filter', 'drop-shadow(0 0 3px rgba(104,181,194,0.5))');
 
         // === NODE GRADIENTS ===
         Object.entries(GROUP_COLORS).forEach(([group, colors]) => {
@@ -246,11 +246,26 @@ class LatticeGraph {
             .attr('class', 'node')
             .call(this.drag());
 
-        // Node rectangles with neon glow
-        this.nodeElements.append('rect')
-            .attr('width', 130)
+        // Node labels (render first to measure text width)
+        this.nodeElements.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '0.35em')
+            .text(d => d.name);
+
+        // Measure each label and store width on datum
+        const MIN_NODE_WIDTH = 130;
+        const NODE_PADDING = 28; // horizontal padding around text
+        this.nodeElements.each(function(d) {
+            const textEl = d3.select(this).select('text').node();
+            const textWidth = textEl.getComputedTextLength();
+            d._nodeWidth = Math.max(MIN_NODE_WIDTH, textWidth + NODE_PADDING);
+        });
+
+        // Node rectangles with neon glow (sized to fit text)
+        this.nodeElements.insert('rect', 'text')
+            .attr('width', d => d._nodeWidth)
             .attr('height', 44)
-            .attr('x', -65)
+            .attr('x', d => -d._nodeWidth / 2)
             .attr('y', -22)
             .attr('rx', 4)
             .attr('class', d => `group-${d.group}`)
@@ -272,20 +287,21 @@ class LatticeGraph {
             const checks = d.checks || [];
             if (checks.length === 0) return;
 
-            // Cyan color variations for multiple checks
+            // Muted teal variations for multiple checks
             const cyanShades = [
-                '#05d9e8', // Base cyan
-                '#00b4d8', // Slightly darker/bluer
-                '#0096c7', // More blue
-                '#0077b6', // Deep cyan-blue
-                '#48cae4', // Lighter cyan
+                '#68b5c2', // Base brighter teal
+                '#5ca0ac', // Slightly darker
+                '#508e9a', // More muted
+                '#457c88', // Deep teal
+                '#78c2ce', // Lighter teal
             ];
 
             // Calculate sliver dimensions
             const sliverWidth = 4;
             const sliverGap = 1;
             const sliverHeight = 44; // Full height of asset block
-            const startX = 65 + 2; // Position to right of main rect (which ends at x=65)
+            const halfWidth = d._nodeWidth / 2;
+            const startX = halfWidth + 2; // Position to right of main rect
 
             checks.forEach((check, i) => {
                 const color = cyanShades[i % cyanShades.length];
@@ -302,12 +318,6 @@ class LatticeGraph {
                     .text(check.name);
             });
         });
-
-        // Node labels
-        this.nodeElements.append('text')
-            .attr('text-anchor', 'middle')
-            .attr('dy', '0.35em')
-            .text(d => d.name.length > 16 ? d.name.slice(0, 14) + '...' : d.name);
 
         // Compute hierarchical layout (left-to-right)
         this.computeHierarchicalLayout();
@@ -403,17 +413,17 @@ class LatticeGraph {
     tick() {
         // Generate curved path for an edge
         const generatePath = (d) => {
-            // Node dimensions
-            const nodeWidth = 130;
-            const nodeHalfWidth = nodeWidth / 2; // 65
+            // Per-node widths
+            const sourceHalfWidth = (d.source._nodeWidth || 130) / 2;
+            const targetHalfWidth = (d.target._nodeWidth || 130) / 2;
 
             // Calculate check sliver offset for source node (right side)
             const sourceChecks = d.source.checks ? d.source.checks.length : 0;
             const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
 
             // Source: right edge (plus slivers), Target: left edge
-            const sourceX = d.source.x + nodeHalfWidth + sliverOffset;
-            const targetX = d.target.x - nodeHalfWidth;
+            const sourceX = d.source.x + sourceHalfWidth + sliverOffset;
+            const targetX = d.target.x - targetHalfWidth;
             const sourceY = d.source.y;
             const targetY = d.target.y;
 
@@ -446,11 +456,6 @@ class LatticeGraph {
 
         // Update gradient positions to follow edge direction
         this.edgeGroups.each(function(d) {
-            const sourceX = d.source.x + 65;
-            const targetX = d.target.x - 65;
-            const sourceY = d.source.y;
-            const targetY = d.target.y;
-
             // Update all path layers with the same curved path
             const path = generatePath(d);
             d3.select(this).selectAll('path').attr('d', path);
@@ -499,9 +504,9 @@ class LatticeGraph {
         this.nodeElements
             .on('mouseenter', (event, d) => {
                 tooltip.innerHTML = `
-                    <div class="font-display font-bold" style="color: #05d9e8; text-shadow: 0 0 10px rgba(5,217,232,0.5);">${d.name}</div>
-                    <div style="color: #8888aa; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
-                    ${d.return_type ? `<div style="color: #ff2a6d; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
+                    <div class="font-display font-bold" style="color: #68b5c2;">${d.name}</div>
+                    <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
+                    ${d.return_type ? `<div style="color: #c45270; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
                 `;
                 tooltip.style.opacity = '1';
                 this.highlightConnections(d);
@@ -514,9 +519,9 @@ class LatticeGraph {
                 tooltip.style.opacity = '0';
                 this.clearHighlights();
             })
-            .on('click', async (event, d) => {
+            .on('click', (event, d) => {
                 event.stopPropagation();
-                await this.selectNode(d);
+                window.location.href = '/asset/' + encodeURIComponent(d.id);
             });
 
         // Close sidebar
@@ -630,7 +635,7 @@ class LatticeGraph {
         this.nodeElements.classed('selected', d => d.id === node.id);
 
         // Show loading state
-        content.innerHTML = '<div style="color: #05d9e8; font-family: Orbitron, sans-serif; letter-spacing: 0.2em; animation: textFlicker 1.5s ease-in-out infinite;">LOADING...</div>';
+        content.innerHTML = '<div style="color: #68b5c2; font-family: Orbitron, sans-serif; letter-spacing: 0.2em; animation: textFlicker 1.5s ease-in-out infinite;">LOADING...</div>';
         sidebar.classList.remove('translate-x-full');
 
         // Move execution controls out of the way
@@ -644,7 +649,7 @@ class LatticeGraph {
             content.innerHTML = `
                 <div class="detail-section">
                     <div class="detail-label">Name</div>
-                    <div class="detail-value font-display" style="font-size: 1.25rem; color: #05d9e8; text-shadow: 0 0 15px rgba(5,217,232,0.5);">${data.name}</div>
+                    <div class="detail-value font-display" style="font-size: 1.25rem; color: #68b5c2;">${data.name}</div>
                 </div>
 
                 <div class="detail-section">
@@ -655,14 +660,14 @@ class LatticeGraph {
                 ${data.return_type ? `
                 <div class="detail-section">
                     <div class="detail-label">Return Type</div>
-                    <div class="detail-value" style="color: #f6ff00; text-shadow: 0 0 10px rgba(246,255,0,0.4);">${data.return_type}</div>
+                    <div class="detail-value" style="color: #d0b454;">${data.return_type}</div>
                 </div>
                 ` : ''}
 
                 ${data.description ? `
                 <div class="detail-section">
                     <div class="detail-label">Description</div>
-                    <div class="detail-value" style="color: #8888aa; line-height: 1.6;">${data.description}</div>
+                    <div class="detail-value" style="color: #8282a0; line-height: 1.6;">${data.description}</div>
                 </div>
                 ` : ''}
 
@@ -677,7 +682,7 @@ class LatticeGraph {
                         ${c.description ? `<span class="check-badge-desc">${c.description}</span>` : ''}
                     </div>
                 `).join('')
-                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NO CHECKS ]</span>'}
+                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NO CHECKS ]</span>'}
                     </div>
                 </div>
 
@@ -686,7 +691,7 @@ class LatticeGraph {
                     <div class="dep-list">
                         ${data.dependencies.length > 0
                 ? data.dependencies.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
+                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
 
@@ -695,7 +700,7 @@ class LatticeGraph {
                     <div class="dep-list">
                         ${data.dependents.length > 0
                 ? data.dependents.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                : '<span style="color: #4a4a6a; font-size: 0.85rem;">[ NONE ]</span>'}
+                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NONE ]</span>'}
                     </div>
                 </div>
 
@@ -711,7 +716,7 @@ class LatticeGraph {
             });
 
         } catch (error) {
-            content.innerHTML = `<div style="color: #ff2a6d; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
+            content.innerHTML = `<div style="color: #c45270; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
         }
     }
 
@@ -1054,10 +1059,10 @@ class LatticeGraph {
         if (currentAssetEl) {
             if (data.failed_count > 0) {
                 currentAssetEl.textContent = 'FAILED';
-                currentAssetEl.style.color = '#ff2a6d';
+                currentAssetEl.style.color = '#c45270';
             } else {
                 currentAssetEl.textContent = 'COMPLETE';
-                currentAssetEl.style.color = '#05d9e8';
+                currentAssetEl.style.color = '#68b5c2';
             }
         }
         // Update total count with actual executed count

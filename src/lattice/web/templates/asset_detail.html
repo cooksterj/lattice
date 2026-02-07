@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LATTICE // Run History</title>
+    <title>LATTICE // {{ asset_key }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,10 +15,95 @@
             overflow: auto;
         }
 
-        .history-container {
+        .asset-container {
             max-width: 1400px;
             margin: 0 auto;
             padding: 6rem 2rem 2rem;
+        }
+
+        .back-link {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--text-secondary);
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+            transition: color 0.2s ease;
+        }
+
+        .back-link:hover {
+            color: var(--neon-cyan);
+        }
+
+        .asset-header {
+            background: rgba(18, 18, 26, 0.8);
+            border: 1px solid var(--border-dim);
+            padding: 1.5rem 2rem;
+            margin-bottom: 2rem;
+            clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
+        }
+
+        .light .asset-header {
+            background: rgba(250, 250, 252, 0.9);
+        }
+
+        .asset-name {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--neon-cyan);
+            letter-spacing: 0.05em;
+        }
+
+        .asset-group-badge {
+            display: inline-block;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            color: var(--neon-purple);
+            background: rgba(110, 90, 142, 0.15);
+            border: 1px solid rgba(110, 90, 142, 0.3);
+            padding: 0.2rem 0.6rem;
+            margin-left: 0.75rem;
+            vertical-align: middle;
+        }
+
+        .asset-description {
+            color: var(--text-secondary);
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .asset-meta {
+            display: flex;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .asset-meta-item {
+            font-size: 0.8rem;
+        }
+
+        .asset-meta-label {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            margin-bottom: 0.25rem;
+        }
+
+        .asset-meta-value {
+            color: var(--text-primary);
+        }
+
+        .asset-meta-value.type {
+            color: var(--neon-yellow);
         }
 
         .section-title {
@@ -27,7 +112,6 @@
             font-weight: 600;
             letter-spacing: 0.15em;
             color: var(--neon-cyan);
-            text-shadow: 0 0 10px var(--neon-cyan-glow);
             margin-bottom: 1rem;
             display: flex;
             align-items: center;
@@ -37,6 +121,46 @@
         .section-title::before {
             content: '//';
             color: var(--neon-pink);
+        }
+
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: rgba(18, 18, 26, 0.8);
+            border: 1px solid var(--border-dim);
+            padding: 1.25rem;
+            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+        }
+
+        .light .stat-card {
+            background: rgba(250, 250, 252, 0.9);
+        }
+
+        .stat-card-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            letter-spacing: 0.1em;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card-value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--neon-cyan);
+        }
+
+        .stat-card-value.pink {
+            color: var(--neon-pink);
+        }
+
+        .stat-card-value.yellow {
+            color: var(--neon-yellow);
         }
 
         .data-table {
@@ -74,6 +198,10 @@
             background: rgba(90, 158, 170, 0.05);
         }
 
+        .data-table tr {
+            cursor: pointer;
+        }
+
         .status-badge {
             display: inline-flex;
             align-items: center;
@@ -97,124 +225,13 @@
             border: 1px solid rgba(168, 70, 94, 0.3);
         }
 
-        .stat-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 1rem;
-            margin-bottom: 2rem;
-        }
-
-        .stat-card {
-            background: rgba(18, 18, 26, 0.8);
-            border: 1px solid var(--border-dim);
-            padding: 1.25rem;
-            clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-        }
-
-        .light .stat-card {
-            background: rgba(250, 250, 252, 0.9);
-        }
-
-        .stat-card-label {
-            font-size: 0.7rem;
-            color: var(--text-secondary);
-            letter-spacing: 0.1em;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-card-value {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 1.75rem;
-            font-weight: 700;
-            color: var(--neon-cyan);
-            text-shadow: 0 0 20px var(--neon-cyan-glow);
-        }
-
-        .stat-card-value.pink {
-            color: var(--neon-pink);
-            text-shadow: 0 0 20px var(--neon-pink-glow);
-        }
-
-        .stat-card-value.yellow {
-            color: var(--neon-yellow);
-            text-shadow: 0 0 20px rgba(184, 158, 74, 0.4);
-        }
-
-        .run-id-link {
-            color: var(--neon-yellow);
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .run-id-link:hover {
-            text-shadow: 0 0 10px rgba(184, 158, 74, 0.4);
-        }
-
-        .nav-link {
-            font-family: 'Orbitron', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.1em;
-            color: var(--text-secondary);
-            text-decoration: none;
-            padding: 0.5rem 1rem;
-            border: 1px solid transparent;
-            transition: all 0.2s ease;
-        }
-
-        .nav-link:hover {
-            color: var(--neon-cyan);
-            border-color: var(--border-dim);
-        }
-
-        .nav-link.active {
-            color: var(--neon-cyan);
-            border-color: var(--neon-cyan);
-            background: rgba(90, 158, 170, 0.1);
-        }
-
-        .filter-bar {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-        }
-
-        .filter-select {
-            padding: 0.5rem 1rem;
-            background: rgba(18, 18, 26, 0.8);
-            border: 1px solid var(--border-dim);
-            color: var(--text-primary);
-            font-family: 'Space Mono', monospace;
-            font-size: 0.8rem;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-
-        .light .filter-select {
-            background: rgba(250, 250, 252, 0.9);
-        }
-
-        .filter-select:hover,
-        .filter-select:focus {
-            border-color: var(--neon-cyan);
-            outline: none;
-        }
-
         .empty-state {
             text-align: center;
             padding: 3rem;
             color: var(--text-secondary);
         }
 
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-            opacity: 0.5;
-        }
-
-        /* Modal styles */
+        /* Run detail modal */
         .modal-overlay {
             position: fixed;
             inset: 0;
@@ -241,7 +258,7 @@
             max-height: 80vh;
             overflow-y: auto;
             clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px);
-            box-shadow: 0 0 60px var(--neon-cyan-glow);
+            box-shadow: 0 0 40px var(--neon-cyan-glow);
         }
 
         .modal-header {
@@ -390,11 +407,6 @@
             color: var(--text-primary);
         }
 
-        .check-asset {
-            color: var(--text-secondary);
-            font-size: 0.8rem;
-        }
-
         .asset-entry {
             display: flex;
             align-items: center;
@@ -411,7 +423,7 @@
         .asset-status-icon.failed { color: var(--neon-pink); }
         .asset-status-icon.skipped { color: var(--text-secondary); }
 
-        .asset-name {
+        .asset-result-name {
             flex: 1;
             color: var(--text-primary);
         }
@@ -419,6 +431,48 @@
         .asset-duration {
             color: var(--text-secondary);
             font-size: 0.8rem;
+        }
+
+        .check-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.25rem 0.625rem;
+            font-size: 0.75rem;
+            background: rgba(90, 158, 170, 0.1);
+            border: 1px solid rgba(90, 158, 170, 0.25);
+            margin: 0.25rem;
+        }
+
+        .check-badge-icon {
+            color: var(--neon-cyan);
+        }
+
+        .check-badge-name {
+            color: var(--text-primary);
+        }
+
+        .check-badge-desc {
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+        }
+
+        .dep-badge {
+            display: inline-block;
+            padding: 0.2rem 0.5rem;
+            font-size: 0.8rem;
+            color: var(--neon-yellow);
+            background: rgba(184, 158, 74, 0.1);
+            border: 1px solid rgba(184, 158, 74, 0.25);
+            margin: 0.25rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .dep-badge:hover {
+            background: rgba(184, 158, 74, 0.2);
+            border-color: rgba(184, 158, 74, 0.4);
         }
     </style>
 </head>
@@ -449,7 +503,7 @@
         <div class="flex items-center gap-3">
             <nav class="flex items-center gap-1">
                 <a href="/" class="nav-link">GRAPH</a>
-                <a href="/history" class="nav-link active">HISTORY</a>
+                <a href="/history" class="nav-link">HISTORY</a>
             </nav>
             <div class="header-divider"></div>
             <button id="theme-toggle" class="header-btn" title="Toggle theme">
@@ -465,7 +519,22 @@
         </div>
     </header>
 
-    <div class="history-container">
+    <div class="asset-container">
+        <!-- Back link -->
+        <a href="/" class="back-link">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            </svg>
+            BACK TO GRAPH
+        </a>
+
+        <!-- Asset Header -->
+        <div class="asset-header" id="asset-header">
+            <div style="color: var(--text-secondary); font-family: Orbitron, sans-serif; letter-spacing: 0.15em; font-size: 0.85rem;">
+                LOADING ASSET DATA...
+            </div>
+        </div>
+
         <!-- Stats Grid -->
         <div class="stat-grid" id="stats-grid">
             <div class="stat-card">
@@ -481,73 +550,23 @@
                 <div class="stat-card-value pink" id="stat-failed">--</div>
             </div>
             <div class="stat-card">
-                <div class="stat-card-label">SUCCESS RATE</div>
-                <div class="stat-card-value yellow" id="stat-rate">--%</div>
+                <div class="stat-card-label">AVG DURATION</div>
+                <div class="stat-card-value yellow" id="stat-duration">--</div>
             </div>
         </div>
 
-        <!-- Asset Summary -->
-        <section class="mb-8">
-            <h2 class="section-title">ASSET SUMMARY</h2>
-            <table class="data-table" id="asset-table">
-                <thead>
-                    <tr>
-                        <th>Asset</th>
-                        <th>Runs</th>
-                        <th>Passed</th>
-                        <th>Failed</th>
-                        <th>Last Run</th>
-                        <th>Avg Duration</th>
-                    </tr>
-                </thead>
-                <tbody id="asset-tbody">
-                    <tr>
-                        <td colspan="6" class="empty-state">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-
-        <!-- Partition Summary -->
-        <section class="mb-8">
-            <h2 class="section-title">PARTITION SUMMARY (LAST 7 DAYS)</h2>
-            <table class="data-table" id="partition-table">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Runs</th>
-                        <th>Completed</th>
-                        <th>Failed</th>
-                        <th>Total Duration</th>
-                    </tr>
-                </thead>
-                <tbody id="partition-tbody">
-                    <tr>
-                        <td colspan="5" class="empty-state">Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-
-        <!-- Recent Runs -->
+        <!-- Run History Table -->
         <section>
-            <h2 class="section-title">RECENT RUNS</h2>
-            <div class="filter-bar">
-                <select id="status-filter" class="filter-select">
-                    <option value="">All Status</option>
-                    <option value="completed">Completed</option>
-                    <option value="failed">Failed</option>
-                </select>
-            </div>
+            <h2 class="section-title">RUN HISTORY</h2>
             <table class="data-table" id="runs-table">
                 <thead>
                     <tr>
                         <th>Run ID</th>
                         <th>Date</th>
                         <th>Partition</th>
-                        <th>Status</th>
-                        <th>Assets</th>
+                        <th>Asset Status</th>
                         <th>Duration</th>
+                        <th>Checks</th>
                     </tr>
                 </thead>
                 <tbody id="runs-tbody">
@@ -571,7 +590,6 @@
                 </button>
             </div>
             <div class="modal-body" id="modal-body">
-                <!-- Content loaded dynamically -->
             </div>
         </div>
     </div>
@@ -583,6 +601,8 @@
     <div class="corner-decor bottom-right"></div>
 
     <script>
+        const ASSET_KEY = "{{ asset_key }}";
+
         // Theme toggle
         const themeToggle = document.getElementById('theme-toggle');
         const html = document.documentElement;
@@ -600,7 +620,6 @@
             updateThemeIcons();
         });
 
-        // Load saved theme
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme === 'light') {
             html.classList.remove('dark');
@@ -608,7 +627,7 @@
         }
         updateThemeIcons();
 
-        // API helpers
+        // Helpers
         async function fetchJSON(url) {
             const response = await fetch(url);
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -625,103 +644,120 @@
             return `${(ms / 1000).toFixed(2)}s`;
         }
 
-        // Load summary data
-        async function loadSummary() {
+        // Load asset metadata
+        async function loadAssetInfo() {
             try {
-                const summary = await fetchJSON('/api/history/summary');
+                const data = await fetchJSON(`/api/assets/${encodeURIComponent(ASSET_KEY)}`);
+                const header = document.getElementById('asset-header');
 
-                // Update stats
-                document.getElementById('stat-total').textContent = summary.total_runs;
-                document.getElementById('stat-passed').textContent = summary.total_passed;
-                document.getElementById('stat-failed').textContent = summary.total_failed;
-                const rate = summary.total_runs > 0
-                    ? Math.round((summary.total_passed / summary.total_runs) * 100)
-                    : 0;
-                document.getElementById('stat-rate').textContent = `${rate}%`;
+                const checksHtml = data.checks && data.checks.length > 0
+                    ? data.checks.map(c => `
+                        <span class="check-badge">
+                            <span class="check-badge-icon">&check;</span>
+                            <span class="check-badge-name">${c.name}</span>
+                            ${c.description ? `<span class="check-badge-desc">${c.description}</span>` : ''}
+                        </span>
+                    `).join('')
+                    : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None</span>';
 
-                // Update asset table
-                const assetTbody = document.getElementById('asset-tbody');
-                if (summary.asset_summaries.length === 0) {
-                    assetTbody.innerHTML = '<tr><td colspan="6" class="empty-state">No asset data available</td></tr>';
-                } else {
-                    assetTbody.innerHTML = summary.asset_summaries.map(a => `
-                        <tr>
-                            <td>${a.asset_key}</td>
-                            <td>${a.total_runs}</td>
-                            <td>${a.passed_count}</td>
-                            <td>${a.failed_count}</td>
-                            <td>${a.last_run_at ? formatDate(a.last_run_at) : '-'}</td>
-                            <td>${a.avg_duration_ms ? formatDuration(a.avg_duration_ms) : '-'}</td>
-                        </tr>
-                    `).join('');
-                }
+                const depsHtml = data.dependencies.length > 0
+                    ? data.dependencies.map(d => `<a href="/asset/${encodeURIComponent(d)}" class="dep-badge">${d}</a>`).join('')
+                    : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (source asset)</span>';
 
-                // Update partition table
-                const partTbody = document.getElementById('partition-tbody');
-                if (summary.partition_summaries.length === 0) {
-                    partTbody.innerHTML = '<tr><td colspan="5" class="empty-state">No partition data available</td></tr>';
-                } else {
-                    partTbody.innerHTML = summary.partition_summaries.map(p => `
-                        <tr>
-                            <td>${p.partition_key}</td>
-                            <td>${p.total_runs}</td>
-                            <td>${p.completed_count}</td>
-                            <td>${p.failed_count}</td>
-                            <td>${formatDuration(p.total_duration_ms)}</td>
-                        </tr>
-                    `).join('');
-                }
+                const dependentsHtml = data.dependents.length > 0
+                    ? data.dependents.map(d => `<a href="/asset/${encodeURIComponent(d)}" class="dep-badge">${d}</a>`).join('')
+                    : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (terminal asset)</span>';
+
+                header.innerHTML = `
+                    <div>
+                        <span class="asset-name">${data.name}</span>
+                        <span class="asset-group-badge">${data.group.toUpperCase()}</span>
+                    </div>
+                    ${data.description ? `<div class="asset-description">${data.description}</div>` : ''}
+                    <div class="asset-meta">
+                        ${data.return_type ? `
+                        <div class="asset-meta-item">
+                            <div class="asset-meta-label">RETURN TYPE</div>
+                            <div class="asset-meta-value type">${data.return_type}</div>
+                        </div>
+                        ` : ''}
+                        <div class="asset-meta-item">
+                            <div class="asset-meta-label">DEPENDENCIES</div>
+                            <div>${depsHtml}</div>
+                        </div>
+                        <div class="asset-meta-item">
+                            <div class="asset-meta-label">DEPENDENTS</div>
+                            <div>${dependentsHtml}</div>
+                        </div>
+                        <div class="asset-meta-item">
+                            <div class="asset-meta-label">CHECKS</div>
+                            <div>${checksHtml}</div>
+                        </div>
+                    </div>
+                `;
             } catch (e) {
-                console.error('Failed to load summary:', e);
+                console.error('Failed to load asset info:', e);
+                document.getElementById('asset-header').innerHTML =
+                    '<div style="color: var(--neon-pink); font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ASSET NOT FOUND</div>';
             }
         }
 
-        // Load runs list
-        async function loadRuns(status = null) {
+        // Load asset run history
+        async function loadAssetHistory() {
             try {
-                let url = '/api/history/runs?limit=50';
-                if (status) url += `&status=${status}`;
+                const data = await fetchJSON(`/api/history/assets/${encodeURIComponent(ASSET_KEY)}`);
 
-                const data = await fetchJSON(url);
+                // Update stats
+                document.getElementById('stat-total').textContent = data.total_runs;
+                document.getElementById('stat-passed').textContent = data.passed_count;
+                document.getElementById('stat-failed').textContent = data.failed_count;
+                document.getElementById('stat-duration').textContent =
+                    data.avg_duration_ms !== null ? formatDuration(data.avg_duration_ms) : '--';
+
+                // Update runs table
                 const tbody = document.getElementById('runs-tbody');
-
                 if (data.runs.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No runs found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No runs found for this asset. Execute the pipeline to generate history.</td></tr>';
                     return;
                 }
 
                 tbody.innerHTML = data.runs.map(r => `
-                    <tr>
-                        <td>
-                            <span class="run-id-link" data-run-id="${r.run_id}">${r.run_id}</span>
-                        </td>
+                    <tr data-run-id="${r.run_id}">
+                        <td style="color: var(--neon-yellow); cursor: pointer;">${r.run_id}</td>
                         <td>${formatDate(r.started_at)}</td>
                         <td>${r.partition_key || '-'}</td>
                         <td>
-                            <span class="status-badge ${r.status}">
-                                ${r.status === 'completed' ? '✓' : '✗'} ${r.status.toUpperCase()}
+                            <span class="status-badge ${r.asset_status}">
+                                ${r.asset_status === 'completed' ? '&check;' : '&cross;'} ${r.asset_status.toUpperCase()}
                             </span>
                         </td>
-                        <td>${r.completed_count}/${r.total_assets}</td>
-                        <td>${formatDuration(r.duration_ms)}</td>
+                        <td>${r.asset_duration_ms !== null ? formatDuration(r.asset_duration_ms) : '-'}</td>
+                        <td>${r.checks_passed}/${r.checks_total}</td>
                     </tr>
                 `).join('');
 
                 // Add click handlers
-                document.querySelectorAll('.run-id-link').forEach(el => {
-                    el.addEventListener('click', () => showRunDetails(el.dataset.runId));
+                document.querySelectorAll('#runs-tbody tr[data-run-id]').forEach(row => {
+                    row.addEventListener('click', () => showRunDetails(row.dataset.runId));
                 });
             } catch (e) {
-                console.error('Failed to load runs:', e);
+                console.error('Failed to load asset history:', e);
+                document.getElementById('runs-tbody').innerHTML =
+                    '<tr><td colspan="6" class="empty-state">Failed to load run history</td></tr>';
             }
         }
 
-        // Show run details modal
+        // Show run detail modal (filtered to this asset)
         async function showRunDetails(runId) {
             try {
                 const run = await fetchJSON(`/api/history/runs/${runId}`);
                 const modal = document.getElementById('run-modal');
                 const body = document.getElementById('modal-body');
+
+                // Filter to this asset's results
+                const assetResult = run.asset_results.find(a => a.key === ASSET_KEY);
+                const assetChecks = run.check_results.filter(c => c.asset_key === ASSET_KEY);
+                const assetLogs = run.logs.filter(l => l.asset_key === ASSET_KEY);
 
                 body.innerHTML = `
                     <div class="detail-row">
@@ -732,7 +768,7 @@
                         <span class="detail-key">STATUS</span>
                         <span class="detail-val">
                             <span class="status-badge ${run.status}">
-                                ${run.status === 'completed' ? '✓' : '✗'} ${run.status.toUpperCase()}
+                                ${run.status === 'completed' ? '&check;' : '&cross;'} ${run.status.toUpperCase()}
                             </span>
                         </span>
                     </div>
@@ -741,23 +777,9 @@
                         <span class="detail-val">${formatDate(run.started_at)}</span>
                     </div>
                     <div class="detail-row">
-                        <span class="detail-key">COMPLETED</span>
-                        <span class="detail-val">${formatDate(run.completed_at)}</span>
-                    </div>
-                    <div class="detail-row">
                         <span class="detail-key">DURATION</span>
                         <span class="detail-val">${formatDuration(run.duration_ms)}</span>
                     </div>
-                    <div class="detail-row">
-                        <span class="detail-key">ASSETS</span>
-                        <span class="detail-val">${run.completed_count}/${run.total_assets} completed, ${run.failed_count} failed</span>
-                    </div>
-                    ${run.target ? `
-                    <div class="detail-row">
-                        <span class="detail-key">TARGET</span>
-                        <span class="detail-val">${run.target}</span>
-                    </div>
-                    ` : ''}
                     ${run.partition_key ? `
                     <div class="detail-row">
                         <span class="detail-key">PARTITION</span>
@@ -766,56 +788,57 @@
                     ` : ''}
 
                     <div class="tab-bar">
-                        <button class="tab-btn active" data-tab="assets">ASSETS</button>
-                        <button class="tab-btn" data-tab="checks">CHECKS</button>
-                        <button class="tab-btn" data-tab="logs">LOGS</button>
-                        <button class="tab-btn" data-tab="lineage">LINEAGE</button>
+                        <button class="tab-btn active" data-tab="asset-result">ASSET RESULT</button>
+                        <button class="tab-btn" data-tab="checks">CHECKS (${assetChecks.length})</button>
+                        <button class="tab-btn" data-tab="logs">LOGS (${assetLogs.length})</button>
+                        <button class="tab-btn" data-tab="all-assets">ALL ASSETS</button>
                     </div>
 
-                    <div class="tab-content active" id="tab-assets">
-                        ${run.asset_results.length === 0 ? '<p class="empty-state">No asset results</p>' :
-                        run.asset_results.map(a => `
+                    <div class="tab-content active" id="tab-asset-result">
+                        ${assetResult ? `
                             <div class="asset-entry">
-                                <span class="asset-status-icon ${a.status}">${
-                                    a.status === 'completed' ? '✓' :
-                                    a.status === 'failed' ? '✗' : '○'
+                                <span class="asset-status-icon ${assetResult.status}">${
+                                    assetResult.status === 'completed' ? '&check;' :
+                                    assetResult.status === 'failed' ? '&cross;' : '&#9675;'
                                 }</span>
-                                <span class="asset-name">${a.key}</span>
-                                <span class="asset-duration">${a.duration_ms ? formatDuration(a.duration_ms) : '-'}</span>
+                                <span class="asset-result-name">${assetResult.key}</span>
+                                <span class="asset-duration">${assetResult.duration_ms ? formatDuration(assetResult.duration_ms) : '-'}</span>
                             </div>
-                            ${a.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${a.error}</div>` : ''}
-                        `).join('')}
+                            ${assetResult.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${assetResult.error}</div>` : ''}
+                        ` : '<p class="empty-state">Asset was not part of this run</p>'}
                     </div>
 
                     <div class="tab-content" id="tab-checks">
-                        ${run.check_results.length === 0 ? '<p class="empty-state">No checks run</p>' :
-                        run.check_results.map(c => `
+                        ${assetChecks.length === 0 ? '<p class="empty-state">No checks for this asset in this run</p>' :
+                        assetChecks.map(c => `
                             <div class="check-entry">
-                                <span class="check-icon ${c.passed ? 'passed' : 'failed'}">${c.passed ? '✓' : '✗'}</span>
+                                <span class="check-icon ${c.passed ? 'passed' : 'failed'}">${c.passed ? '&check;' : '&cross;'}</span>
                                 <span class="check-name">${c.check_name}</span>
-                                <span class="check-asset">on ${c.asset_key}</span>
                             </div>
                             ${c.error ? `<div style="padding: 0.5rem 1rem; color: var(--neon-pink); font-size: 0.8rem;">Error: ${c.error}</div>` : ''}
                         `).join('')}
                     </div>
 
                     <div class="tab-content" id="tab-logs">
-                        ${run.logs.length === 0 ? '<p class="empty-state">No logs captured</p>' :
-                        run.logs.map(l => `
+                        ${assetLogs.length === 0 ? '<p class="empty-state">No logs captured for this asset</p>' :
+                        assetLogs.map(l => `
                             <div class="log-entry">
                                 <span class="log-level ${l.level}">${l.level}</span>
-                                ${l.asset_key ? `<span class="log-asset">[${l.asset_key}]</span>` : ''}
                                 <span class="log-message">${l.message}</span>
                             </div>
                         `).join('')}
                     </div>
 
-                    <div class="tab-content" id="tab-lineage">
-                        ${run.lineage.length === 0 ? '<p class="empty-state">No lineage events</p>' :
-                        run.lineage.map(e => `
-                            <div class="log-entry">
-                                <span class="log-level ${e.event_type === 'read' ? 'INFO' : 'WARNING'}">${e.event_type.toUpperCase()}</span>
-                                <span class="log-message">${e.asset_key}${e.source_asset ? ` (from ${e.source_asset})` : ''}</span>
+                    <div class="tab-content" id="tab-all-assets">
+                        ${run.asset_results.length === 0 ? '<p class="empty-state">No asset results</p>' :
+                        run.asset_results.map(a => `
+                            <div class="asset-entry">
+                                <span class="asset-status-icon ${a.status}">${
+                                    a.status === 'completed' ? '&check;' :
+                                    a.status === 'failed' ? '&cross;' : '&#9675;'
+                                }</span>
+                                <span class="asset-result-name">${a.key}</span>
+                                <span class="asset-duration">${a.duration_ms ? formatDuration(a.duration_ms) : '-'}</span>
                             </div>
                         `).join('')}
                     </div>
@@ -841,21 +864,15 @@
         document.getElementById('modal-close').addEventListener('click', () => {
             document.getElementById('run-modal').classList.remove('active');
         });
-
         document.getElementById('run-modal').addEventListener('click', (e) => {
             if (e.target.id === 'run-modal') {
                 document.getElementById('run-modal').classList.remove('active');
             }
         });
 
-        // Status filter
-        document.getElementById('status-filter').addEventListener('change', (e) => {
-            loadRuns(e.target.value || null);
-        });
-
         // Initial load
-        loadSummary();
-        loadRuns();
+        loadAssetInfo();
+        loadAssetHistory();
     </script>
 </body>
 </html>

@@ -196,6 +196,7 @@ class ExecutionManager:
         from lattice.observability import (
             CheckResult,
             CheckStatus,
+            ExecutionLogHandler,
             LineageIOManager,
             LineageTracker,
             RunRecord,
@@ -270,27 +271,31 @@ class ExecutionManager:
                 lineage_tracker = LineageTracker()
                 io_manager = LineageIOManager(base_io_manager, lineage_tracker)
 
-                # Create callbacks that update observability context
-                # Use default argument to bind lineage_tracker at definition time (avoids B023)
-                async def on_asset_start_with_tracking(
-                    key: AssetKey, tracker: LineageTracker = lineage_tracker
-                ) -> None:
-                    tracker.set_current_asset(key)
-                    await self._broadcast_asset_start(key)
-
-                executor = AsyncExecutor(
-                    io_manager=io_manager,
-                    max_concurrency=self._max_concurrency,
-                    on_asset_start=on_asset_start_with_tracking,
-                    on_asset_complete=self._broadcast_asset_complete,
-                    partition_key=partition_date,
-                )
-                self._executor = executor
-
                 partition_start = datetime.now()
 
-                # Execute with log capture
+                # Execute with log capture — handler must exist before
+                # the callback is defined so it can be bound via default arg
                 with capture_logs("lattice") as log_handler:
+                    # Create callbacks that update observability context
+                    # Use default argument to bind at definition time (avoids B023)
+                    async def on_asset_start_with_tracking(
+                        key: AssetKey,
+                        tracker: LineageTracker = lineage_tracker,
+                        handler: ExecutionLogHandler = log_handler,
+                    ) -> None:
+                        tracker.set_current_asset(key)
+                        handler.set_current_asset(key)
+                        await self._broadcast_asset_start(key)
+
+                    executor = AsyncExecutor(
+                        io_manager=io_manager,
+                        max_concurrency=self._max_concurrency,
+                        on_asset_start=on_asset_start_with_tracking,
+                        on_asset_complete=self._broadcast_asset_complete,
+                        partition_key=partition_date,
+                    )
+                    self._executor = executor
+
                     result = await executor.execute(plan)
 
                 partition_duration = (datetime.now() - partition_start).total_seconds() * 1000

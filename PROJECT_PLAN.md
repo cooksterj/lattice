@@ -385,31 +385,36 @@ print(run.check_results) # Data quality results
 
 ---
 
-## Phase 7: AWS Deployment
+## Phase 7: Web UI Enhancements & AWS Deployment
 
-**Goal:** Run Lattice on AWS within $10-20/month budget.
+**Goal:** Refine the web UI for production-quality observability, then deploy Lattice on AWS within $10-20/month budget.
 
-```
-EventBridge ──▶ Lambda ──▶ Lattice ──▶ S3
-   (cron)       (runner)   (materialize)  (IO manager)
-```
+### Web UI Enhancements
 
-**Cost breakdown:**
-| Service | Usage | Est. Cost |
-|---------|-------|-----------|
-| S3 | 1-5 GB storage | ~$0.12 |
-| Lambda | 100 invocations/day, 512MB, 2min | ~$2-5 |
-| EventBridge | Scheduler rules | Free tier |
-| Athena | Occasional queries | ~$1-3 |
-| **Total** | | **~$5-10/month** |
+**Refined Color Palette:**
+- Replaced eye-straining neon synthwave colors with a muted "dimmed mission control" aesthetic
+- Kept futuristic feel (Orbitron font, clip-path angular shapes, gradient edges) while dramatically reducing saturation and glow intensity
+- Updated both dark mode and light mode palettes for comfortable extended use
 
-**Deliverables:**
-- `S3IOManager` implementation
-- Lambda handler that invokes `materialize()`
-- Terraform modules (integrate with existing `infrastructure/` patterns)
-- CloudWatch logging integration
+**Asset Detail Page:**
+- New dedicated page at `/asset/{key}` showing per-asset run history
+- Clicking an asset node on the graph navigates to its detail page
+- Displays asset metadata (name, group, description, return type, dependencies, checks)
+- Shows all historical runs that included the asset with status, duration, and logs
+- Click any run to view full execution details (assets, checks, logs, lineage)
 
----
+**Asset Observability Logging:**
+- Demo assets now emit structured log messages during execution
+- Logs are captured and stored in run history via `capture_logs()` context manager
+- Log entries visible in run detail modal under the "Logs" tab
+- Uses standard Python `logging` module (`INFO` for operations, `WARNING` for edge cases)
+
+**New API Endpoint:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/asset/{key}` | GET | Asset detail page with run history |
+| `/api/history/assets/{key}` | GET | Asset-specific run history (filtered) |
 
 ## Project Structure
 

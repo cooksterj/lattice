@@ -68,6 +68,30 @@ class PartitionSummarySchema(BaseModel):
     total_duration_ms: float
 
 
+class AssetRunSchema(BaseModel):
+    """A single run's data filtered to a specific asset."""
+
+    run_id: str
+    started_at: str
+    completed_at: str
+    partition_key: str | None = None
+    asset_status: str
+    asset_duration_ms: float | None = None
+    checks_passed: int = 0
+    checks_total: int = 0
+
+
+class AssetHistorySchema(BaseModel):
+    """Run history filtered to a specific asset."""
+
+    asset_key: str
+    total_runs: int
+    passed_count: int
+    failed_count: int
+    avg_duration_ms: float | None = None
+    runs: list[AssetRunSchema]
+
+
 class HistorySummarySchema(BaseModel):
     """Summary of run history by asset and partition."""
 
@@ -274,6 +298,82 @@ def create_history_router(
             total_runs=len(runs),
             total_passed=total_passed,
             total_failed=total_failed,
+        )
+
+    @router.get("/api/history/assets/{key:path}", response_model=AssetHistorySchema)
+    async def get_asset_history(key: str) -> AssetHistorySchema:
+        """Get run history filtered to a specific asset."""
+        if history_store is None:
+            return AssetHistorySchema(
+                asset_key=key,
+                total_runs=0,
+                passed_count=0,
+                failed_count=0,
+                avg_duration_ms=None,
+                runs=[],
+            )
+
+        all_runs = history_store.list_runs(limit=500)
+
+        asset_runs: list[AssetRunSchema] = []
+        passed = 0
+        failed = 0
+        total_duration = 0.0
+        duration_count = 0
+
+        for run in all_runs:
+            asset_results = json.loads(run.asset_results_json)
+            check_results = json.loads(run.check_results_json)
+
+            # Find this asset in the run's results
+            asset_result = None
+            for ar in asset_results:
+                if ar["key"] == key:
+                    asset_result = ar
+                    break
+
+            if asset_result is None:
+                continue
+
+            # Count checks for this asset
+            asset_checks = [c for c in check_results if c.get("asset_key") == key]
+            checks_passed = sum(1 for c in asset_checks if c.get("passed"))
+            checks_total = len(asset_checks)
+
+            # Track stats
+            asset_status = asset_result.get("status", "unknown")
+            if asset_status == "completed":
+                passed += 1
+            elif asset_status == "failed":
+                failed += 1
+
+            duration_ms = asset_result.get("duration_ms")
+            if duration_ms is not None:
+                total_duration += duration_ms
+                duration_count += 1
+
+            asset_runs.append(
+                AssetRunSchema(
+                    run_id=run.run_id,
+                    started_at=run.started_at.isoformat(),
+                    completed_at=run.completed_at.isoformat(),
+                    partition_key=run.partition_key,
+                    asset_status=asset_status,
+                    asset_duration_ms=duration_ms,
+                    checks_passed=checks_passed,
+                    checks_total=checks_total,
+                )
+            )
+
+        avg_duration = total_duration / duration_count if duration_count > 0 else None
+
+        return AssetHistorySchema(
+            asset_key=key,
+            total_runs=len(asset_runs),
+            passed_count=passed,
+            failed_count=failed,
+            avg_duration_ms=avg_duration,
+            runs=asset_runs,
         )
 
     @router.delete("/api/history/runs/{run_id}")

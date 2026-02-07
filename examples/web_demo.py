@@ -13,18 +13,24 @@ from lattice import configure_logging
 # Configure logging before defining assets to see registration logs
 configure_logging()
 
+import logging  # noqa: E402
 import time  # noqa: E402
 
 from lattice import AssetKey, SQLiteRunHistoryStore, asset  # noqa: E402
 from lattice.web import serve  # noqa: E402
+
+logger = logging.getLogger("lattice")
 
 
 # Source assets (no dependencies)
 @asset
 def raw_users() -> list[dict]:
     """Raw user data from CSV."""
+    logger.info("Fetching raw user data from CSV source...")
     time.sleep(0.3)  # Simulate I/O
-    return [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+    data = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
+    logger.info("Loaded %d raw users", len(data))
+    return data
 
 
 @raw_users.check
@@ -42,8 +48,12 @@ def users_have_ids(data: list[dict]) -> bool:
 @asset
 def raw_orders() -> list[dict]:
     """Raw order data from database."""
+    logger.info("Querying raw orders from database...")
     time.sleep(0.2)  # Simulate DB query
-    return [{"order_id": 100, "user_id": 1, "amount": 50.0}]
+    data = [{"order_id": 100, "user_id": 1, "amount": 50.0}]
+    total = sum(o["amount"] for o in data)
+    logger.info("Retrieved %d raw orders (total amount: $%.2f)", len(data), total)
+    return data
 
 
 @raw_orders.check
@@ -55,8 +65,11 @@ def orders_have_positive_amounts(data: list[dict]) -> bool:
 @asset
 def raw_products() -> list[dict]:
     """Raw product catalog."""
+    logger.info("Fetching product catalog from API...")
     time.sleep(0.2)  # Simulate API call
-    return [{"sku": "ABC", "price": 25.0}]
+    data = [{"sku": "ABC", "price": 25.0}]
+    logger.info("Loaded %d products from catalog", len(data))
+    return data
 
 
 @raw_products.check
@@ -68,8 +81,11 @@ def products_have_skus(data: list[dict]) -> bool:
 @asset
 def raw_inventory() -> list[dict]:
     """Raw inventory levels."""
+    logger.info("Polling warehouse API for inventory levels...")
     time.sleep(0.4)  # Simulate warehouse API
-    return [{"sku": "ABC", "qty": 100}]
+    data = [{"sku": "ABC", "qty": 100}]
+    logger.info("Inventory snapshot: %d SKUs, total qty %d", len(data), sum(i["qty"] for i in data))
+    return data
 
 
 @raw_inventory.check
@@ -81,15 +97,21 @@ def inventory_non_negative(data: list[dict]) -> bool:
 @asset
 def raw_suppliers() -> list[dict]:
     """Raw supplier data."""
+    logger.info("Loading supplier directory...")
     time.sleep(0.3)  # Simulate supplier API
-    return [{"id": 1, "name": "Acme Corp"}]
+    data = [{"id": 1, "name": "Acme Corp"}]
+    logger.info("Loaded %d suppliers", len(data))
+    return data
 
 
 @asset
 def raw_shipping() -> list[dict]:
     """Raw shipping rates."""
+    logger.info("Fetching shipping rate tables...")
     time.sleep(0.35)  # Simulate shipping API
-    return [{"zone": "US", "rate": 5.99}]
+    data = [{"zone": "US", "rate": 5.99}]
+    logger.info("Loaded shipping rates for %d zones", len(data))
+    return data
 
 
 @raw_shipping.check
@@ -102,8 +124,14 @@ def shipping_rates_positive(data: list[dict]) -> bool:
 @asset
 def cleaned_users(raw_users: list[dict]) -> list[dict]:
     """Users with validated emails."""
+    logger.info("Cleaning user records (%d input)...", len(raw_users))
     time.sleep(0.2)
-    return [u for u in raw_users if u.get("name")]
+    result = [u for u in raw_users if u.get("name")]
+    removed = len(raw_users) - len(result)
+    if removed:
+        logger.warning("Removed %d users with missing names", removed)
+    logger.info("Cleaned users: %d records retained", len(result))
+    return result
 
 
 @cleaned_users.check
@@ -115,17 +143,27 @@ def no_users_lost_in_cleaning(data: list[dict]) -> bool:
 @asset
 def cleaned_orders(raw_orders: list[dict]) -> list[dict]:
     """Orders with valid amounts."""
+    logger.info("Validating order amounts (%d input)...", len(raw_orders))
     time.sleep(0.2)
-    return [o for o in raw_orders if o.get("amount", 0) > 0]
+    result = [o for o in raw_orders if o.get("amount", 0) > 0]
+    removed = len(raw_orders) - len(result)
+    if removed:
+        logger.warning("Filtered %d orders with non-positive amounts", removed)
+    logger.info("Cleaned orders: %d valid records", len(result))
+    return result
 
 
 # Joined assets
 @asset
 def user_orders(cleaned_users: list[dict], cleaned_orders: list[dict]) -> list[dict]:
     """Orders enriched with user information (slow join operation)."""
+    logger.info("Joining %d orders with %d users...", len(cleaned_orders), len(cleaned_users))
     time.sleep(5.0)  # Simulate a slow database join
     user_map = {u["id"]: u for u in cleaned_users}
-    return [{**order, "user": user_map.get(order["user_id"])} for order in cleaned_orders]
+    result = [{**order, "user": user_map.get(order["user_id"])} for order in cleaned_orders]
+    matched = sum(1 for r in result if r.get("user") is not None)
+    logger.info("Join complete: %d/%d orders matched to users", matched, len(result))
+    return result
 
 
 @user_orders.check
@@ -138,8 +176,10 @@ def all_orders_have_users(data: list[dict]) -> bool:
 @asset(key=AssetKey(name="daily_revenue", group="analytics"))
 def daily_revenue(user_orders: list[dict]) -> dict:
     """Daily revenue aggregation."""
+    logger.info("Aggregating daily revenue from %d orders...", len(user_orders))
     time.sleep(0.2)
     total = sum(o.get("amount", 0) for o in user_orders)
+    logger.info("Daily revenue calculated: $%.2f", total)
     return {"date": "2024-01-15", "revenue": total}
 
 
@@ -158,11 +198,16 @@ def revenue_has_date(data: dict) -> bool:
 @asset(key=AssetKey(name="user_stats", group="analytics"))
 def user_stats(cleaned_users: list[dict], user_orders: list[dict]) -> dict:
     """User statistics and metrics."""
+    logger.info("Computing user statistics...")
     time.sleep(0.2)
-    return {
+    result = {
         "total_users": len(cleaned_users),
         "users_with_orders": len({o["user_id"] for o in user_orders}),
     }
+    logger.info(
+        "User stats: %d total, %d with orders", result["total_users"], result["users_with_orders"]
+    )
+    return result
 
 
 @user_stats.check
@@ -174,15 +219,33 @@ def users_with_orders_not_greater_than_total(data: dict) -> bool:
 @asset(key=AssetKey(name="product_performance", group="analytics"))
 def product_performance(raw_products: list[dict], user_orders: list[dict]) -> dict:
     """Product sales performance."""
+    logger.info("Analyzing product performance across %d products...", len(raw_products))
     time.sleep(0.2)
-    return {"total_products": len(raw_products), "orders": len(user_orders)}
+    result = {"total_products": len(raw_products), "orders": len(user_orders)}
+    logger.info(
+        "Product performance: %d products, %d orders",
+        result["total_products"],
+        result["orders"],
+    )
+    return result
 
 
 @asset(key=AssetKey(name="inventory_status", group="analytics"))
 def inventory_status(raw_inventory: list[dict], raw_suppliers: list[dict]) -> dict:
     """Current inventory status with supplier info."""
+    logger.info(
+        "Building inventory status from %d items and %d suppliers...",
+        len(raw_inventory),
+        len(raw_suppliers),
+    )
     time.sleep(0.25)
-    return {"total_items": sum(i["qty"] for i in raw_inventory), "suppliers": len(raw_suppliers)}
+    result = {"total_items": sum(i["qty"] for i in raw_inventory), "suppliers": len(raw_suppliers)}
+    logger.info(
+        "Inventory status: %d total items across %d suppliers",
+        result["total_items"],
+        result["suppliers"],
+    )
+    return result
 
 
 @inventory_status.check
@@ -194,8 +257,12 @@ def has_at_least_one_supplier(data: dict) -> bool:
 @asset(key=AssetKey(name="shipping_costs", group="analytics"))
 def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
     """Shipping cost analysis."""
+    logger.info("Calculating shipping costs for %d orders...", len(user_orders))
     time.sleep(0.2)
-    return {"avg_rate": raw_shipping[0]["rate"] if raw_shipping else 0, "orders": len(user_orders)}
+    avg_rate = raw_shipping[0]["rate"] if raw_shipping else 0
+    result = {"avg_rate": avg_rate, "orders": len(user_orders)}
+    logger.info("Shipping analysis: avg rate $%.2f across %d orders", avg_rate, len(user_orders))
+    return result
 
 
 # Final dashboard asset - uses deps to specify grouped dependencies
@@ -209,12 +276,20 @@ def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
 )
 def executive_dashboard(revenue: dict, stats: dict, products: dict) -> dict:
     """Executive summary dashboard."""
+    logger.info("Assembling executive dashboard from 3 data sources...")
     time.sleep(0.3)
-    return {
+    result = {
         "revenue": revenue,
         "users": stats,
         "products": products,
     }
+    logger.info(
+        "Dashboard ready: revenue=$%.2f, %d users, %d products",
+        revenue.get("revenue", 0),
+        stats.get("total_users", 0),
+        products.get("total_products", 0),
+    )
+    return result
 
 
 @executive_dashboard.check
