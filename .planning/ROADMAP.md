@@ -57,11 +57,11 @@ Plans:
   2. Clicking any sidebar icon navigates to the corresponding full page (not a popup, not a modal)
   3. The icon for the current page is visually highlighted so the user always knows where they are
   4. Browser back and forward buttons work correctly between all pages
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: TBD
-- [ ] 04-02: TBD
+- [ ] 04-01-PLAN.md — Create base.html with sidebar, sidebar CSS, and current_page route context
+- [ ] 04-02-PLAN.md — Migrate all 4 templates to extend base.html + visual verification
 
 ### Phase 5: Run Monitoring & Live Logs
 **Goal**: Users can monitor active execution progress and view live logs as full pages within the sidebar layout
@@ -115,7 +115,7 @@ Plans:
 | 1. Streaming Infrastructure | v1.0 | 3/3 | Complete | 2026-02-06 |
 | 2. Asset Live Monitoring | v1.0 | 2/2 | Complete | 2026-02-06 |
 | 3. Graph Window Integration | v1.0 | 2/2 | Complete | 2026-02-06 |
-| 4. Template Foundation & Sidebar | v2.0 | 0/TBD | Not started | - |
+| 4. Template Foundation & Sidebar | v2.0 | 0/2 | Not started | - |
 | 5. Run Monitoring & Live Logs | v2.0 | 0/TBD | Not started | - |
 | 6. Graph Selection & Failure Recovery | v2.0 | 0/TBD | Not started | - |
 | 7. Popup Cleanup | v2.0 | 0/TBD | Not started | - |
