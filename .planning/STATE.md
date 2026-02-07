@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Users can monitor execution, view logs, and recover from failures without leaving the main workflow or dealing with popup windows.
-**Current focus:** Phase 4 - Template Foundation & Sidebar
+**Current focus:** Phase 5 - Run Monitoring & Live Logs
 
 ## Current Position
 
 Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery
-Phase: 4 of 7 (Template Foundation & Sidebar)
-Plan: 2 of 2 in current phase
-Status: Phase complete
-Last activity: 2026-02-07 — Completed 04-02-PLAN.md
+Phase: 5 of 7 (Run Monitoring & Live Logs)
+Plan: 1 of 2 in current phase
+Status: In progress
+Last activity: 2026-02-07 -- Completed 05-01-PLAN.md
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 75%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 9 (7 v1.0 + 2 v2.0)
+- Total plans completed: 10 (7 v1.0 + 3 v2.0)
 - Average duration: carried from v1.0
 - Total execution time: carried from v1.0
 
@@ -32,6 +32,7 @@ Progress: [███████░░░] 67%
 | 2 | 2 | v1.0 | v1.0 |
 | 3 | 2 | v1.0 | v1.0 |
 | 4 | 2 | 11min | 5.5min |
+| 5 | 1 | 2.5min | 2.5min |
 
 *Updated after each plan completion*
 
@@ -54,6 +55,12 @@ Phase 4 decisions:
 - Left corner decorations shifted to left:62px to clear sidebar
 - /runs link included now even though Active Runs page does not exist until Phase 5
 
+Phase 5 decisions:
+- statusPulse keyframe animation centralized in styles.css (was only inline in asset_live.html)
+- 1.5s delay before idle transition after execution_complete (lets user see final state)
+- Asset rows are anchor elements linking to /asset/{key}/live
+- body overflow-auto set via block body_class for scrollable runs page
+
 ### Pending Todos
 
 None.
@@ -64,7 +71,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07T16:35:04Z
-Stopped at: Completed 04-02-PLAN.md (Phase 4 complete)
+Last session: 2026-02-07T17:16:02Z
+Stopped at: Completed 05-01-PLAN.md
 Resume file: None
-Next action: Begin Phase 5 (Active Runs Page implementation)
+Next action: Execute 05-02-PLAN.md (Asset Live Page Refactor)
