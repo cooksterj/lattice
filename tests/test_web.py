@@ -829,6 +829,60 @@ class TestAssetLogStreaming:
         assert "asset_complete" in types
 
 
+class TestAssetLivePage:
+    """Tests for /asset/{key}/live page endpoint and route ordering."""
+
+    def test_asset_live_page_returns_html(self, populated_client: TestClient) -> None:
+        """Live monitoring page returns 200 with live template content."""
+        response = populated_client.get("/asset/source_data/live")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "LIVE" in response.text
+        assert "source_data" in response.text
+
+    def test_asset_live_page_grouped_asset(self, populated_client: TestClient) -> None:
+        """Live page works for grouped assets with slashes in the key."""
+        response = populated_client.get("/asset/analytics/stats/live")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "LIVE" in response.text
+        assert "analytics/stats" in response.text
+
+    def test_live_route_not_captured_by_greedy_detail_route(
+        self, populated_client: TestClient
+    ) -> None:
+        """Route ordering ensures /live is not captured by the greedy :path detail route.
+
+        The /asset/{key:path} detail route uses a greedy path converter.
+        Without correct registration order, GET /asset/data/test_asset/live would
+        match as key='data/test_asset/live' on the detail route instead of
+        routing to the live endpoint.
+        """
+        # The live route should serve the LIVE template
+        live_response = populated_client.get("/asset/data/test_asset/live")
+        assert live_response.status_code == 200
+        assert "LIVE" in live_response.text
+        # Confirm it's NOT the detail template
+        assert "RUN HISTORY" not in live_response.text
+
+        # The detail route should still serve the DETAIL template
+        detail_response = populated_client.get("/asset/data/test_asset")
+        assert detail_response.status_code == 200
+        assert "RUN HISTORY" in detail_response.text
+        # Confirm it's NOT the live template title
+        assert "LATTICE // LIVE" not in detail_response.text
+
+    def test_live_and_detail_coexist_for_simple_key(self, populated_client: TestClient) -> None:
+        """Both live and detail routes work for simple (non-grouped) asset keys."""
+        live_response = populated_client.get("/asset/source_data/live")
+        assert live_response.status_code == 200
+        assert "LIVE" in live_response.text
+
+        detail_response = populated_client.get("/asset/source_data")
+        assert detail_response.status_code == 200
+        assert "RUN HISTORY" in detail_response.text
+
+
 class TestAssetDetailPage:
     """Tests for /asset/{key} page endpoint."""
 
