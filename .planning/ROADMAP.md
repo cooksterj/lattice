@@ -28,12 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. A WebSocket client connecting after execution has started receives buffered recent log entries (replay catch-up)
   4. Downstream assets continue executing at the same pace whether or not WebSocket clients are connected
   5. Opening and closing WebSocket connections during execution has no effect on execution state
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: StreamingLogHandler and ExecutionManager subscriber registry
-- [ ] 01-02: Asset-scoped WebSocket endpoint with replay buffer
-- [ ] 01-03: Async bridge (sync-to-async log routing) and execution isolation verification
+- [ ] 01-01-PLAN.md -- Callback-extended log handler and per-asset subscriber registry
+- [ ] 01-02-PLAN.md -- Asset-scoped WebSocket endpoint with replay buffer delivery
+- [ ] 01-03-PLAN.md -- Async bridge (sync-to-async log routing) and execution isolation verification
 
 ### Phase 2: Asset Live Monitoring Page
 **Goal**: Users can open a dedicated page showing live execution logs, completion status, and asset details
