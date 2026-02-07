@@ -45,12 +45,12 @@ Plans:
   3. User can click a button to refocus the main graph window
   4. User can click a link to open run history in a separate browser window
   5. When no execution is running, user sees asset details including dependencies, type, and group
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: Asset live route and Jinja2 template with asset details panel
-- [ ] 02-02: WebSocket client JavaScript for live log rendering and state management
-- [ ] 02-03: Completion banner, refocus button, and run history link
+- [ ] 02-01-PLAN.md -- Asset live route and Jinja2 template with asset details panel
+- [ ] 02-02-PLAN.md -- WebSocket client JavaScript for live log rendering and state management
+- [ ] 02-03-PLAN.md -- Completion banner, refocus button, and run history link
 
 ### Phase 3: Main Graph Window Integration
 **Goal**: Users can click any asset on the main DAG graph to open asset monitoring in a new browser window without leaving the graph
