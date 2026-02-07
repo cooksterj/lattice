@@ -126,7 +126,7 @@ def create_history_router(
     @router.get("/history", response_class=HTMLResponse)
     async def history_page(request: Request) -> HTMLResponse:
         """Serve the run history page."""
-        return templates.TemplateResponse(request, "history.html")
+        return templates.TemplateResponse(request, "history.html", {"current_page": "history"})
 
     @router.get("/api/history/runs", response_model=RunListSchema)
     async def list_runs(
