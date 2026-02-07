@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Users can monitor execution, view logs, and recover from failures without leaving the main workflow or dealing with popup windows.
-**Current focus:** Phase 5 - Run Monitoring & Live Logs
+**Current focus:** Phase 5 complete, ready for Phase 6
 
 ## Current Position
 
 Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery
 Phase: 5 of 7 (Run Monitoring & Live Logs)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-07 -- Completed 05-01-PLAN.md
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-02-07 -- Completed 05-02-PLAN.md
 
-Progress: [████████░░] 75%
+Progress: [█████████░] 83%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 10 (7 v1.0 + 3 v2.0)
+- Total plans completed: 11 (7 v1.0 + 4 v2.0)
 - Average duration: carried from v1.0
 - Total execution time: carried from v1.0
 
@@ -32,7 +32,7 @@ Progress: [████████░░] 75%
 | 2 | 2 | v1.0 | v1.0 |
 | 3 | 2 | v1.0 | v1.0 |
 | 4 | 2 | 11min | 5.5min |
-| 5 | 1 | 2.5min | 2.5min |
+| 5 | 2 | 3.5min | 1.75min |
 
 *Updated after each plan completion*
 
@@ -60,6 +60,9 @@ Phase 5 decisions:
 - 1.5s delay before idle transition after execution_complete (lets user see final state)
 - Asset rows are anchor elements linking to /asset/{key}/live
 - body overflow-auto set via block body_class for scrollable runs page
+- Back button on live page navigates to /runs via standard anchor href
+- No sidebar icon highlighted for live page (sub-page, not top-level nav)
+- Container padding changed from 6rem to 0 top (fixed header removed)
 
 ### Pending Todos
 
@@ -71,7 +74,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07T17:16:02Z
-Stopped at: Completed 05-01-PLAN.md
+Last session: 2026-02-07T17:19:13Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
-Next action: Execute 05-02-PLAN.md (Asset Live Page Refactor)
+Next action: Plan Phase 6 (Graph Integration)
