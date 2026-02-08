@@ -101,10 +101,10 @@ Plans:
   1. No window.open calls exist anywhere in the JavaScript codebase
   2. The popup blocked notice, refocus button, and named window targeting code are all removed
   3. All existing functionality (graph, monitoring, history, live logs) continues to work after removal
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 07-01: TBD
+- [ ] 07-01-PLAN.md — Remove popup dead code from graph.js and verify zero popup references
 
 ## Progress
 
