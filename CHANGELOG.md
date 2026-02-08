@@ -1,5 +1,82 @@
 # Changelog
 
+## [0.7.0](https://github.com/cooksterj/lattice/compare/v0.6.0...v0.7.0) (2026-02-08)
+
+
+### Features
+
+* **02-01:** add /asset/{key}/live route with correct ordering and tests ([3bf4bf2](https://github.com/cooksterj/lattice/commit/3bf4bf2ad229415740133a73f03ed103539eb64a))
+* **02-01:** create asset_live.html template with asset details panel ([e25f9c2](https://github.com/cooksterj/lattice/commit/e25f9c2fbf5249d4c914989499908307466f7fa2))
+* **02-02:** add log entry CSS styles and connection status indicator ([1833e29](https://github.com/cooksterj/lattice/commit/1833e2931c267a620ddd798caa4b79461212cd7f))
+* **02-02:** implement WebSocket client with state machine and log rendering ([2b95f39](https://github.com/cooksterj/lattice/commit/2b95f39ad3a755e665e6b9d07d66715067b1c49a))
+* **02-03:** add refocus main window button and run history link ([7d09108](https://github.com/cooksterj/lattice/commit/7d0910884be8891f246444fd451f162bc7e3eacb))
+* **02-03:** implement completion banner with success/failure styling and duration ([7069eee](https://github.com/cooksterj/lattice/commit/7069eee0443f0c5149dac4dfcbe816765a30481f))
+* **03-01:** implement window.open click handler with tracking and popup fallback ([38f5c24](https://github.com/cooksterj/lattice/commit/38f5c24dfff21d4d2388ecb5aff3207f3add4e49))
+* **04-01:** add current_page to all route handlers ([edc98b5](https://github.com/cooksterj/lattice/commit/edc98b576a3a555b22fd8056cc57e62d2bcebffd))
+* **04-01:** add sidebar CSS to styles.css ([ab0e836](https://github.com/cooksterj/lattice/commit/ab0e836746687777adad2e5c160b9475c1d6448f))
+* **04-01:** create base.html with sidebar and shared structure ([470e10a](https://github.com/cooksterj/lattice/commit/470e10a803f5019829fa6a8168c5fa2a7a0f2218))
+* **04-02:** migrate asset_detail.html and asset_live.html to extend base.html ([92640d7](https://github.com/cooksterj/lattice/commit/92640d7d1c9b459ff8a52b2bbd802298f58ae801))
+* **04-02:** migrate index.html and history.html to extend base.html ([2dad2ce](https://github.com/cooksterj/lattice/commit/2dad2ced8612c9d1e78d44c09f91251c1e7adceb))
+* **05-01:** add /runs active runs page with dual-mode display ([4d26b1c](https://github.com/cooksterj/lattice/commit/4d26b1cba0b31e5452b2c34f64a61925a3b4d999))
+* **05-02:** refactor asset_live.html from popup-style to full-page layout ([1b8d8c9](https://github.com/cooksterj/lattice/commit/1b8d8c9821fdf79603f65598d34e8dbc7932fb5f))
+* **06-01:** implement graph selection and context-aware Execute button ([888aeff](https://github.com/cooksterj/lattice/commit/888aeff5838b53b327767b88b9b8d87626995e57))
+* **07-01:** remove v1 popup infrastructure from graph.js ([7a4ac8c](https://github.com/cooksterj/lattice/commit/7a4ac8c6932fb742644b4e1e1f4cdd83ef320336))
+* add failure recovery demo with retry support ([a70a26d](https://github.com/cooksterj/lattice/commit/a70a26d2bd918696e0514d8d618e000b10598597))
+* Additional infrasture with the SQLite databases. ([206670d](https://github.com/cooksterj/lattice/commit/206670dd5ce6709a1e5bdd865a23bccfb3fc4e6c))
+* archive v1.0 milestone ([f4a4729](https://github.com/cooksterj/lattice/commit/f4a4729a4900d9a9a79f7493c75f5b030480c2e6))
+* Expose asset detail and log information with the asset window. ([8268369](https://github.com/cooksterj/lattice/commit/8268369d15ff95fbc76235a911458321e73d7895))
+* Implement streaming infrastructure and per-asset WebSocket (Phase 1) ([e8a1b66](https://github.com/cooksterj/lattice/commit/e8a1b66225c7ef450044747c079cc028c0e2c333))
+* Implementation of phase 7. ([a841abc](https://github.com/cooksterj/lattice/commit/a841abca8b0266628ed28e33af0e2d5c72e8bec0))
+* targeted re-execution runs only selected asset and downstream ([9ff3ee1](https://github.com/cooksterj/lattice/commit/9ff3ee19d6a95b20a343f2b0e9b234845fca1a10))
+
+
+### Bug Fixes
+
+* propagate skipped status to downstream assets in async executor ([6579714](https://github.com/cooksterj/lattice/commit/6579714eb87d64e025145ab8cf0b091ffa0f5b5d))
+* Use named window targeting for reliable refocus across browsers ([39d4eb2](https://github.com/cooksterj/lattice/commit/39d4eb2c21c53e8e0d277d7d67a894474dee9fce))
+
+
+### Documentation
+
+* **01:** create phase plan ([ce98a4a](https://github.com/cooksterj/lattice/commit/ce98a4a3625f07a87ac23e24905ee582ac10a83b))
+* **02-01:** complete live monitoring page route and template plan ([c5028ab](https://github.com/cooksterj/lattice/commit/c5028abac30a686dc70c12727a27fd722cfd1ec9))
+* **02-02:** complete WebSocket client with state machine plan ([f1149d2](https://github.com/cooksterj/lattice/commit/f1149d217bf53b4e197fd3dbbe016481f2dfad1c))
+* **02-03:** complete completion-banner-and-action-buttons plan ([e5da942](https://github.com/cooksterj/lattice/commit/e5da942a05ec21e6f13a19f093886051affc7c9a))
+* **02:** address plan checker feedback on route ordering and testing notes ([aceb127](https://github.com/cooksterj/lattice/commit/aceb1277041a74113c1d2acca10999a17386bc15))
+* **02:** create phase plan ([7781e91](https://github.com/cooksterj/lattice/commit/7781e91229b86d859ae930ef89379092bf27cbf0))
+* **03:** create phase plan ([c75d66c](https://github.com/cooksterj/lattice/commit/c75d66c6d745ab10a3bba16cd075ee34e154645b))
+* **04-01:** complete template foundation & sidebar plan ([2b0f8a3](https://github.com/cooksterj/lattice/commit/2b0f8a3bfb58e49297997d9b16f44f4fb7eea220))
+* **04-02:** complete template migration plan ([0dc84d4](https://github.com/cooksterj/lattice/commit/0dc84d44679ef3451341ecb8d9c31d36904f750b))
+* **04:** complete template foundation & sidebar phase ([910b5dd](https://github.com/cooksterj/lattice/commit/910b5dd0ed698888243b2e347176453a5864f83a))
+* **04:** create phase plan ([b2e662d](https://github.com/cooksterj/lattice/commit/b2e662d048cd5198a80efe1300a5a20099ce3c23))
+* **05-01:** complete active runs page plan ([afcc635](https://github.com/cooksterj/lattice/commit/afcc6354406e3dd5c110d28365886b9484593a1d))
+* **05-02:** complete asset live page refactor plan ([68b5a4d](https://github.com/cooksterj/lattice/commit/68b5a4d8b083b01bdfce5d27be3c5db5fdf77198))
+* **05:** create phase plan for run monitoring & live logs ([1fedbd5](https://github.com/cooksterj/lattice/commit/1fedbd5bb5804a9f9394b9ccb7bec2b481b2e387))
+* **05:** research phase domain ([960cbda](https://github.com/cooksterj/lattice/commit/960cbdabfdc59703a5fa660fc11675b749ad3af4))
+* **06-01:** complete graph selection plan ([dc45cf7](https://github.com/cooksterj/lattice/commit/dc45cf7496a752f5583b63fc83462f43222bedb5))
+* **06:** create phase plan for graph selection & failure recovery ([e004eec](https://github.com/cooksterj/lattice/commit/e004eec8cf6e61f2be3a8cb1bd611fde70256381))
+* **06:** research phase domain ([8963db8](https://github.com/cooksterj/lattice/commit/8963db86bd68513876cfed4a97f2de8c2b036b22))
+* **07-01:** complete popup cleanup plan - v2.0 milestone shipped ([55cdb17](https://github.com/cooksterj/lattice/commit/55cdb17b2a233f0e743fdfbbd5f6337be590e377))
+* **07:** create phase plan ([19cc31d](https://github.com/cooksterj/lattice/commit/19cc31df31602428742b6a5068261e08a2056bff))
+* complete v2.0 project research synthesis ([9a2cdc2](https://github.com/cooksterj/lattice/commit/9a2cdc25a537f21262baf3e2faabac7a6368c0a3))
+* create roadmap (3 phases) ([99c3f18](https://github.com/cooksterj/lattice/commit/99c3f18bc65a2e09e1558af23e4c9409790d6811))
+* create v2.0 roadmap (4 phases) ([211a5e3](https://github.com/cooksterj/lattice/commit/211a5e32473947a02f5a5c0a7f4c3cdb7e68060f))
+* define v1 requirements ([8f5d73f](https://github.com/cooksterj/lattice/commit/8f5d73f8c8926ae99d988b04680f69e010e0eca0))
+* define v2.0 milestone requirements ([e3a253f](https://github.com/cooksterj/lattice/commit/e3a253fd150b28caf2a7ec6b513df3a2425c62f9))
+* domain research for multi-window asset monitoring ([a5f5210](https://github.com/cooksterj/lattice/commit/a5f5210335a74d120f7c54e9e5f47f0b53620bd9))
+* initialize project ([5fde97e](https://github.com/cooksterj/lattice/commit/5fde97ead3f2125999a4ef560f0e67dfbffa2686))
+* map existing codebase ([1318a73](https://github.com/cooksterj/lattice/commit/1318a7344b1be318f271ed01a595e5493ca15279))
+* **phase-1:** research streaming infrastructure and WebSocket implementation ([96384a2](https://github.com/cooksterj/lattice/commit/96384a21d411b9f3f6048883636b77c87f893c0e))
+* **phase-2:** complete asset live monitoring page phase ([f6d551f](https://github.com/cooksterj/lattice/commit/f6d551f2853160abc0f005275648ea808b19fdbd))
+* **phase-2:** research phase domain ([c109135](https://github.com/cooksterj/lattice/commit/c109135379fb7e0678b27bccee90ca9f5666b6c5))
+* **phase-3:** complete main graph window integration phase ([f2a61cb](https://github.com/cooksterj/lattice/commit/f2a61cb7c6812a237f71fe187d4802eb9ba4d2c5))
+* **phase-3:** research main graph window integration ([3194ad3](https://github.com/cooksterj/lattice/commit/3194ad3572db7b3bf7eb0fef1392a3bc6609e83f))
+* **phase-4:** research template foundation & sidebar ([3af3739](https://github.com/cooksterj/lattice/commit/3af37399324acf065f5ea3a6822409c119c309a4))
+* **phase-6:** add phase verification report ([352bd08](https://github.com/cooksterj/lattice/commit/352bd083cdc30f8d2c8ddb1d5d9719a14ff9e853))
+* **phase-7:** complete phase execution and verification ([7b5fe51](https://github.com/cooksterj/lattice/commit/7b5fe51a1b48b07e63df1285e8434f9c593359bf))
+* **phase-7:** research phase domain ([0308a9c](https://github.com/cooksterj/lattice/commit/0308a9c2418b7081bbc9c97e339a96d1f9ffce79))
+* start milestone v2.0 Sidebar Navigation & Failed Asset Recovery ([0a9eb9c](https://github.com/cooksterj/lattice/commit/0a9eb9cd79ee4990dc42419f998f811811d36067))
+
 ## [0.6.0](https://github.com/cooksterj/lattice/compare/v0.5.0...v0.6.0) (2026-02-05)
 
 
