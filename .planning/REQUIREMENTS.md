@@ -13,20 +13,20 @@
 
 ### Run Monitoring
 
-- [ ] **RUNS-01**: Active runs page shows real-time per-asset status (running/queued/completed/failed) during execution via WebSocket
-- [ ] **RUNS-02**: Active runs page shows last completed run summary when no execution is running
-- [ ] **RUNS-03**: Clicking a running asset on the active runs page navigates to its live logs page
-- [ ] **RUNS-04**: Run history page accessible via sidebar (existing history template re-parented into sidebar layout)
+- [x] **RUNS-01**: Active runs page shows real-time per-asset status (running/queued/completed/failed) during execution via WebSocket
+- [x] **RUNS-02**: Active runs page shows last completed run summary when no execution is running
+- [x] **RUNS-03**: Clicking a running asset on the active runs page navigates to its live logs page
+- [x] **RUNS-04**: Run history page accessible via sidebar (existing history template re-parented into sidebar layout)
 
 ### Failure Recovery
 
-- [ ] **RECV-01**: Clicking any asset on the graph selects/highlights it (no popup)
-- [ ] **RECV-02**: Execute button is context-aware — when a failed asset is selected, re-runs that asset plus all downstream
-- [ ] **RECV-03**: Full-page live logs view with sidebar and back button (refactored from popup)
+- [x] **RECV-01**: Clicking any asset on the graph selects/highlights it (no popup)
+- [x] **RECV-02**: Execute button is context-aware — when a failed asset is selected, re-runs that asset plus all downstream
+- [x] **RECV-03**: Full-page live logs view with sidebar and back button (refactored from popup)
 
 ### Cleanup
 
-- [ ] **CLEN-01**: Remove v1 popup infrastructure (window.open, popup fallback, refocus button, named window targeting)
+- [x] **CLEN-01**: Remove v1 popup infrastructure (window.open, popup fallback, refocus button, named window targeting)
 
 ## Future Requirements
 
@@ -63,14 +63,14 @@
 | SIDE-01 | Phase 4 | Complete |
 | SIDE-02 | Phase 4 | Complete |
 | SIDE-03 | Phase 4 | Complete |
-| RUNS-01 | Phase 5 | Pending |
-| RUNS-02 | Phase 5 | Pending |
-| RUNS-03 | Phase 5 | Pending |
-| RUNS-04 | Phase 5 | Pending |
-| RECV-01 | Phase 6 | Pending |
-| RECV-02 | Phase 6 | Pending |
-| RECV-03 | Phase 5 | Pending |
-| CLEN-01 | Phase 7 | Pending |
+| RUNS-01 | Phase 5 | Complete |
+| RUNS-02 | Phase 5 | Complete |
+| RUNS-03 | Phase 5 | Complete |
+| RUNS-04 | Phase 5 | Complete |
+| RECV-01 | Phase 6 | Complete |
+| RECV-02 | Phase 6 | Complete |
+| RECV-03 | Phase 5 | Complete |
+| CLEN-01 | Phase 7 | Complete |
 
 **Coverage:**
 - v2.0 requirements: 11 total
