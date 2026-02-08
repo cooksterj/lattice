@@ -3,7 +3,7 @@
 ## Milestones
 
 - [x] **v1.0 Multi-Window Asset Monitoring** - Phases 1-3 (shipped 2026-02-06)
-- [ ] **v2.0 Sidebar Navigation & Failed Asset Recovery** - Phases 4-7 (in progress)
+- [x] **v2.0 Sidebar Navigation & Failed Asset Recovery** - Phases 4-7 (shipped 2026-02-08)
 
 ## Phases
 
@@ -44,7 +44,7 @@ Plans:
 - [x] **Phase 4: Template Foundation & Sidebar** - Base template with persistent sidebar on all pages
 - [x] **Phase 5: Run Monitoring & Live Logs** - Active runs page, history re-parenting, live logs as full page
 - [x] **Phase 6: Graph Selection & Failure Recovery** - Click-to-select on graph, context-aware Execute for re-runs
-- [ ] **Phase 7: Popup Cleanup** - Remove all v1 popup infrastructure
+- [x] **Phase 7: Popup Cleanup** - Remove all v1 popup infrastructure
 
 ## Phase Details
 
@@ -104,7 +104,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 07-01-PLAN.md — Remove popup dead code from graph.js and verify zero popup references
+- [x] 07-01-PLAN.md — Remove popup dead code from graph.js and verify zero popup references
 
 ## Progress
 
@@ -118,4 +118,4 @@ Plans:
 | 4. Template Foundation & Sidebar | v2.0 | 2/2 | Complete | 2026-02-07 |
 | 5. Run Monitoring & Live Logs | v2.0 | 2/2 | Complete | 2026-02-07 |
 | 6. Graph Selection & Failure Recovery | v2.0 | 1/1 | Complete | 2026-02-08 |
-| 7. Popup Cleanup | v2.0 | 0/TBD | Not started | - |
+| 7. Popup Cleanup | v2.0 | 1/1 | Complete | 2026-02-08 |
