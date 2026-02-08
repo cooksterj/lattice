@@ -526,27 +526,17 @@ class LatticeGraph {
             .on('click', (event, d) => {
                 if (event.defaultPrevented) return; // Ignore drag-end clicks (D3 pattern)
                 event.stopPropagation();
-                this.openAssetWindow(d.id);
+                this.handleNodeClick(d);
             });
 
         // Close sidebar
         closeSidebar.addEventListener('click', () => {
-            sidebar.classList.add('translate-x-full');
-            this.selectedNode = null;
-            this.nodeElements.classed('selected', false);
-            // Move execution controls back
-            const execControls = document.querySelector('.execution-controls');
-            if (execControls) execControls.classList.remove('sidebar-open');
+            this.deselectNode();
         });
 
         // Click outside to deselect
         this.svg.on('click', () => {
-            sidebar.classList.add('translate-x-full');
-            this.selectedNode = null;
-            this.nodeElements.classed('selected', false);
-            // Move execution controls back
-            const execControls = document.querySelector('.execution-controls');
-            if (execControls) execControls.classList.remove('sidebar-open');
+            this.deselectNode();
         });
 
         // Theme toggle
@@ -577,6 +567,13 @@ class LatticeGraph {
             this.width = document.getElementById(this.container).clientWidth;
             this.height = document.getElementById(this.container).clientHeight;
             this.svg.attr('width', this.width).attr('height', this.height);
+        });
+
+        // Escape key deselects current node
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape' && this.selectedNode) {
+                this.deselectNode();
+            }
         });
     }
 
@@ -791,6 +788,57 @@ class LatticeGraph {
         }
     }
 
+    handleNodeClick(d) {
+        // Toggle selection: clicking the already-selected node deselects it
+        if (this.selectedNode && this.selectedNode.id === d.id) {
+            this.deselectNode();
+            return;
+        }
+        this.selectNodeForExecution(d);
+    }
+
+    selectNodeForExecution(d) {
+        this.selectedNode = d;
+
+        // Highlight selected node visually
+        this.nodeElements.classed('selected', n => n.id === d.id);
+
+        // Update execute button label
+        this.updateExecuteButtonLabel();
+    }
+
+    deselectNode() {
+        this.selectedNode = null;
+        this.nodeElements.classed('selected', false);
+        this.updateExecuteButtonLabel();
+
+        // Close right sidebar and remove sidebar-open from execution controls
+        const sidebar = document.getElementById('sidebar');
+        if (sidebar) sidebar.classList.add('translate-x-full');
+        const execControls = document.querySelector('.execution-controls');
+        if (execControls) execControls.classList.remove('sidebar-open');
+    }
+
+    updateExecuteButtonLabel() {
+        const btn = document.getElementById('execute-btn');
+        if (!btn) return;
+        const span = btn.querySelector('span');
+        if (!span) return;
+
+        if (this.selectedNode) {
+            const name = this.selectedNode.name || this.selectedNode.id;
+            const status = this.executionState.assetStatuses.get(this.selectedNode.id);
+
+            if (status === 'failed') {
+                span.textContent = `RE-EXECUTE FROM ${name.toUpperCase()}`;
+            } else {
+                span.textContent = `EXECUTE FROM ${name.toUpperCase()}`;
+            }
+        } else {
+            span.textContent = 'EXECUTE';
+        }
+    }
+
     hideLoading() {
         document.getElementById('loading').style.display = 'none';
     }
@@ -994,9 +1042,14 @@ class LatticeGraph {
         // Reset node visual states
         this.nodeElements.attr('class', 'node');
 
+        // Re-apply selected class if a node is selected (class reset clears it)
+        if (this.selectedNode) {
+            this.nodeElements.classed('selected', n => n.id === this.selectedNode.id);
+        }
+
         // Reset progress display
         document.getElementById('progress-current').textContent = '0';
-        document.getElementById('progress-total').textContent = this.nodes.length;
+        document.getElementById('progress-total').textContent = this.selectedNode ? '...' : this.nodes.length;
         const currentAssetEl = document.getElementById('progress-current-asset');
         if (currentAssetEl) {
             currentAssetEl.textContent = 'STARTING...';
@@ -1018,6 +1071,12 @@ class LatticeGraph {
             } else if (this.dateState.mode === 'range' && this.dateState.startDate && this.dateState.endDate) {
                 requestBody.execution_date = this.dateState.startDate;
                 requestBody.execution_date_end = this.dateState.endDate;
+            }
+
+            // Targeted execution when a node is selected
+            if (this.selectedNode) {
+                requestBody.target = this.selectedNode.id;
+                requestBody.include_downstream = true;
             }
 
             // Start execution after WebSocket is connected
@@ -1159,6 +1218,11 @@ class LatticeGraph {
             }
         }
 
+        // Update execute button label if selected node status changed
+        if (this.selectedNode && this.selectedNode.id === assetId) {
+            this.updateExecuteButtonLabel();
+        }
+
         // Update progress counter
         const completed = [...this.executionState.assetStatuses.values()]
             .filter(s => s === 'completed' || s === 'failed').length;
@@ -1212,12 +1276,13 @@ class LatticeGraph {
         }
 
         const btn = document.getElementById('execute-btn');
-        const controlsContainer = document.querySelector('.execution-controls');
         if (btn) {
             btn.disabled = false;
             btn.classList.remove('running');
-            btn.querySelector('span').textContent = 'EXECUTE';
         }
+
+        // Clear selection and reset button label
+        this.deselectNode();
         document.getElementById('execution-progress').classList.add('hidden');
 
         // Keep memory panel visible for a bit to see final stats
