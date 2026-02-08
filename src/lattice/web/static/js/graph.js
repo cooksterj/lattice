@@ -23,10 +23,6 @@ class LatticeGraph {
         this.width = 0;
         this.height = 0;
 
-        // Window tracking for asset live monitoring (GRAF-02)
-        this.assetWindows = new Map();
-        window.name = 'lattice_graph';
-
         // Execution state
         this.executionState = {
             isRunning: false,
@@ -627,72 +623,6 @@ class LatticeGraph {
         });
 
         this.nodeElements.style('opacity', 1);
-    }
-
-    openAssetWindow(assetId) {
-        // Check if window is already open (GRAF-02: duplicate prevention)
-        const existing = this.assetWindows.get(assetId);
-        if (existing && !existing.closed) {
-            existing.focus();
-            return;
-        }
-
-        // MUST be synchronous in click handler -- no await before this line
-        const url = '/asset/' + encodeURIComponent(assetId) + '/live';
-        const windowName = 'lattice_asset_' + assetId.replace(/[^a-zA-Z0-9_]/g, '_');
-        const features = 'width=900,height=700';
-        const windowRef = window.open(url, windowName, features);
-
-        if (!windowRef) {
-            // Popup was blocked by browser
-            this.showPopupBlockedNotice(url);
-            return;
-        }
-
-        windowRef.focus();
-        this.assetWindows.set(assetId, windowRef);
-    }
-
-    showPopupBlockedNotice(url) {
-        // Remove any existing notice
-        const existing = document.querySelector('.popup-blocked-notice');
-        if (existing) existing.remove();
-
-        const notice = document.createElement('div');
-        notice.className = 'popup-blocked-notice';
-        notice.innerHTML = `
-            <span style="color: var(--neon-pink, #ff2a6d); font-family: Orbitron, sans-serif;
-                  font-size: 0.75rem; letter-spacing: 0.1em;">
-                POPUP BLOCKED
-            </span>
-            <a href="${encodeURI(url)}" target="_blank" rel="noopener"
-               style="color: var(--neon-cyan, #05d9e8); text-decoration: underline;
-                      font-size: 0.8rem; margin-left: 0.5rem;">
-                Open manually
-            </a>
-            <button onclick="this.parentElement.remove()"
-                    style="margin-left: 0.5rem; color: var(--text-secondary, #8282a0);
-                           background: none; border: none; cursor: pointer;
-                           font-size: 0.8rem;">
-                dismiss
-            </button>
-        `;
-        Object.assign(notice.style, {
-            position: 'fixed',
-            bottom: '1rem',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: '1000',
-            padding: '0.75rem 1.5rem',
-            background: 'rgba(18, 18, 26, 0.95)',
-            border: '1px solid var(--neon-pink, #ff2a6d)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.5rem',
-        });
-
-        document.body.appendChild(notice);
-        setTimeout(() => { if (notice.parentElement) notice.remove(); }, 8000);
     }
 
     async selectNode(node) {
