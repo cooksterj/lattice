@@ -88,10 +88,10 @@ Plans:
   2. When a failed asset is selected, the Execute button label changes to indicate re-execution from that asset
   3. Clicking Execute with a failed asset selected runs that asset plus all its downstream dependencies
   4. Clicking the graph background or pressing Escape deselects the current selection
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 06-01: TBD
+- [ ] 06-01-PLAN.md — Graph click-to-select, context-aware Execute button, targeted re-execution wiring
 
 ### Phase 7: Popup Cleanup
 **Goal**: All v1 popup infrastructure is removed and the codebase contains no window.open, popup fallback, or named window targeting code
