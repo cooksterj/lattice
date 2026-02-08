@@ -5,22 +5,22 @@
 See: .planning/PROJECT.md (updated 2026-02-07)
 
 **Core value:** Users can monitor execution, view logs, and recover from failures without leaving the main workflow or dealing with popup windows.
-**Current focus:** Phase 5 complete, ready for Phase 6
+**Current focus:** Phase 6 Plan 01 complete, graph selection and targeted execution wired
 
 ## Current Position
 
 Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery
-Phase: 5 of 7 (Run Monitoring & Live Logs)
-Plan: 2 of 2 in current phase
+Phase: 6 of 7 (Graph Selection & Failure Recovery)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-02-07 -- Completed 05-02-PLAN.md
+Last activity: 2026-02-08 -- Completed 06-01-PLAN.md
 
-Progress: [█████████░] 83%
+Progress: [██████████░] 92%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11 (7 v1.0 + 4 v2.0)
+- Total plans completed: 12 (7 v1.0 + 5 v2.0)
 - Average duration: carried from v1.0
 - Total execution time: carried from v1.0
 
@@ -33,6 +33,7 @@ Progress: [█████████░] 83%
 | 3 | 2 | v1.0 | v1.0 |
 | 4 | 2 | 11min | 5.5min |
 | 5 | 2 | 3.5min | 1.75min |
+| 6 | 1 | 2min | 2min |
 
 *Updated after each plan completion*
 
@@ -64,6 +65,12 @@ Phase 5 decisions:
 - No sidebar icon highlighted for live page (sub-page, not top-level nav)
 - Container padding changed from 6rem to 0 top (fixed header removed)
 
+Phase 6 decisions:
+- Clear selection after execution completes (both success and failure) for simplicity
+- No sidebar opens on node click -- selection is purely visual (highlight + button label)
+- Progress total shows '...' during targeted execution, corrected by showExecutionComplete
+- openAssetWindow method kept as dead code for Phase 7 cleanup
+
 ### Pending Todos
 
 None.
@@ -74,7 +81,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-07T17:19:13Z
-Stopped at: Completed 05-02-PLAN.md
+Last session: 2026-02-08T00:20:16Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
-Next action: Plan Phase 6 (Graph Integration)
+Next action: Plan Phase 7 (Popup Cleanup)

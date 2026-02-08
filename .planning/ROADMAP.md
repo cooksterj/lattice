@@ -42,8 +42,8 @@ Plans:
 **Milestone Goal:** Replace popup windows with sidebar-driven full-page navigation and add failed asset re-execution with downstream propagation.
 
 - [x] **Phase 4: Template Foundation & Sidebar** - Base template with persistent sidebar on all pages
-- [ ] **Phase 5: Run Monitoring & Live Logs** - Active runs page, history re-parenting, live logs as full page
-- [ ] **Phase 6: Graph Selection & Failure Recovery** - Click-to-select on graph, context-aware Execute for re-runs
+- [x] **Phase 5: Run Monitoring & Live Logs** - Active runs page, history re-parenting, live logs as full page
+- [x] **Phase 6: Graph Selection & Failure Recovery** - Click-to-select on graph, context-aware Execute for re-runs
 - [ ] **Phase 7: Popup Cleanup** - Remove all v1 popup infrastructure
 
 ## Phase Details
@@ -76,8 +76,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01-PLAN.md — Active Runs page with dual-mode display (live WebSocket + idle REST)
-- [ ] 05-02-PLAN.md — Refactor asset_live.html to full-page layout with back button + visual verification
+- [x] 05-01-PLAN.md — Active Runs page with dual-mode display (live WebSocket + idle REST)
+- [x] 05-02-PLAN.md — Refactor asset_live.html to full-page layout with back button + visual verification
 
 ### Phase 6: Graph Selection & Failure Recovery
 **Goal**: Users can select a failed asset on the graph and re-execute it plus all downstream assets
@@ -91,7 +91,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — Graph click-to-select, context-aware Execute button, targeted re-execution wiring
+- [x] 06-01-PLAN.md — Graph click-to-select, context-aware Execute button, targeted re-execution wiring
 
 ### Phase 7: Popup Cleanup
 **Goal**: All v1 popup infrastructure is removed and the codebase contains no window.open, popup fallback, or named window targeting code
@@ -116,6 +116,6 @@ Plans:
 | 2. Asset Live Monitoring | v1.0 | 2/2 | Complete | 2026-02-06 |
 | 3. Graph Window Integration | v1.0 | 2/2 | Complete | 2026-02-06 |
 | 4. Template Foundation & Sidebar | v2.0 | 2/2 | Complete | 2026-02-07 |
-| 5. Run Monitoring & Live Logs | v2.0 | 0/TBD | Not started | - |
-| 6. Graph Selection & Failure Recovery | v2.0 | 0/TBD | Not started | - |
+| 5. Run Monitoring & Live Logs | v2.0 | 2/2 | Complete | 2026-02-07 |
+| 6. Graph Selection & Failure Recovery | v2.0 | 1/1 | Complete | 2026-02-08 |
 | 7. Popup Cleanup | v2.0 | 0/TBD | Not started | - |
