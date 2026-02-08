@@ -507,6 +507,7 @@ class AsyncExecutor:
                         )
                         results.append(result)
                         self._current_state.asset_results[str(key)] = result
+                        failed_keys.add(key)
                         if self.on_asset_complete:
                             cb_result = self.on_asset_complete(result)
                             if inspect.iscoroutine(cb_result):
