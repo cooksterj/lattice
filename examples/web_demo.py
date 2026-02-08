@@ -27,7 +27,7 @@ logger = logging.getLogger("lattice")
 def raw_users() -> list[dict]:
     """Raw user data from CSV."""
     logger.info("Fetching raw user data from CSV source...")
-    time.sleep(0.3)  # Simulate I/O
+    time.sleep(2.0)  # Simulate I/O
     data = [{"id": 1, "name": "Alice"}, {"id": 2, "name": "Bob"}]
     logger.info("Loaded %d raw users", len(data))
     return data
@@ -49,7 +49,7 @@ def users_have_ids(data: list[dict]) -> bool:
 def raw_orders() -> list[dict]:
     """Raw order data from database."""
     logger.info("Querying raw orders from database...")
-    time.sleep(0.2)  # Simulate DB query
+    time.sleep(2.0)  # Simulate DB query
     data = [{"order_id": 100, "user_id": 1, "amount": 50.0}]
     total = sum(o["amount"] for o in data)
     logger.info("Retrieved %d raw orders (total amount: $%.2f)", len(data), total)
@@ -66,7 +66,7 @@ def orders_have_positive_amounts(data: list[dict]) -> bool:
 def raw_products() -> list[dict]:
     """Raw product catalog."""
     logger.info("Fetching product catalog from API...")
-    time.sleep(0.2)  # Simulate API call
+    time.sleep(2.0)  # Simulate API call
     data = [{"sku": "ABC", "price": 25.0}]
     logger.info("Loaded %d products from catalog", len(data))
     return data
@@ -82,7 +82,7 @@ def products_have_skus(data: list[dict]) -> bool:
 def raw_inventory() -> list[dict]:
     """Raw inventory levels."""
     logger.info("Polling warehouse API for inventory levels...")
-    time.sleep(0.4)  # Simulate warehouse API
+    time.sleep(2.5)  # Simulate warehouse API
     data = [{"sku": "ABC", "qty": 100}]
     logger.info("Inventory snapshot: %d SKUs, total qty %d", len(data), sum(i["qty"] for i in data))
     return data
@@ -98,7 +98,7 @@ def inventory_non_negative(data: list[dict]) -> bool:
 def raw_suppliers() -> list[dict]:
     """Raw supplier data."""
     logger.info("Loading supplier directory...")
-    time.sleep(0.3)  # Simulate supplier API
+    time.sleep(2.0)  # Simulate supplier API
     data = [{"id": 1, "name": "Acme Corp"}]
     logger.info("Loaded %d suppliers", len(data))
     return data
@@ -108,7 +108,7 @@ def raw_suppliers() -> list[dict]:
 def raw_shipping() -> list[dict]:
     """Raw shipping rates."""
     logger.info("Fetching shipping rate tables...")
-    time.sleep(0.35)  # Simulate shipping API
+    time.sleep(2.0)  # Simulate shipping API
     data = [{"zone": "US", "rate": 5.99}]
     logger.info("Loaded shipping rates for %d zones", len(data))
     return data
@@ -125,7 +125,7 @@ def shipping_rates_positive(data: list[dict]) -> bool:
 def cleaned_users(raw_users: list[dict]) -> list[dict]:
     """Users with validated emails."""
     logger.info("Cleaning user records (%d input)...", len(raw_users))
-    time.sleep(0.2)
+    time.sleep(1.5)
     result = [u for u in raw_users if u.get("name")]
     removed = len(raw_users) - len(result)
     if removed:
@@ -144,7 +144,7 @@ def no_users_lost_in_cleaning(data: list[dict]) -> bool:
 def cleaned_orders(raw_orders: list[dict]) -> list[dict]:
     """Orders with valid amounts."""
     logger.info("Validating order amounts (%d input)...", len(raw_orders))
-    time.sleep(0.2)
+    time.sleep(1.5)
     result = [o for o in raw_orders if o.get("amount", 0) > 0]
     removed = len(raw_orders) - len(result)
     if removed:
