@@ -1,22 +1,12 @@
-# Lattice Web UI — Sidebar Navigation & Recovery
+# Lattice Web UI
 
 ## What This Is
 
-Enhancements to Lattice's web UI replacing the popup-based monitoring approach with persistent sidebar navigation and adding failed asset recovery. Users monitor execution via a sidebar available on every page — with icons for run history and active/queued runs — and can re-execute failed assets plus their downstream dependencies directly from the graph.
+A web UI for the Lattice DAG orchestration framework featuring persistent sidebar navigation, real-time execution monitoring, live per-asset log streaming, and failed asset recovery with targeted downstream re-execution.
 
 ## Core Value
 
 Users can monitor execution, view logs, and recover from failures without leaving the main workflow or dealing with popup windows.
-
-## Current Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery
-
-**Goal:** Replace popup windows with sidebar-driven full-page navigation and add the ability to re-execute failed assets with downstream propagation.
-
-**Target features:**
-- Persistent sidebar with run history and active runs icons on all pages
-- Full-page views for run history, active/queued runs, and live asset logs
-- Failed asset re-execution (select failed asset + downstream, click Execute)
-- Remove v1 popup window behavior entirely
 
 ## Requirements
 
@@ -30,47 +20,53 @@ Users can monitor execution, view logs, and recover from failures without leavin
 - ✓ SQLite-backed run history store — existing
 - ✓ REST API for graph, execution, and history — existing
 - ✓ Background execution (async executor with semaphore-limited concurrency) — existing
-- ✓ Clicking an asset on the main graph opens a new browser window (not tab, not navigation) — v1.0
-- ✓ Asset window streams live logs in real-time during execution via WebSocket — v1.0
-- ✓ Asset window shows asset info and details when no execution is running — v1.0
-- ✓ When asset execution completes, logs stop and a success/failure banner is displayed — v1.0
-- ✓ Asset window has a button to refocus the main graph window — v1.0
-- ✓ Asset window has a "Run History" link that opens run history in its own browser window — v1.0
-- ✓ Downstream assets continue executing while viewing any asset window — v1.0
-- ✓ Main graph window remains functional and updating while asset windows are open — v1.0
+- ✓ Real-time per-asset log streaming via WebSocket with replay buffer — v1.0
+- ✓ Live monitoring page with state machine (idle/running/completed/failed) — v1.0
+- ✓ Completion banner with success/failure styling — v1.0
+- ✓ Execution isolation — viewing pages never affects pipeline state — v1.0
+- ✓ Persistent icon rail sidebar on all pages with tooltips — v2.0
+- ✓ Active page highlighting in sidebar — v2.0
+- ✓ Full-page navigation with browser back/forward support — v2.0
+- ✓ Active runs page with real-time WebSocket updates during execution — v2.0
+- ✓ Active runs page shows last completed run summary when idle — v2.0
+- ✓ Click running asset to navigate to live logs — v2.0
+- ✓ Run history page in sidebar layout — v2.0
+- ✓ Full-page live logs with sidebar and back button — v2.0
+- ✓ Graph click-to-select with visual highlighting — v2.0
+- ✓ Context-aware Execute button for targeted re-execution from failed assets — v2.0
+- ✓ All v1 popup infrastructure removed — v2.0
 
 ### Active
 
-- [ ] Persistent sidebar with icons on all pages (run history, active runs)
-- [ ] Run history full page — shows past execution runs
-- [ ] Active runs full page — shows running/queued assets during execution, last completed run when idle
-- [ ] Click running asset on active runs page to navigate to live logs full page
-- [ ] All detail views are full pages with back button
-- [ ] Failed asset re-execution — click failed asset on graph to highlight it + downstream, click Execute to re-run from that point
-- [ ] Graph click behavior changed to select/highlight only (no popups)
-- [ ] Remove v1 popup window behavior entirely
+(No active requirements — start next milestone with `/gsd:new-milestone`)
 
 ### Out of Scope
 
-- Authentication/authorization for the web UI — framework assumes local/trusted network
+- Authentication/authorization — framework assumes local/trusted network
 - Mobile-responsive design — development tool, desktop browser only
 - Multi-user concurrent execution monitoring — single-user tool
-- Popup/multi-window approach — replaced by sidebar navigation in v2
+- SPA client-side routing — requires JS framework, violates stack constraint
+- Expandable sidebar with text labels — overkill for 3 nav items
+- Modal overlays for run details — full-page views are the design choice
+- Automatic retry on failure — masks real failures, complicates execution model
 
 ## Context
 
-Lattice is a Python DAG orchestration framework with a FastAPI web server for visualization and execution. v1.0 shipped multi-window asset monitoring with 1,607 lines of code across 9 source files. v2.0 replaces the popup approach with sidebar navigation and adds failure recovery.
+Lattice is a Python DAG orchestration framework with a FastAPI web server for visualization and execution. v1.0 shipped multi-window asset monitoring, v2.0 replaced popups with sidebar navigation and added failure recovery.
 
-**Current tech stack:** FastAPI, Jinja2 templates, vanilla JS, D3.js, WebSocket, SQLite
+**Current codebase:**
+- 32 files modified across v2.0 (net +4,319 lines)
+- Tech stack: FastAPI, Jinja2 templates, vanilla JS, D3.js, WebSocket, SQLite
+- 276 passing tests
+- Zero popup/multi-window code remaining
 
-**Key infrastructure from v1.0 (reusable):**
+**Key infrastructure:**
 - `src/lattice/observability/log_capture.py` — ExecutionLogHandler with on_entry callback
 - `src/lattice/web/execution.py` — Per-asset subscriber registry, WebSocket endpoint, replay buffer
-- `src/lattice/web/routes.py` — Asset live route (`/asset/{key}/live`)
-- `src/lattice/web/templates/asset_live.html` — 891-line live monitoring template with state machine
-- `src/lattice/web/static/js/graph.js` — Window.open integration (to be replaced with select/highlight)
-
-**v2.0 changes:** The popup window infrastructure (window.open, named windows, refocus) will be removed. The WebSocket per-asset streaming and log capture infrastructure remains — it just delivers to an in-page view instead of a popup. The ExecutionManager needs extension to support partial re-execution from a specific asset downstream.
+- `src/lattice/web/routes.py` — All routes including /runs, /asset/{key}/live, /asset/{key}/detail
+- `src/lattice/web/templates/base.html` — Jinja2 base template with sidebar
+- `src/lattice/web/static/js/graph.js` — DAG visualization with click-to-select and targeted execution
+- `src/lattice/web/static/css/styles.css` — Shared styles including sidebar and statusPulse animation
 
 ## Constraints
 
@@ -84,20 +80,22 @@ Lattice is a Python DAG orchestration framework with a FastAPI web server for vi
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| New browser windows (not tabs/modals) | User wants independent windows to arrange alongside the main graph | ⚠️ Revisit — replaced by sidebar navigation in v2 |
 | Separate live view from run history | Live execution logs and historical runs serve different purposes | ✓ Good |
 | WebSocket per-asset log streaming | Existing WebSocket infrastructure extended for asset-scoped delivery | ✓ Good |
-| Per-window WebSocket with server-side filtering | Each window gets its own connection; server filters by asset key | ✓ Good |
+| Per-window WebSocket with server-side filtering | Each connection gets its own connection; server filters by asset key | ✓ Good |
 | asyncio.Queue as sync-to-async bridge | emit() never blocks execution thread; queue bridges to async WebSocket | ✓ Good |
 | Live route before greedy detail route | Prevents FastAPI's `:path` converter from capturing `/live` suffix | ✓ Good |
 | textContent for XSS safety | All user content rendered via textContent, not innerHTML | ✓ Good |
 | DOM cap at 2000 log entries | FIFO eviction prevents browser slowdown on long-running assets | ✓ Good |
-| Named window targeting for refocus | window.opener.focus() unreliable in modern browsers; named window + window.open is user-gesture-compliant | ⚠️ Revisit — no longer needed with sidebar navigation |
-| Synchronous window.open in click handler | Async operations before window.open trigger popup blockers | ⚠️ Revisit — no longer needed with sidebar navigation |
-| Replace popups with sidebar navigation | User prefers full-page views with persistent sidebar over popup windows | — Pending |
-| Graph click selects/highlights only | Decouples asset selection from navigation; sidebar handles all navigation | — Pending |
-| Re-execute from failed asset downstream | Enables recovery without re-running the entire pipeline | — Pending |
-| event.defaultPrevented for click-vs-drag | D3's drag behavior sets defaultPrevented; checking this prevents accidental window opens | ✓ Good |
+| event.defaultPrevented for click-vs-drag | D3's drag behavior sets defaultPrevented; checking this prevents accidental actions | ✓ Good |
+| Replace popups with sidebar navigation | Better UX, no popup blockers, consistent layout | ✓ Good |
+| Graph click selects/highlights only | Decouples asset selection from navigation; sidebar handles navigation | ✓ Good |
+| Re-execute from failed asset downstream | Reuses existing ExecutionPlan.resolve for targeted re-execution | ✓ Good |
+| No new dependencies for v2.0 | Entire milestone built on existing stack, minimizes complexity | ✓ Good |
+| REST polling for sidebar state | Avoids WebSocket churn on navigation between pages | ✓ Good |
+| Jinja2 template inheritance with base.html | Consistent sidebar on all pages, DRY template structure | ✓ Good |
+| Dual-mode active runs page | WebSocket for live execution, REST for idle summary — clean state transitions | ✓ Good |
+| Clear selection after execution completes | Clean state for both success and failure cases | ✓ Good |
 
 ---
-*Last updated: 2026-02-07 after v2.0 milestone initialization*
+*Last updated: 2026-02-08 after v2.0 milestone*

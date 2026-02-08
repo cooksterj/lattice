@@ -2,18 +2,18 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-07)
+See: .planning/PROJECT.md (updated 2026-02-08)
 
 **Core value:** Users can monitor execution, view logs, and recover from failures without leaving the main workflow or dealing with popup windows.
-**Current focus:** v2.0 milestone COMPLETE -- all 7 phases delivered
+**Current focus:** v2.0 milestone complete — planning next milestone
 
 ## Current Position
 
-Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery
-Phase: 7 of 7 (Popup Cleanup)
-Plan: 1 of 1 in current phase
-Status: Milestone complete
-Last activity: 2026-02-08 -- Completed 07-01-PLAN.md
+Milestone: v2.0 Sidebar Navigation & Failed Asset Recovery (SHIPPED)
+Phase: 7 of 7 (all complete)
+Plan: All complete
+Status: Milestone shipped
+Last activity: 2026-02-08 -- v2.0 milestone complete
 
 Progress: [███████████] 100%
 
@@ -21,8 +21,6 @@ Progress: [███████████] 100%
 
 **Velocity:**
 - Total plans completed: 13 (7 v1.0 + 6 v2.0)
-- Average duration: carried from v1.0
-- Total execution time: carried from v1.0
 
 **By Phase:**
 
@@ -36,44 +34,11 @@ Progress: [███████████] 100%
 | 6 | 1 | 2min | 2min |
 | 7 | 1 | 1min | 1min |
 
-*Updated after each plan completion*
-
 ## Accumulated Context
 
 ### Decisions
 
 Full decision log in PROJECT.md Key Decisions table.
-
-Key v2 decisions:
-- Replace popup windows with sidebar-driven full-page navigation
-- Graph click selects/highlights only (no navigation, no popup)
-- Re-execute from failed asset + downstream using existing ExecutionPlan.resolve
-- No new dependencies -- entire v2.0 built on existing stack
-- REST polling for sidebar state (avoids WebSocket churn on navigation)
-
-Phase 4 decisions:
-- No header in base.html -- each page defines its own header inside {% block content %}
-- Theme init only reads localStorage (no toggle button) -- button stays in per-page headers
-- Left corner decorations shifted to left:62px to clear sidebar
-- /runs link included now even though Active Runs page does not exist until Phase 5
-
-Phase 5 decisions:
-- statusPulse keyframe animation centralized in styles.css (was only inline in asset_live.html)
-- 1.5s delay before idle transition after execution_complete (lets user see final state)
-- Asset rows are anchor elements linking to /asset/{key}/live
-- body overflow-auto set via block body_class for scrollable runs page
-- Back button on live page navigates to /runs via standard anchor href
-- No sidebar icon highlighted for live page (sub-page, not top-level nav)
-- Container padding changed from 6rem to 0 top (fixed header removed)
-
-Phase 6 decisions:
-- Clear selection after execution completes (both success and failure) for simplicity
-- No sidebar opens on node click -- selection is purely visual (highlight + button label)
-- Progress total shows '...' during targeted execution, corrected by showExecutionComplete
-- openAssetWindow method kept as dead code for Phase 7 cleanup
-
-Phase 7 decisions:
-- None -- followed plan as specified (pure dead code removal)
 
 ### Pending Todos
 
@@ -85,7 +50,7 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-02-08T01:19:09Z
-Stopped at: Completed 07-01-PLAN.md -- v2.0 milestone complete
+Last session: 2026-02-08
+Stopped at: v2.0 milestone complete
 Resume file: None
-Next action: None -- milestone complete
+Next action: /gsd:new-milestone (if starting next milestone)
