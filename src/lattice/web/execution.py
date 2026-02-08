@@ -17,6 +17,7 @@ from fastapi import (
     WebSocketDisconnect,
 )
 
+from lattice.io.memory import MemoryIOManager
 from lattice.models import AssetKey
 from lattice.plan import ExecutionPlan
 from lattice.registry import AssetRegistry
@@ -93,6 +94,7 @@ class ExecutionManager:
         self._check_registry = check_registry
         self._asset_subscribers: dict[str, set[WebSocket]] = {}
         self._replay_buffers: dict[str, deque[dict[str, Any]]] = {}
+        self._base_io_manager: MemoryIOManager | None = None
         self._log_queue: asyncio.Queue[Any] | None = None
         self._drain_task: asyncio.Task[None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -280,7 +282,6 @@ class ExecutionManager:
             date in the range.
         """
         from lattice.executor import AsyncExecutor
-        from lattice.io.memory import MemoryIOManager
         from lattice.observability import (
             CheckResult,
             CheckStatus,
@@ -361,7 +362,10 @@ class ExecutionManager:
                     )
 
                 # Set up observability components
-                base_io_manager = MemoryIOManager()
+                # Reuse IO manager so re-execution can load upstream outputs
+                if self._base_io_manager is None:
+                    self._base_io_manager = MemoryIOManager()
+                base_io_manager = self._base_io_manager
                 lineage_tracker = LineageTracker()
                 io_manager = LineageIOManager(base_io_manager, lineage_tracker)
 

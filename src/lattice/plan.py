@@ -100,11 +100,11 @@ class ExecutionPlan(BaseModel):
                 raise KeyError(f"Target asset {target_key} not found in registry")
 
             if include_downstream:
-                # Include target, its upstream dependencies, AND all downstream dependents
-                # Use case: "execute from this asset and refresh everything downstream"
-                required = graph.get_all_upstream(target_key)  # Upstream needed to run target
-                required.add(target_key)
-                required.update(graph.get_all_downstream(target_key))  # Plus downstream
+                # Include target and all downstream dependents only
+                # Use case: re-execute a failed asset and refresh everything downstream
+                # Upstream outputs are assumed to already exist in the IO manager
+                required = {target_key}
+                required.update(graph.get_all_downstream(target_key))
             else:
                 # Include target and all upstream dependencies
                 required = graph.get_all_upstream(target_key)
