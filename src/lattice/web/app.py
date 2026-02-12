@@ -20,6 +20,11 @@ from lattice.web.execution import (
 from lattice.web.routes import create_router
 from lattice.web.routes_history import create_history_router
 
+# TYPE_CHECKING block for imports only needed by type checkers (mypy, pyright).
+# RunHistoryStore is imported here to avoid pulling in the full observability
+# stack (SQLite, history models) at app-module load time. It is used only in
+# the ``create_app`` function's type annotation for the optional history_store
+# parameter.
 if TYPE_CHECKING:
     from lattice.observability.history import RunHistoryStore
 

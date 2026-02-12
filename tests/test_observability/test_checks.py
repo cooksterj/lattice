@@ -1,6 +1,7 @@
 """Tests for asset checks module."""
 
 from lattice import AssetKey, AssetRegistry, asset
+from lattice.models import AssetDefinition
 from lattice.observability.checks import (
     AssetWithChecks,
     CheckDefinition,
@@ -231,6 +232,77 @@ class TestAssetWithChecks:
         # Should be hashable
         s = {my_asset}
         assert my_asset in s
+
+
+class TestRegisterCheck:
+    """Tests for AssetWithChecks._register_check static method."""
+
+    def test_custom_name_override(self) -> None:
+        """Custom name overrides the function name."""
+        registry = CheckRegistry()
+        asset_key = AssetKey(name="my_asset")
+        asset_def = AssetDefinition(
+            key=asset_key,
+            fn=lambda: 1,
+            dependencies=(),
+            dependency_params=(),
+            return_type=int,
+            description=None,
+        )
+
+        def my_check(value: int) -> bool:
+            return value > 0
+
+        AssetWithChecks._register_check(my_check, "custom_name", None, asset_def, registry)
+
+        checks = registry.get_checks(asset_key)
+        assert len(checks) == 1
+        assert checks[0].name == "custom_name"
+
+    def test_fallback_to_function_name(self) -> None:
+        """When name is None, uses the function's __name__."""
+        registry = CheckRegistry()
+        asset_key = AssetKey(name="my_asset")
+        asset_def = AssetDefinition(
+            key=asset_key,
+            fn=lambda: 1,
+            dependencies=(),
+            dependency_params=(),
+            return_type=int,
+            description=None,
+        )
+
+        def is_positive(value: int) -> bool:
+            return value > 0
+
+        AssetWithChecks._register_check(is_positive, None, None, asset_def, registry)
+
+        checks = registry.get_checks(asset_key)
+        assert len(checks) == 1
+        assert checks[0].name == "is_positive"
+
+    def test_docstring_as_description(self) -> None:
+        """When description is None, uses the function's docstring."""
+        registry = CheckRegistry()
+        asset_key = AssetKey(name="my_asset")
+        asset_def = AssetDefinition(
+            key=asset_key,
+            fn=lambda: 1,
+            dependencies=(),
+            dependency_params=(),
+            return_type=int,
+            description=None,
+        )
+
+        def my_check(value: int) -> bool:
+            """Validates that value is positive."""
+            return value > 0
+
+        AssetWithChecks._register_check(my_check, None, None, asset_def, registry)
+
+        checks = registry.get_checks(asset_key)
+        assert len(checks) == 1
+        assert checks[0].description == "Validates that value is positive."
 
 
 class TestGlobalCheckRegistry:

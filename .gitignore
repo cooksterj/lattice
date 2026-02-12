@@ -19,4 +19,5 @@ wheels/
 .DS_Store
 /.claude/settings.json
 
-/tmux-client-10915.log
+tmux-client-*.log
+/.claude/

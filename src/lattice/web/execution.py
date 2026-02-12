@@ -32,7 +32,11 @@ from lattice.web.schemas_execution import (
 
 logger = logging.getLogger(__name__)
 
-# Observability imports - for tracking lineage, logs, checks, and history
+# TYPE_CHECKING block for imports only needed by type checkers (mypy, pyright).
+# CheckRegistry and RunHistoryStore are imported here to avoid circular
+# imports at runtime: the observability package references executor types,
+# so importing it eagerly would create a cycle. These are used only in
+# type annotations for the ExecutionManager constructor and properties.
 if TYPE_CHECKING:
     from lattice.observability import CheckRegistry, RunHistoryStore
 

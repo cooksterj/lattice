@@ -193,6 +193,73 @@ class AssetWithChecks:
         self._asset_def = asset_def
         self._registry = registry if registry is not None else get_global_check_registry()
 
+    @staticmethod
+    def _register_check(
+        check_fn: Callable[..., CheckResult | bool],
+        name: str | None,
+        description: str | None,
+        asset_def: AssetDefinition,
+        registry: CheckRegistry,
+    ) -> Callable[..., CheckResult | bool]:
+        """Register a check function for an asset and return it unchanged.
+
+        Called by the ``AssetWithChecks.check`` decorator to perform the
+        actual registration logic. This method is the single point where
+        a user-supplied check function is paired with its target asset
+        and persisted into a ``CheckRegistry``.
+
+        The method builds a ``CheckDefinition`` by resolving the check's
+        display name and description through a two-tier fallback:
+
+        - **name**: uses the explicit ``name`` argument when provided,
+          otherwise falls back to ``check_fn.__name__``.
+        - **description**: uses the explicit ``description`` argument
+          when provided, otherwise falls back to ``check_fn.__doc__``
+          (the function's docstring).
+
+        The resulting ``CheckDefinition`` is an immutable Pydantic model
+        (``frozen=True``) that is appended to the registry under the
+        asset's key. Multiple checks may be registered against the same
+        asset; the registry stores them as an ordered list.
+
+        The original function is returned unmodified so that it remains
+        usable as a normal callable and supports decorator chaining
+        (e.g., stacking ``@my_asset.check`` on top of other decorators).
+
+        Parameters
+        ----------
+        check_fn : Callable[..., CheckResult | bool]
+            The check function to register. Should accept the
+            materialized asset value and return either a ``bool``
+            (pass/fail) or a full ``CheckResult`` with metadata.
+        name : str or None
+            Custom check name. When ``None``, falls back to
+            ``check_fn.__name__``.
+        description : str or None
+            Custom description of what the check validates. When
+            ``None``, falls back to ``check_fn.__doc__``.
+        asset_def : AssetDefinition
+            The asset definition this check applies to. Its ``key``
+            is used to associate the check in the registry.
+        registry : CheckRegistry
+            The registry to register the check in. Typically the
+            global check registry or a test-isolated instance.
+
+        Returns
+        -------
+        Callable[..., CheckResult | bool]
+            The original ``check_fn``, unchanged.
+        """
+        check_name = name if name is not None else check_fn.__name__
+        check_def = CheckDefinition(
+            name=check_name,
+            asset_key=asset_def.key,
+            fn=check_fn,
+            description=description or check_fn.__doc__,
+        )
+        registry.register(check_def)
+        return check_fn
+
     def check(
         self,
         fn: Callable[..., CheckResult | bool] | None = None,
@@ -231,15 +298,9 @@ class AssetWithChecks:
         def decorator(
             check_fn: Callable[..., CheckResult | bool],
         ) -> Callable[..., CheckResult | bool]:
-            check_name = name if name is not None else check_fn.__name__
-            check_def = CheckDefinition(
-                name=check_name,
-                asset_key=self._asset_def.key,
-                fn=check_fn,
-                description=description or check_fn.__doc__,
+            return self._register_check(
+                check_fn, name, description, self._asset_def, self._registry
             )
-            self._registry.register(check_def)
-            return check_fn
 
         if fn is not None:
             return decorator(fn)

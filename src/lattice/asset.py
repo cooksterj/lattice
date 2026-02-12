@@ -100,6 +100,130 @@ def _extract_return_type(fn: Callable[..., Any]) -> type | None:
     return hints.get("return")
 
 
+def _create_async_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Create an async wrapper that preserves the original function's metadata.
+
+    Used by ``_asset_decorator`` to wrap async asset functions before they
+    are stored in an ``AssetDefinition``. The wrapper applies
+    ``@functools.wraps`` so that ``__name__``, ``__doc__``, and
+    ``__module__`` propagate from the original coroutine function to the
+    wrapper. This ensures that logging, error messages, and introspection
+    within the executor and web UI continue to reference the user-defined
+    function name rather than an anonymous wrapper.
+
+    Parameters
+    ----------
+    func : Callable[..., Any]
+        The async function to wrap. Must be a coroutine function.
+
+    Returns
+    -------
+    Callable[..., Any]
+        An async wrapper that awaits ``func`` and carries its metadata.
+    """
+
+    @wraps(func)
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        return await func(*args, **kwargs)
+
+    return async_wrapper
+
+
+def _create_sync_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
+    """Create a sync wrapper that preserves the original function's metadata.
+
+    Used by ``_asset_decorator`` to wrap synchronous asset functions before
+    they are stored in an ``AssetDefinition``. The wrapper applies
+    ``@functools.wraps`` so that ``__name__``, ``__doc__``, and
+    ``__module__`` propagate from the original function to the wrapper.
+    This ensures that logging, error messages, and introspection within
+    the executor and web UI continue to reference the user-defined
+    function name rather than an anonymous wrapper.
+
+    Parameters
+    ----------
+    func : Callable[..., Any]
+        The sync function to wrap. Must not be a coroutine function.
+
+    Returns
+    -------
+    Callable[..., Any]
+        A sync wrapper that delegates to ``func`` and carries its metadata.
+    """
+
+    @wraps(func)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
+        return func(*args, **kwargs)
+
+    return sync_wrapper
+
+
+def _asset_decorator(
+    func: Callable[P, R],
+    key: AssetKey | None,
+    deps: dict[str, AssetKey] | None,
+    description: str | None,
+    target_registry: AssetRegistry,
+) -> AssetWithChecks:
+    """Register a function as an asset and return an AssetWithChecks wrapper.
+
+    Extracts dependencies, return type, and description from the function,
+    wraps it to preserve async/sync nature, and registers the resulting
+    ``AssetDefinition`` in the target registry.
+
+    Parameters
+    ----------
+    func : Callable[P, R]
+        The asset function to register.
+    key : AssetKey or None
+        Explicit asset key. Defaults to the function's ``__name__``.
+    deps : dict[str, AssetKey] or None
+        Optional mapping of parameter names to asset keys for grouped deps.
+    description : str or None
+        Optional description. Falls back to the function's docstring.
+    target_registry : AssetRegistry
+        The registry to register the asset definition in.
+
+    Returns
+    -------
+    AssetWithChecks
+        A wrapper around the registered ``AssetDefinition``.
+    """
+    # Import here to avoid circular imports
+    from lattice.observability.checks import AssetWithChecks
+
+    asset_key = key or AssetKey(name=func.__name__)
+    dependencies, dependency_params = _extract_dependencies(func, deps)
+    return_type = _extract_return_type(func)
+
+    # Preserve the async nature of the wrapped function.
+    # We use Callable[..., Any] for the wrapped function since we can't
+    # easily express the dual sync/async nature in the type system.
+    wrapped_fn: Callable[..., Any]
+    if inspect.iscoroutinefunction(func):
+        wrapped_fn = _create_async_wrapper(func)
+    else:
+        wrapped_fn = _create_sync_wrapper(func)
+
+    asset_def = AssetDefinition(
+        key=asset_key,
+        fn=wrapped_fn,
+        dependencies=dependencies,
+        dependency_params=dependency_params,
+        return_type=return_type,
+        description=description or func.__doc__,
+    )
+
+    target_registry.register(asset_def)
+    logger.info("Asset registered: %s", asset_key)
+    logger.debug(
+        "Asset %s depends on: %s",
+        asset_key,
+        [str(d) for d in dependencies] if dependencies else "none",
+    )
+    return AssetWithChecks(asset_def)
+
+
 @overload
 def asset(fn: Callable[P, R]) -> AssetWithChecks: ...
 
@@ -166,54 +290,15 @@ def asset(
         An AssetWithChecks wrapper (delegating to AssetDefinition) that
         enables the .check() decorator, or a decorator if called with arguments.
     """
-    # Import here to avoid circular imports
-    from lattice.observability.checks import AssetWithChecks
-
     target_registry = get_global_registry() if registry is None else registry
 
-    def decorator(func: Callable[P, R]) -> AssetWithChecks:
-        asset_key = key or AssetKey(name=func.__name__)
-        dependencies, dependency_params = _extract_dependencies(func, deps)
-        return_type = _extract_return_type(func)
-
-        # Preserve the async nature of the wrapped function.
-        # We use Callable[..., Any] for the wrapped function since we can't
-        # easily express the dual sync/async nature in the type system.
-        wrapped_fn: Callable[..., Any]
-        if inspect.iscoroutinefunction(func):
-
-            @wraps(func)
-            async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
-                return await func(*args, **kwargs)
-
-            wrapped_fn = async_wrapper
-        else:
-
-            @wraps(func)
-            def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
-                return func(*args, **kwargs)
-
-            wrapped_fn = sync_wrapper
-
-        asset_def = AssetDefinition(
-            key=asset_key,
-            fn=wrapped_fn,
-            dependencies=dependencies,
-            dependency_params=dependency_params,
-            return_type=return_type,
-            description=description or func.__doc__,
-        )
-
-        target_registry.register(asset_def)
-        logger.info("Asset registered: %s", asset_key)
-        logger.debug(
-            "Asset %s depends on: %s",
-            asset_key,
-            [str(d) for d in dependencies] if dependencies else "none",
-        )
-        return AssetWithChecks(asset_def)
-
-    # Handle both @asset and @asset(...) syntax
+    # Handle both @asset and @asset(...) syntax.
+    # When used without parentheses (@asset), fn is the decorated function
+    # itself, so we register it immediately.
+    # When used with parentheses (@asset(key=..., deps=...)), fn is None and
+    # Python expects a callable back that will receive the decorated function
+    # on the next call — the lambda closes over the configuration arguments
+    # and defers the actual registration to that second invocation.
     if fn is not None:
-        return decorator(fn)
-    return decorator
+        return _asset_decorator(fn, key, deps, description, target_registry)
+    return lambda func: _asset_decorator(func, key, deps, description, target_registry)

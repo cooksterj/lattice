@@ -221,3 +221,104 @@ class TestAssetRegistry:
             return 1
 
         assert len(registry) == 1
+
+
+class TestWrapperMetadata:
+    """Tests for _create_async_wrapper and _create_sync_wrapper metadata preservation."""
+
+    def test_sync_wrapper_preserves_name(self) -> None:
+        """Sync wrapper preserves __name__."""
+        from lattice.asset import _create_sync_wrapper
+
+        def my_function() -> int:
+            return 42
+
+        wrapped = _create_sync_wrapper(my_function)
+        assert wrapped.__name__ == "my_function"
+
+    def test_sync_wrapper_preserves_doc(self) -> None:
+        """Sync wrapper preserves __doc__."""
+        from lattice.asset import _create_sync_wrapper
+
+        def my_function() -> int:
+            """My docstring."""
+            return 42
+
+        wrapped = _create_sync_wrapper(my_function)
+        assert wrapped.__doc__ == "My docstring."
+
+    def test_sync_wrapper_delegates_correctly(self) -> None:
+        """Sync wrapper calls through to the original function."""
+        from lattice.asset import _create_sync_wrapper
+
+        def add(a: int, b: int) -> int:
+            return a + b
+
+        wrapped = _create_sync_wrapper(add)
+        assert wrapped(3, 4) == 7
+
+    def test_async_wrapper_preserves_name(self) -> None:
+        """Async wrapper preserves __name__."""
+        from lattice.asset import _create_async_wrapper
+
+        async def my_async_fn() -> int:
+            return 42
+
+        wrapped = _create_async_wrapper(my_async_fn)
+        assert wrapped.__name__ == "my_async_fn"
+
+    def test_async_wrapper_preserves_doc(self) -> None:
+        """Async wrapper preserves __doc__."""
+        from lattice.asset import _create_async_wrapper
+
+        async def my_async_fn() -> int:
+            """Async docstring."""
+            return 42
+
+        wrapped = _create_async_wrapper(my_async_fn)
+        assert wrapped.__doc__ == "Async docstring."
+
+    def test_async_wrapper_returns_coroutine_function(self) -> None:
+        """Async wrapper is recognized as a coroutine function."""
+        import inspect
+
+        from lattice.asset import _create_async_wrapper
+
+        async def my_async_fn() -> int:
+            return 42
+
+        wrapped = _create_async_wrapper(my_async_fn)
+        assert inspect.iscoroutinefunction(wrapped)
+
+
+class TestAssetDecoratorFunction:
+    """Tests for the _asset_decorator extracted function."""
+
+    def test_produces_correct_asset_with_checks(self, registry: AssetRegistry) -> None:
+        """_asset_decorator creates an AssetWithChecks with correct attributes."""
+        from lattice.asset import _asset_decorator
+        from lattice.observability.checks import AssetWithChecks
+
+        def my_func() -> int:
+            """My description."""
+            return 42
+
+        result = _asset_decorator(my_func, None, None, None, registry)
+
+        assert isinstance(result, AssetWithChecks)
+        assert result.key == AssetKey(name="my_func")
+        assert result.description == "My description."
+        assert "my_func" in registry
+
+    def test_explicit_key_and_description(self, registry: AssetRegistry) -> None:
+        """_asset_decorator respects explicit key and description."""
+        from lattice.asset import _asset_decorator
+
+        def my_func() -> int:
+            return 42
+
+        key = AssetKey(name="custom", group="grp")
+        result = _asset_decorator(my_func, key, None, "Explicit desc", registry)
+
+        assert result.key == key
+        assert result.description == "Explicit desc"
