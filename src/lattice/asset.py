@@ -2,9 +2,10 @@
 The @asset decorator for defining data assets.
 
 This module provides the primary API for declaring assets in Lattice.
-The decorator automatically extracts dependencies from function parameter
-names, captures return type annotations, and registers the asset definition
-to a registry (global by default).
+Dependencies are declared explicitly via the ``deps`` parameter as a
+sequence of ``AssetKey`` or string shorthand.  When ``deps`` is omitted
+(or ``None``), the asset is treated as a source asset with zero
+dependencies.
 
 The decorator returns an AssetWithChecks wrapper that enables the .check()
 decorator for attaching data quality checks to assets.
@@ -14,7 +15,7 @@ from __future__ import annotations
 
 import inspect
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ParamSpec, TypeVar, get_type_hints, overload
 
@@ -35,48 +36,66 @@ logger = logging.getLogger(__name__)
 P = ParamSpec("P")
 R = TypeVar("R")
 
+# Parameters that are never treated as asset dependencies.
+SKIP_PARAMS = frozenset({"self", "cls", "context", "partition_key"})
+
+
+def _normalize_deps(deps: Sequence[AssetKey | str]) -> tuple[AssetKey, ...]:
+    """Normalize a sequence of dependencies to a tuple of AssetKey.
+
+    String entries are converted to ``AssetKey(name=s)`` in the default group.
+
+    Parameters
+    ----------
+    deps : Sequence[AssetKey | str]
+        Raw dependency declarations.
+
+    Returns
+    -------
+    tuple of AssetKey
+        Normalized dependency keys.
+    """
+    return tuple(AssetKey(name=d) if isinstance(d, str) else d for d in deps)
+
 
 def _extract_dependencies(
-    fn: Callable[..., Any],
-    explicit_deps: dict[str, AssetKey] | None = None,
-) -> tuple[tuple[AssetKey, ...], tuple[str, ...]]:
-    """
-    Extract asset dependencies from the function signature.
+    deps: Sequence[AssetKey | str] | None,
+) -> tuple[AssetKey, ...]:
+    """Extract asset dependencies from an explicit deps declaration.
 
-    Each parameter name is treated as a dependency on an asset with that name,
-    unless an explicit mapping is provided in explicit_deps.
-    Special parameters (self, cls, context, partition_key) are excluded.
+    When ``deps`` is ``None`` the asset is a source asset with no
+    dependencies.  When provided, the sequence is normalized and returned.
+
+    Parameters
+    ----------
+    deps : Sequence[AssetKey | str] or None
+        Explicit dependency list supplied by the user.
+
+    Returns
+    -------
+    tuple of AssetKey
+        Normalized dependency keys.
+    """
+    if deps is None:
+        return ()
+    return _normalize_deps(deps)
+
+
+def _get_asset_params(fn: Callable[..., Any]) -> tuple[str, ...]:
+    """Return non-skipped parameter names from a function signature.
 
     Parameters
     ----------
     fn : Callable[..., Any]
-        The function to extract dependencies from.
-    explicit_deps : dict[str, AssetKey] or None
-        Optional mapping of parameter names to asset keys. Use this for
-        dependencies on assets in non-default groups.
+        The function to inspect.
 
     Returns
     -------
-    tuple of (tuple of AssetKey, tuple of str)
-        Asset keys for dependencies and their corresponding parameter names.
+    tuple of str
+        Parameter names excluding those in ``SKIP_PARAMS``.
     """
     sig = inspect.signature(fn)
-    deps: list[AssetKey] = []
-    params: list[str] = []
-    explicit_deps = explicit_deps or {}
-
-    for param_name in sig.parameters:
-        # Skip special parameters that aren't asset dependencies
-        if param_name in ("self", "cls", "context", "partition_key"):
-            continue
-        # Use the explicit mapping if provided, otherwise derive from the parameter name
-        if param_name in explicit_deps:
-            deps.append(explicit_deps[param_name])
-        else:
-            deps.append(AssetKey(name=param_name))
-        params.append(param_name)
-
-    return tuple(deps), tuple(params)
+    return tuple(p for p in sig.parameters if p not in SKIP_PARAMS)
 
 
 def _extract_return_type(fn: Callable[..., Any]) -> type | None:
@@ -161,7 +180,7 @@ def _create_sync_wrapper(func: Callable[..., Any]) -> Callable[..., Any]:
 def _asset_decorator(
     func: Callable[P, R],
     key: AssetKey | None,
-    deps: dict[str, AssetKey] | None,
+    deps: Sequence[AssetKey | str] | None,
     description: str | None,
     target_registry: AssetRegistry,
 ) -> AssetWithChecks:
@@ -177,8 +196,8 @@ def _asset_decorator(
         The asset function to register.
     key : AssetKey or None
         Explicit asset key. Defaults to the function's ``__name__``.
-    deps : dict[str, AssetKey] or None
-        Optional mapping of parameter names to asset keys for grouped deps.
+    deps : Sequence[AssetKey | str] or None
+        Explicit dependency list.  ``None`` means source asset (zero deps).
     description : str or None
         Optional description. Falls back to the function's docstring.
     target_registry : AssetRegistry
@@ -188,13 +207,30 @@ def _asset_decorator(
     -------
     AssetWithChecks
         A wrapper around the registered ``AssetDefinition``.
+
+    Raises
+    ------
+    TypeError
+        If the number of declared dependencies does not match the number
+        of non-skipped function parameters.
     """
     # Import here to avoid circular imports
     from lattice.observability.checks import AssetWithChecks
 
     asset_key = key or AssetKey(name=func.__name__)
-    dependencies, dependency_params = _extract_dependencies(func, deps)
+    dependencies = _extract_dependencies(deps)
     return_type = _extract_return_type(func)
+
+    # Arity validation: when deps are provided, the count must match the
+    # number of non-skipped parameters on the function.
+    if dependencies:
+        params = _get_asset_params(func)
+        if len(dependencies) != len(params):
+            raise TypeError(
+                f"Asset '{asset_key}' declares {len(dependencies)} dependency(ies) "
+                f"but its function accepts {len(params)} parameter(s). "
+                f"deps={[str(d) for d in dependencies]}, params={list(params)}"
+            )
 
     # Preserve the async nature of the wrapped function.
     # We use Callable[..., Any] for the wrapped function since we can't
@@ -209,7 +245,6 @@ def _asset_decorator(
         key=asset_key,
         fn=wrapped_fn,
         dependencies=dependencies,
-        dependency_params=dependency_params,
         return_type=return_type,
         description=description or func.__doc__,
     )
@@ -232,7 +267,8 @@ def asset(fn: Callable[P, R]) -> AssetWithChecks: ...
 def asset(
     *,
     key: AssetKey | None = None,
-    deps: dict[str, AssetKey] | None = None,
+    group: str | None = None,
+    deps: Sequence[AssetKey | str] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
 ) -> Callable[[Callable[P, R]], AssetWithChecks]: ...
@@ -242,7 +278,8 @@ def asset(
     fn: Callable[P, R] | None = None,
     *,
     key: AssetKey | None = None,
-    deps: dict[str, AssetKey] | None = None,
+    group: str | None = None,
+    deps: Sequence[AssetKey | str] | None = None,
     registry: AssetRegistry | None = None,
     description: str | None = None,
 ) -> AssetWithChecks | Callable[[Callable[P, R]], AssetWithChecks]:
@@ -252,21 +289,31 @@ def asset(
     Can be used with or without arguments::
 
         @asset
-        def my_asset() -> pd.DataFrame:
+        def my_source() -> pd.DataFrame:
             ...
 
         @asset(key=AssetKey(group="analytics", name="stats"))
         def my_stats() -> dict:
             ...
 
-    For dependencies on grouped assets, use the 'deps' parameter to map
-    parameter names to asset keys::
+    Use the ``group`` shorthand to place the asset in a group when the
+    asset name matches the function name::
 
-        @asset(deps={
-            "revenue": AssetKey(name="daily_revenue", group="analytics"),
-            "stats": AssetKey(name="user_stats", group="analytics"),
-        })
-        def dashboard (revenue: dict, stats: dict) -> dict:
+        @asset(group="analytics", deps=["user_orders"])
+        def daily_revenue(orders: list[dict]) -> dict:
+            ...
+
+    Declare dependencies explicitly via the ``deps`` parameter::
+
+        @asset(deps=["raw_users"])
+        def cleaned_users(raw_users: list[dict]) -> list[dict]:
+            ...
+
+        @asset(deps=[
+            AssetKey(name="daily_revenue", group="analytics"),
+            AssetKey(name="user_stats", group="analytics"),
+        ])
+        def dashboard(revenue: dict, stats: dict) -> dict:
             ...
 
     Parameters
@@ -275,10 +322,14 @@ def asset(
         The asset function (when used without parentheses).
     key : AssetKey or None
         Optional explicit asset key. Defaults to function name.
-    deps : dict[str, AssetKey] or None
-        Optional mapping of parameter names to asset keys. Use this when
-        depending on assets in non-default groups. Parameters not in this
-        dict are resolved by name in the default group.
+        Cannot be combined with ``group``.
+    group : str or None
+        Shorthand for ``key=AssetKey(name=func.__name__, group=group)``.
+        Cannot be combined with ``key``.
+    deps : Sequence[AssetKey | str] or None
+        Explicit list of upstream dependencies. Strings are converted to
+        ``AssetKey(name=s)`` in the default group. When ``None`` (the
+        default), the asset is treated as a source with zero dependencies.
     registry : AssetRegistry or None
         Optional registry to use. Defaults to global registry.
     description : str or None
@@ -290,6 +341,12 @@ def asset(
         An AssetWithChecks wrapper (delegating to AssetDefinition) that
         enables the .check() decorator, or a decorator if called with arguments.
     """
+    if key is not None and group is not None:
+        raise ValueError(
+            "Cannot specify both 'key' and 'group' on @asset — "
+            "use 'key' for full control or 'group' as shorthand"
+        )
+
     target_registry = get_global_registry() if registry is None else registry
 
     # Handle both @asset and @asset(...) syntax.
@@ -301,4 +358,14 @@ def asset(
     # and defers the actual registration to that second invocation.
     if fn is not None:
         return _asset_decorator(fn, key, deps, description, target_registry)
-    return lambda func: _asset_decorator(func, key, deps, description, target_registry)
+
+    # Resolve key from group shorthand at decoration time.  The lambda
+    # captures `group` and builds the effective AssetKey once it knows
+    # the decorated function's __name__.
+    def _decorator(func: Callable[P, R]) -> AssetWithChecks:
+        effective_key = key
+        if effective_key is None and group is not None:
+            effective_key = AssetKey(name=func.__name__, group=group)
+        return _asset_decorator(func, effective_key, deps, description, target_registry)
+
+    return _decorator

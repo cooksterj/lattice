@@ -47,11 +47,11 @@ class TestExecutorBasics:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 10
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         def c(b: int) -> int:
             return b + 100
 
@@ -74,15 +74,15 @@ class TestExecutorBasics:
         def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def left(root: int) -> int:
             return root * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def right(root: int) -> int:
             return root * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["left", "right"])
         def sink(left: int, right: int) -> int:
             return left + right
 
@@ -100,7 +100,7 @@ class TestExecutorBasics:
         def needed() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["needed"])
         def target(needed: int) -> int:
             return needed + 1
 
@@ -128,11 +128,11 @@ class TestExecutorFailures:
         def works() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["works"])
         def fails(works: int) -> int:
             raise ValueError("Intentional failure")
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["fails"])
         def downstream(fails: int) -> int:
             return fails + 1
 
@@ -189,7 +189,7 @@ class TestExecutorCallbacks:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
@@ -466,11 +466,11 @@ class TestAsyncExecutorBasics:
         def sync_a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["sync_a"])
         async def async_b(sync_a: int) -> int:
             return sync_a + 10
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["async_b"])
         def sync_c(async_b: int) -> int:
             return async_b + 100
 
@@ -490,15 +490,15 @@ class TestAsyncExecutorBasics:
         async def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         async def left(root: int) -> int:
             return root * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         async def right(root: int) -> int:
             return root * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["left", "right"])
         async def sink(left: int, right: int) -> int:
             return left + right
 
@@ -625,11 +625,11 @@ class TestAsyncExecutorFailures:
         async def works() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["works"])
         async def fails(works: int) -> int:
             raise ValueError("Intentional failure")
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["fails"])
         async def downstream(fails: int) -> int:
             return fails + 1
 
@@ -691,7 +691,7 @@ class TestAsyncExecutorCallbacks:
         async def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         async def b(a: int) -> int:
             return a + 1
 
@@ -740,12 +740,12 @@ class TestAsyncExecutorCancellation:
             await asyncio.sleep(0.05)
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         async def b(a: int) -> int:
             started.append("b")
             return a + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         async def c(b: int) -> int:
             started.append("c")
             return b + 1
@@ -890,12 +890,12 @@ class TestExecutorPartitionKey:
         def source() -> int:
             return 100
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def date_processor(source: int, partition_key: date) -> str:
             received_dates["date_processor"] = partition_key
             return f"{source}_{partition_key}"
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["date_processor"])
         def final(date_processor: str) -> str:
             return f"final_{date_processor}"
 
@@ -1029,3 +1029,122 @@ class TestAsyncExecutorPartitionKey:
         assert received_dates["a"] == test_date
         assert received_dates["b"] == test_date
         assert received_dates["c"] == test_date
+
+
+class TestPositionalInjectionOrder:
+    """Tests that dependency values are injected in the order declared in deps."""
+
+    def test_sync_positional_injection_order(self, registry: AssetRegistry) -> None:
+        """deps=['a', 'b'] injects a's value into first param, b's into second."""
+
+        @asset(registry=registry)
+        def a() -> str:
+            return "value_a"
+
+        @asset(registry=registry)
+        def b() -> str:
+            return "value_b"
+
+        @asset(registry=registry, deps=["a", "b"])
+        def combined(x: str, y: str) -> dict:
+            return {"x": x, "y": y}
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = Executor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        loaded = io.load(AssetKey(name="combined"))
+        assert loaded["x"] == "value_a"
+        assert loaded["y"] == "value_b"
+
+    def test_sync_injection_order_reversed(self, registry: AssetRegistry) -> None:
+        """deps=['b', 'a'] injects b's value into first param, a's into second."""
+
+        @asset(registry=registry)
+        def a() -> str:
+            return "value_a"
+
+        @asset(registry=registry)
+        def b() -> str:
+            return "value_b"
+
+        @asset(registry=registry, deps=["b", "a"])
+        def combined(x: str, y: str) -> dict:
+            return {"x": x, "y": y}
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = Executor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        loaded = io.load(AssetKey(name="combined"))
+        assert loaded["x"] == "value_b"
+        assert loaded["y"] == "value_a"
+
+
+class TestAsyncDepsInjection:
+    """Tests that async assets with deps receive correct injected values."""
+
+    @pytest.mark.asyncio
+    async def test_async_asset_with_string_deps(self, registry: AssetRegistry) -> None:
+        """Async asset with deps=['source'] receives source's value."""
+
+        @asset(registry=registry)
+        async def source() -> int:
+            return 100
+
+        @asset(registry=registry, deps=["source"])
+        async def downstream(data: int) -> int:
+            return data * 2
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="downstream")) == 200
+
+    @pytest.mark.asyncio
+    async def test_async_asset_positional_injection_order(self, registry: AssetRegistry) -> None:
+        """Async asset respects deps ordering for positional injection."""
+
+        @asset(registry=registry)
+        async def first() -> str:
+            return "first_val"
+
+        @asset(registry=registry)
+        async def second() -> str:
+            return "second_val"
+
+        @asset(registry=registry, deps=["first", "second"])
+        async def combined(x: str, y: str) -> dict:
+            return {"x": x, "y": y}
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        loaded = io.load(AssetKey(name="combined"))
+        assert loaded["x"] == "first_val"
+        assert loaded["y"] == "second_val"
+
+    @pytest.mark.asyncio
+    async def test_async_asset_with_grouped_deps(self, registry: AssetRegistry) -> None:
+        """Async asset with grouped AssetKey deps receives correct values."""
+
+        @asset(registry=registry, group="data")
+        async def source() -> int:
+            return 42
+
+        @asset(registry=registry, deps=[AssetKey(name="source", group="data")])
+        async def consumer(data: int) -> int:
+            return data + 1
+
+        plan = ExecutionPlan.resolve(registry)
+        io = MemoryIOManager()
+        result = await AsyncExecutor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="consumer")) == 43

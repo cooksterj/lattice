@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lattice.asset import SKIP_PARAMS
 from lattice.graph import DependencyGraph
 from lattice.io.base import IOManager
 from lattice.io.memory import MemoryIOManager
@@ -328,18 +329,16 @@ class Executor:
             self.on_asset_start(key)
 
         try:
-            # Load dependencies using parameter names
+            # Derive parameter names from function signature and zip with deps
+            sig = inspect.signature(asset_def.fn)
+            param_names = [p for p in sig.parameters if p not in SKIP_PARAMS]
             kwargs: dict[str, Any] = {}
-            for param_name, dep_key in zip(
-                asset_def.dependency_params, asset_def.dependencies, strict=True
-            ):
+            for param_name, dep_key in zip(param_names, asset_def.dependencies, strict=True):
                 kwargs[param_name] = self.io_manager.load(dep_key)
 
             # Inject partition_key if asset accepts it
-            if self._partition_key is not None:
-                sig = inspect.signature(asset_def.fn)
-                if "partition_key" in sig.parameters:
-                    kwargs["partition_key"] = self._partition_key
+            if self._partition_key is not None and "partition_key" in sig.parameters:
+                kwargs["partition_key"] = self._partition_key
 
             # Execute asset function
             result_value = asset_def.fn(**kwargs)
@@ -634,18 +633,16 @@ class AsyncExecutor:
                     await result
 
             try:
-                # Load dependencies using parameter names
+                # Derive parameter names from function signature and zip with deps
+                sig = inspect.signature(asset_def.fn)
+                param_names = [p for p in sig.parameters if p not in SKIP_PARAMS]
                 kwargs: dict[str, Any] = {}
-                for param_name, dep_key in zip(
-                    asset_def.dependency_params, asset_def.dependencies, strict=True
-                ):
+                for param_name, dep_key in zip(param_names, asset_def.dependencies, strict=True):
                     kwargs[param_name] = self.io_manager.load(dep_key)
 
                 # Inject partition_key if asset accepts it
-                if self._partition_key is not None:
-                    sig = inspect.signature(asset_def.fn)
-                    if "partition_key" in sig.parameters:
-                        kwargs["partition_key"] = self._partition_key
+                if self._partition_key is not None and "partition_key" in sig.parameters:
+                    kwargs["partition_key"] = self._partition_key
 
                 # Execute asset function (handle both sync and async)
                 if inspect.iscoroutinefunction(asset_def.fn):

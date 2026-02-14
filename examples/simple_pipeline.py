@@ -1,6 +1,6 @@
 """Simple example demonstrating Lattice asset definitions."""
 
-from lattice import AssetKey, asset, get_global_registry
+from lattice import asset, get_global_registry
 
 
 @asset
@@ -9,19 +9,19 @@ def raw_numbers() -> list[int]:
     return [1, 2, 3, 4, 5]
 
 
-@asset
+@asset(deps=["raw_numbers"])
 def doubled(raw_numbers: list[int]) -> list[int]:
     """Depends on raw_numbers - doubles each value."""
     return [x * 2 for x in raw_numbers]
 
 
-@asset
+@asset(deps=["doubled"])
 def summed(doubled: list[int]) -> int:
     """Depends on doubled - sums all values."""
     return sum(doubled)
 
 
-@asset(key=AssetKey(name="statistics", group="analytics"))
+@asset(group="analytics", deps=["raw_numbers", "summed"])
 def statistics(raw_numbers: list[int], summed: int) -> dict[str, float]:
     """Multiple dependencies with custom key."""
     return {

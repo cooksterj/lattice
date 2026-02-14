@@ -41,11 +41,11 @@ class TestDependencyGraphConstruction:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         def c(b: int) -> int:
             return b + 1
 
@@ -68,15 +68,15 @@ class TestDependencyGraphConstruction:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def c(a: int) -> int:
             return a * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b", "c"])
         def d(b: int, c: int) -> int:
             return b + c
 
@@ -122,11 +122,11 @@ class TestTopologicalSort:
         def first() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["first"])
         def second(first: int) -> int:
             return first + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["second"])
         def third(second: int) -> int:
             return second + 1
 
@@ -144,15 +144,15 @@ class TestTopologicalSort:
         def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def left(root: int) -> int:
             return root * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def right(root: int) -> int:
             return root * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["left", "right"])
         def leaf(left: int, right: int) -> int:
             return left + right
 
@@ -204,7 +204,7 @@ class TestCycleDetection:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
@@ -245,11 +245,11 @@ class TestUpstreamDownstream:
         def source() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def middle(source: int) -> int:
             return source + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["middle"])
         def sink(middle: int) -> int:
             return middle + 1
 
@@ -265,7 +265,7 @@ class TestUpstreamDownstream:
         def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def child(root: int) -> int:
             return root + 1
 
@@ -281,11 +281,11 @@ class TestUpstreamDownstream:
         def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def mid(root: int) -> int:
             return root + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["mid"])
         def leaf(mid: int) -> int:
             return mid + 1
 
@@ -301,7 +301,7 @@ class TestUpstreamDownstream:
         def parent() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["parent"])
         def leaf(parent: int) -> int:
             return parent + 1
 
@@ -317,15 +317,15 @@ class TestUpstreamDownstream:
         def top() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["top"])
         def left(top: int) -> int:
             return top * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["top"])
         def right(top: int) -> int:
             return top * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["left", "right"])
         def bottom(left: int, right: int) -> int:
             return left + right
 
@@ -361,11 +361,11 @@ class TestExecutionLevels:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         def c(b: int) -> int:
             return b + 1
 
@@ -384,15 +384,15 @@ class TestExecutionLevels:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def c(a: int) -> int:
             return a * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b", "c"])
         def d(b: int, c: int) -> int:
             return b + c
 
@@ -436,11 +436,11 @@ class TestExecutionLevels:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         def c(b: int) -> int:
             return b + 1
 
@@ -473,7 +473,7 @@ class TestExecutionLevels:
         def x() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["x"])
         def y(x: int) -> int:
             return x + 1
 

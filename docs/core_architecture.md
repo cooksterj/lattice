@@ -87,13 +87,12 @@ Several modules use the `TYPE_CHECKING` guard to break circular dependencies at 
 | `key` | `AssetKey` | *(required)* | Unique identifier |
 | `fn` | `Callable[..., Any]` | *(required)* | The wrapped asset function |
 | `dependencies` | `tuple[AssetKey, ...]` | `()` | Assets this asset depends on |
-| `dependency_params` | `tuple[str, ...]` | `()` | Parameter names for each dependency (same order) |
 | `return_type` | `Any` | `None` | Return type annotation |
 | `description` | `str \| None` | `None` | Human-readable description |
 
 - `__call__()` delegates to `fn`, making the definition callable.
 - `__hash__()` hashes by `key`.
-- Invariant: `len(dependencies) == len(dependency_params)`.
+- Invariant: at decoration time, `len(dependencies) == len(non-skipped function parameters)` (validated by the `@asset` decorator).
 
 ### AssetRegistry
 
@@ -119,20 +118,27 @@ Several modules use the `TYPE_CHECKING` guard to break circular dependencies at 
 @asset
 def my_asset() -> int: ...
 
-# Parameterized decoration
-@asset(key=AssetKey(name="custom", group="analytics"), deps={...}, description="...")
+# Parameterized decoration — group shorthand (name derived from function)
+@asset(group="analytics", deps=["user_orders"])
+def daily_revenue(orders: list[dict]) -> dict: ...
+
+# Parameterized decoration — explicit key (full control)
+@asset(key=AssetKey(name="custom", group="analytics"), deps=[...], description="...")
 def my_asset(source: dict) -> int: ...
 ```
 
-**Internal flow (`_asset_decorator`)** &mdash; see [Decorator Execution Step-by-Step](#decorator-execution-step-by-step) for the full walkthrough:
+The ``group`` parameter is a shorthand for ``key=AssetKey(name=func.__name__, group=group)``. It cannot be combined with ``key``.
 
-1. **Resolve key** &mdash; Use provided key or derive from `func.__name__`.
-2. **Extract dependencies** (`_extract_dependencies`) &mdash; Inspect function parameters. Each parameter becomes a dependency (as `AssetKey(name=param_name)`), unless it appears in the skip list (`self`, `cls`, `context`, `partition_key`) or has an explicit mapping via `deps`.
-3. **Extract return type** (`_extract_return_type`) &mdash; Safely read type hints via `get_type_hints()`.
-4. **Wrap function** &mdash; `_create_sync_wrapper` or `_create_async_wrapper` (preserves `__name__`, `__doc__`, and async detection via `@wraps`).
-5. **Create `AssetDefinition`** with all extracted metadata.
-6. **Register** to the target registry.
-7. **Return `AssetWithChecks`** wrapping the definition, enabling `.check()` chaining.
+**Internal flow** &mdash; see [Decorator Execution Step-by-Step](#decorator-execution-step-by-step) for the full walkthrough:
+
+1. **Validate & resolve key** &mdash; `asset()` validates that `key` and `group` are mutually exclusive (raises `ValueError` if both are provided). When `group` is given, the effective key `AssetKey(name=func.__name__, group=group)` is built at decoration time. `_asset_decorator` receives only a resolved `key` and does not know about `group`.
+2. **Normalize dependencies** (`_normalize_deps` + `_extract_dependencies`) &mdash; Convert `deps` list entries (strings become `AssetKey(name=s)`, `AssetKey` objects pass through). If `deps` is `None`, returns empty tuple.
+3. **Validate arity** &mdash; Compare `len(dependencies)` against the number of non-skipped parameters (`self`, `cls`, `context`, `partition_key` are skipped). Raises `TypeError` on mismatch.
+4. **Extract return type** (`_extract_return_type`) &mdash; Safely read type hints via `get_type_hints()`.
+5. **Wrap function** &mdash; `_create_sync_wrapper` or `_create_async_wrapper` (preserves `__name__`, `__doc__`, and async detection via `@wraps`).
+6. **Create `AssetDefinition`** with all extracted metadata.
+7. **Register** to the target registry.
+8. **Return `AssetWithChecks`** wrapping the definition, enabling `.check()` chaining.
 
 ### Decorator Execution Step-by-Step
 
@@ -143,69 +149,97 @@ When Python encounters `@asset` on a function definition, the following sequence
 The `asset()` function uses `@overload` to support two calling conventions. Python resolves this at decoration time:
 
 - **`@asset` (no parentheses):** Python passes the decorated function directly as `fn`. Since `fn is not None`, `_asset_decorator()` is called immediately with the function and default arguments.
-- **`@asset(key=..., deps=...)` (with arguments):** Python calls `asset(key=..., deps=...)` first, which returns a lambda. Python then calls that lambda with the decorated function, which in turn calls `_asset_decorator()`.
+- **`@asset(key=..., deps=...)` (with arguments):** Python calls `asset(key=..., deps=...)` first, which validates `key`/`group` mutual exclusion and returns a closure. Python then calls that closure with the decorated function, which resolves the effective key from `group` (if provided) and calls `_asset_decorator()`.
 
-Both paths converge on `_asset_decorator(func, key, deps, description, target_registry)`.
+Both paths converge on `_asset_decorator(func, key, deps, description, target_registry)`. The `group` parameter is fully resolved to an `AssetKey` before `_asset_decorator` is called.
 
-#### Step 2: Resolve the Asset Key
+#### Step 1.5: Validate & Resolve `group` Shorthand (in `asset()`)
+
+Before `_asset_decorator` is called, the `asset()` function handles the `group` parameter:
+
+```python
+# In asset():
+if key is not None and group is not None:
+    raise ValueError("Cannot specify both 'key' and 'group' ...")
+
+# In the returned closure (when @asset(...) is used):
+effective_key = key
+if effective_key is None and group is not None:
+    effective_key = AssetKey(name=func.__name__, group=group)
+# Then: _asset_decorator(func, effective_key, deps, ...)
+```
+
+This keeps `_asset_decorator` simple — it only sees a resolved `key` or `None`.
+
+#### Step 2: Resolve the Asset Key (in `_asset_decorator`)
 
 ```python
 asset_key = key or AssetKey(name=func.__name__)
 ```
 
-If no explicit `key` is provided, the function's `__name__` attribute becomes the asset name in the `"default"` group. For example, `def daily_revenue()` produces `AssetKey(name="daily_revenue", group="default")`.
+By this point `key` is either an explicit `AssetKey` (from `key=` or resolved from `group=`) or `None`. If `None`, the function's `__name__` attribute becomes the asset name in the `"default"` group. For example, `def daily_revenue()` produces `AssetKey(name="daily_revenue", group="default")`.
 
-#### Step 3: Extract Dependencies (`_extract_dependencies`)
+#### Step 3: Normalize Dependencies and Validate Arity
 
-The decorator inspects the function's signature using `inspect.signature(fn)` and iterates every parameter:
-
-1. **Skip reserved parameters** — `self`, `cls`, `context`, and `partition_key` are excluded since they serve framework purposes rather than representing upstream assets.
-2. **Check explicit mapping** — If `deps` was provided (e.g., `deps={"revenue": AssetKey(name="daily_revenue", group="analytics")}`), parameters in that dict resolve to the specified `AssetKey`.
-3. **Derive by name** — Parameters not in the skip list or explicit mapping become `AssetKey(name=param_name)` in the default group.
-
-The function returns two parallel tuples: `dependencies` (the `AssetKey` objects) and `dependency_params` (the corresponding parameter names), preserving insertion order.
-
-**Why `deps` mirrors parameter names:**
-
-By default, the decorator derives dependencies purely from parameter names — `def my_asset(raw_users)` automatically depends on `AssetKey(name="raw_users", group="default")`. This convention-over-configuration approach works when the parameter name matches the upstream asset's registered name in the default group. However, it breaks down in two cases:
-
-1. **Non-default groups** — An asset registered as `AssetKey(name="daily_revenue", group="analytics")` cannot be resolved from a parameter named `daily_revenue` alone, because the decorator would derive `AssetKey(name="daily_revenue", group="default")` — wrong group.
-2. **Name aliasing** — A function may want a shorter or more meaningful local variable name (e.g., `revenue`) than the upstream asset's registered name (`daily_revenue`).
-
-The `deps` parameter solves both by providing an explicit mapping from parameter name to `AssetKey`. The keys in the `deps` dict must match the function's parameter names because `_extract_dependencies()` iterates `inspect.signature(fn).parameters` and looks up each parameter name in the `deps` dict. This is how the framework knows which registry key to load and which function argument to inject the value into at execution time.
-
-At execution time, the executor uses the parallel tuples produced by this step:
+Dependencies are declared as a list of `AssetKey` objects or plain strings:
 
 ```python
-# dependency_params = ("revenue", "stats")
-# dependencies     = (AssetKey("daily_revenue", "analytics"), AssetKey("user_stats", "analytics"))
+@asset(deps=["raw_users", AssetKey(name="daily_revenue", group="analytics")])
+def my_asset(users: list[dict], revenue: dict) -> dict: ...
+```
 
-for param_name, dep_key in zip(asset_def.dependency_params, asset_def.dependencies):
+**Normalization (`_normalize_deps`):**
+
+String entries are converted to `AssetKey(name=s)` in the default group. `AssetKey` objects pass through unchanged. If `deps` is `None` (source asset with no dependencies), an empty tuple is returned.
+
+**Arity validation:**
+
+The decorator inspects the function's signature using `_get_asset_params(fn)`, which returns all parameter names excluding the skip set (`self`, `cls`, `context`, `partition_key`). It then validates:
+
+```python
+if len(dependencies) != len(params):
+    raise TypeError(
+        f"Asset '{asset_key}' declares {len(dependencies)} dependency(ies) "
+        f"but its function accepts {len(params)} parameter(s). ..."
+    )
+```
+
+This catches mismatches at import time rather than at execution time.
+
+**Positional injection at execution time:**
+
+The executor derives parameter names from `inspect.signature(asset_def.fn)` at execution time and zips them with `asset_def.dependencies` positionally:
+
+```python
+# deps     = [AssetKey("daily_revenue", "analytics"), AssetKey("user_stats", "analytics")]
+# params   = ("revenue", "stats")  — derived from inspect.signature at execution time
+
+sig = inspect.signature(asset_def.fn)
+param_names = [p for p in sig.parameters if p not in SKIP_PARAMS]
+for param_name, dep_key in zip(param_names, asset_def.dependencies, strict=True):
     kwargs[param_name] = io_manager.load(dep_key)
 #   kwargs["revenue"]  = io_manager.load(AssetKey("daily_revenue", "analytics"))
 
 asset_def.fn(**kwargs)
-# dashboard(revenue=<loaded value>, stats=<loaded value>)
+# my_asset(revenue=<loaded value>, stats=<loaded value>)
 ```
 
-So the apparent duplication between `deps={"revenue": ...}` and `def dashboard(revenue: ...)` is intentional — `deps` maps the parameter name to the correct registry key, and the parameter name is the local variable the function receives.
+This means parameter names are independent of dependency names — the function can use any local variable name, and the positional order in the `deps` list determines which dependency maps to which parameter.
 
 **Example:**
 
 ```python
-@asset(deps={
-    "revenue": AssetKey(name="daily_revenue", group="analytics"),
-    "stats": AssetKey(name="user_stats", group="analytics"),
-})
+@asset(deps=[
+    AssetKey(name="daily_revenue", group="analytics"),
+    AssetKey(name="user_stats", group="analytics"),
+])
 def dashboard(revenue: dict, stats: dict, partition_key: date) -> dict: ...
 ```
 
 Produces:
 - `dependencies = (AssetKey("daily_revenue", "analytics"), AssetKey("user_stats", "analytics"))`
-- `dependency_params = ("revenue", "stats")`
-- `partition_key` is skipped
-
-Without `deps`, the decorator would derive `AssetKey(name="revenue", group="default")` and `AssetKey(name="stats", group="default")` — neither of which exist in the registry, causing a `KeyError` at execution time.
+- `partition_key` is skipped (in `SKIP_PARAMS`)
+- At execution time: `revenue` receives the loaded value of `daily_revenue`, `stats` receives `user_stats`
 
 #### Step 4: Extract Return Type (`_extract_return_type`)
 
@@ -229,13 +263,12 @@ AssetDefinition(
     key=asset_key,               # From Step 2
     fn=wrapped_fn,               # From Step 5
     dependencies=dependencies,   # From Step 3
-    dependency_params=dependency_params,  # From Step 3
     return_type=return_type,     # From Step 4
     description=description or func.__doc__,  # Explicit or docstring
 )
 ```
 
-The invariant `len(dependencies) == len(dependency_params)` is guaranteed by `_extract_dependencies()` building both lists in lockstep.
+The invariant `len(dependencies) == len(non-skipped params)` is guaranteed by the arity validation in Step 3.
 
 #### Step 7: Register to Registry
 
@@ -448,7 +481,8 @@ Executor(
 1. Generate `run_id`, create `ExecutionState`.
 2. Iterate assets in plan order.
 3. For each asset, call `_execute_asset()`:
-   - Load dependencies via `io_manager.load(dep_key)` for each `(param_name, dep_key)` pair.
+   - Derive parameter names from `inspect.signature(asset_def.fn)`, excluding `SKIP_PARAMS`.
+   - Load dependencies via `io_manager.load(dep_key)` for each `(param_name, dep_key)` pair (positional zip).
    - Inject `partition_key` if the function accepts it (checked via `inspect.signature`).
    - Invoke `asset_def.fn(**kwargs)`.
    - Store result via `io_manager.store(key, result_value)`.
@@ -557,17 +591,21 @@ Both resolve an `ExecutionPlan`, create the appropriate executor, and return `Ex
 
 ### Executor Integration
 
-The executor uses IOManager in a **load-execute-store** cycle:
+The executor uses IOManager in a **load-execute-store** cycle. Parameter names are derived from `inspect.signature(asset_def.fn)` at execution time and zipped positionally with `asset_def.dependencies`:
 
 ```python
-# 1. Load each dependency
-for param_name, dep_key in zip(asset_def.dependency_params, asset_def.dependencies):
+# 1. Derive parameter names from function signature
+sig = inspect.signature(asset_def.fn)
+param_names = [p for p in sig.parameters if p not in SKIP_PARAMS]
+
+# 2. Load each dependency
+for param_name, dep_key in zip(param_names, asset_def.dependencies, strict=True):
     kwargs[param_name] = self.io_manager.load(dep_key)
 
-# 2. Execute asset function
+# 3. Execute asset function
 result_value = asset_def.fn(**kwargs)
 
-# 3. Store result
+# 4. Store result
 self.io_manager.store(key, result_value)
 ```
 

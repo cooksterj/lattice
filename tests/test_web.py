@@ -35,12 +35,12 @@ def populated_registry(registry: AssetRegistry) -> AssetRegistry:
         """Raw source data."""
         return {"value": 1}
 
-    @asset(registry=registry)
+    @asset(registry=registry, deps=["source_data"])
     def processed(source_data: dict) -> dict:
         """Processed data."""
         return {"processed": source_data["value"] * 2}
 
-    @asset(registry=registry, key=AssetKey(name="stats", group="analytics"))
+    @asset(registry=registry, key=AssetKey(name="stats", group="analytics"), deps=["processed"])
     def analytics_stats(processed: dict) -> int:
         """Analytics statistics."""
         return processed["processed"]
@@ -715,11 +715,11 @@ class TestAssetLogStreaming:
         def asset_a() -> str:
             return "a"
 
-        @asset(registry=test_registry)
+        @asset(registry=test_registry, deps=["asset_a"])
         def asset_b(asset_a: str) -> str:
             return f"b({asset_a})"
 
-        @asset(registry=test_registry)
+        @asset(registry=test_registry, deps=["asset_b"])
         def asset_c(asset_b: str) -> str:
             return f"c({asset_b})"
 
@@ -741,12 +741,12 @@ class TestAssetLogStreaming:
             log_mod.getLogger("lattice").info("a executing")
             return "a"
 
-        @asset(registry=test_registry)
+        @asset(registry=test_registry, deps=["asset_a"])
         def asset_b(asset_a: str) -> str:
             log_mod.getLogger("lattice").info("b executing")
             return f"b({asset_a})"
 
-        @asset(registry=test_registry)
+        @asset(registry=test_registry, deps=["asset_b"])
         def asset_c(asset_b: str) -> str:
             log_mod.getLogger("lattice").info("c executing")
             return f"c({asset_b})"

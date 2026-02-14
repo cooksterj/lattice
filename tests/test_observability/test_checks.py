@@ -245,7 +245,6 @@ class TestRegisterCheck:
             key=asset_key,
             fn=lambda: 1,
             dependencies=(),
-            dependency_params=(),
             return_type=int,
             description=None,
         )
@@ -267,7 +266,6 @@ class TestRegisterCheck:
             key=asset_key,
             fn=lambda: 1,
             dependencies=(),
-            dependency_params=(),
             return_type=int,
             description=None,
         )
@@ -289,7 +287,6 @@ class TestRegisterCheck:
             key=asset_key,
             fn=lambda: 1,
             dependencies=(),
-            dependency_params=(),
             return_type=int,
             description=None,
         )

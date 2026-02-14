@@ -121,7 +121,7 @@ def shipping_rates_positive(data: list[dict]) -> bool:
 
 
 # Cleaned/transformed assets
-@asset
+@asset(deps=["raw_users"])
 def cleaned_users(raw_users: list[dict]) -> list[dict]:
     """Users with validated emails."""
     logger.info("Cleaning user records (%d input)...", len(raw_users))
@@ -140,7 +140,7 @@ def no_users_lost_in_cleaning(data: list[dict]) -> bool:
     return len(data) > 0
 
 
-@asset
+@asset(deps=["raw_orders"])
 def cleaned_orders(raw_orders: list[dict]) -> list[dict]:
     """Orders with valid amounts."""
     logger.info("Validating order amounts (%d input)...", len(raw_orders))
@@ -154,7 +154,7 @@ def cleaned_orders(raw_orders: list[dict]) -> list[dict]:
 
 
 # Joined assets
-@asset
+@asset(deps=["cleaned_users", "cleaned_orders"])
 def user_orders(cleaned_users: list[dict], cleaned_orders: list[dict]) -> list[dict]:
     """Orders enriched with user information (slow join operation)."""
     logger.info("Joining %d orders with %d users...", len(cleaned_orders), len(cleaned_users))
@@ -173,7 +173,7 @@ def all_orders_have_users(data: list[dict]) -> bool:
 
 
 # Analytics assets (in analytics group)
-@asset(key=AssetKey(name="daily_revenue", group="analytics"))
+@asset(group="analytics", deps=["user_orders"])
 def daily_revenue(user_orders: list[dict]) -> dict:
     """Daily revenue aggregation."""
     logger.info("Aggregating daily revenue from %d orders...", len(user_orders))
@@ -195,7 +195,7 @@ def revenue_has_date(data: dict) -> bool:
     return "date" in data and data["date"] is not None
 
 
-@asset(key=AssetKey(name="user_stats", group="analytics"))
+@asset(group="analytics", deps=["cleaned_users", "user_orders"])
 def user_stats(cleaned_users: list[dict], user_orders: list[dict]) -> dict:
     """User statistics and metrics."""
     logger.info("Computing user statistics...")
@@ -216,7 +216,7 @@ def users_with_orders_not_greater_than_total(data: dict) -> bool:
     return data.get("users_with_orders", 0) <= data.get("total_users", 0)
 
 
-@asset(key=AssetKey(name="product_performance", group="analytics"))
+@asset(group="analytics", deps=["raw_products", "user_orders"])
 def product_performance(raw_products: list[dict], user_orders: list[dict]) -> dict:
     """Product sales performance."""
     logger.info("Analyzing product performance across %d products...", len(raw_products))
@@ -230,7 +230,7 @@ def product_performance(raw_products: list[dict], user_orders: list[dict]) -> di
     return result
 
 
-@asset(key=AssetKey(name="inventory_status", group="analytics"))
+@asset(group="analytics", deps=["raw_inventory", "raw_suppliers"])
 def inventory_status(raw_inventory: list[dict], raw_suppliers: list[dict]) -> dict:
     """Current inventory status with supplier info."""
     logger.info(
@@ -254,7 +254,7 @@ def has_at_least_one_supplier(data: dict) -> bool:
     return data.get("suppliers", 0) >= 1
 
 
-@asset(key=AssetKey(name="shipping_costs", group="analytics"))
+@asset(group="analytics", deps=["raw_shipping", "user_orders"])
 def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
     """Shipping cost analysis."""
     logger.info("Calculating shipping costs for %d orders...", len(user_orders))
@@ -265,14 +265,14 @@ def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
     return result
 
 
-# Final dashboard asset - uses deps to specify grouped dependencies
+# Final dashboard asset
 @asset(
-    key=AssetKey(name="executive_dashboard", group="analytics"),
-    deps={
-        "revenue": AssetKey(name="daily_revenue", group="analytics"),
-        "stats": AssetKey(name="user_stats", group="analytics"),
-        "products": AssetKey(name="product_performance", group="analytics"),
-    },
+    group="analytics",
+    deps=[
+        AssetKey(name="daily_revenue", group="analytics"),
+        AssetKey(name="user_stats", group="analytics"),
+        AssetKey(name="product_performance", group="analytics"),
+    ],
 )
 def executive_dashboard(revenue: dict, stats: dict, products: dict) -> dict:
     """Executive summary dashboard."""

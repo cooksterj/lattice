@@ -17,7 +17,7 @@ class TestMaterializeWithObservability:
         def source() -> int:
             return 42
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def double(source: int) -> int:
             return source * 2
 
@@ -55,7 +55,7 @@ class TestMaterializeWithObservability:
         def source() -> int:
             return 42
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def transform(source: int) -> int:
             return source * 2
 
@@ -151,7 +151,7 @@ class TestMaterializeWithObservability:
         def source() -> int:
             return 42
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def target(source: int) -> int:
             return source * 2
 
@@ -233,7 +233,7 @@ class TestMaterializeWithObservability:
         def source() -> int:
             return 42
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def transform(source: int) -> int:
             return source * 2
 
@@ -275,11 +275,11 @@ class TestEndToEndWorkflow:
             def raw_data() -> list:
                 return [1, 2, 3, 4, 5]
 
-            @asset(registry=registry)
+            @asset(registry=registry, deps=["raw_data"])
             def processed(raw_data: list) -> list:
                 return [x * 2 for x in raw_data]
 
-            @asset(registry=registry)
+            @asset(registry=registry, deps=["processed"])
             def summary(processed: list) -> dict:
                 return {"sum": sum(processed), "count": len(processed)}
 

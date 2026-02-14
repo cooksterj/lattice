@@ -322,11 +322,6 @@ class AssetWithChecks:
         return self._asset_def.dependencies
 
     @property
-    def dependency_params(self) -> tuple[str, ...]:
-        """Get the dependency parameter names."""
-        return self._asset_def.dependency_params
-
-    @property
     def return_type(self) -> Any:
         """Get the return type annotation."""
         return self._asset_def.return_type

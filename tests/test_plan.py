@@ -33,11 +33,11 @@ class TestExecutionPlanResolve:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["b"])
         def c(b: int) -> int:
             return b + 1
 
@@ -55,7 +55,7 @@ class TestExecutionPlanResolve:
         def source() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["source"])
         def target(source: int) -> int:
             return source + 1
 
@@ -78,7 +78,7 @@ class TestExecutionPlanResolve:
         def dep() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["dep"])
         def main(dep: int) -> int:
             return dep * 2
 
@@ -105,15 +105,15 @@ class TestExecutionPlanResolve:
         def root() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def left(root: int) -> int:
             return root * 2
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["root"])
         def right(root: int) -> int:
             return root * 3
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["left", "right"])
         def leaf(left: int, right: int) -> int:
             return left + right
 
@@ -153,7 +153,7 @@ class TestExecutionPlanProtocols:
         def a() -> int:
             return 1
 
-        @asset(registry=registry)
+        @asset(registry=registry, deps=["a"])
         def b(a: int) -> int:
             return a + 1
 
