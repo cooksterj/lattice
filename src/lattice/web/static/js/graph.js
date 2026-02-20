@@ -507,6 +507,7 @@ class LatticeGraph {
                     <div class="font-display font-bold" style="color: #68b5c2;">${d.name}</div>
                     <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
                     ${d.return_type ? `<div style="color: #c45270; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
+                    <div style="color: #5a5a72; font-size: 0.65rem; margin-top: 6px; letter-spacing: 0.05em;">CLICK: details &nbsp;|&nbsp; SHIFT+CLICK: select</div>
                 `;
                 tooltip.style.opacity = '1';
                 this.highlightConnections(d);
@@ -522,7 +523,13 @@ class LatticeGraph {
             .on('click', (event, d) => {
                 if (event.defaultPrevented) return; // Ignore drag-end clicks (D3 pattern)
                 event.stopPropagation();
-                this.handleNodeClick(d);
+                if (event.shiftKey) {
+                    // Shift+click: select for execution (old behavior)
+                    this.handleNodeClick(d);
+                } else {
+                    // Normal click: navigate to asset detail page
+                    window.location.href = '/asset/' + encodeURIComponent(d.id);
+                }
             });
 
         // Close sidebar

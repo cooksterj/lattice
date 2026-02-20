@@ -1096,3 +1096,140 @@ class TestMemoryPanelPositioning:
         """graph.js removes sidebar-open class from memory-panel when sidebar closes."""
         js = self._read_js()
         assert "classList.remove('sidebar-open')" in js
+
+
+class TestAssetCatalogPage:
+    """Tests for /assets page and /api/assets endpoint (AC-2, AC-5)."""
+
+    def test_assets_page_returns_html(self, populated_client: TestClient) -> None:
+        """GET /assets returns 200 with HTML content."""
+        response = populated_client.get("/assets")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+
+    def test_assets_page_contains_catalog_elements(self, populated_client: TestClient) -> None:
+        """Response contains ASSET CATALOG heading."""
+        response = populated_client.get("/assets")
+        assert "ASSET CATALOG" in response.text
+
+    def test_assets_api_returns_list(self, populated_client: TestClient) -> None:
+        """GET /api/assets returns a JSON list."""
+        response = populated_client.get("/api/assets")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) == 3
+
+    def test_assets_api_contains_expected_fields(self, populated_client: TestClient) -> None:
+        """Each item has id, name, group, dependency_count, dependent_count, check_count."""
+        response = populated_client.get("/api/assets")
+        data = response.json()
+        expected_fields = {
+            "id",
+            "name",
+            "group",
+            "dependency_count",
+            "dependent_count",
+            "check_count",
+        }
+        for item in data:
+            assert expected_fields.issubset(item.keys())
+
+    def test_assets_api_empty_when_no_assets(self, client: TestClient) -> None:
+        """Returns empty list when no assets registered."""
+        response = client.get("/api/assets")
+        assert response.status_code == 200
+        assert response.json() == []
+
+
+class TestAssetCatalogSidebar:
+    """Tests for sidebar navigation icon for assets (AC-3)."""
+
+    TEMPLATES_DIR = TEMPLATES_DIR
+    STATIC_DIR = STATIC_DIR
+
+    def test_base_template_has_assets_sidebar_icon(self) -> None:
+        """base.html contains href='/assets' and current_page == 'assets' condition."""
+        html = (self.TEMPLATES_DIR / "base.html").read_text()
+        assert 'href="/assets"' in html
+        assert "current_page == 'assets'" in html
+
+    def test_assets_page_has_active_sidebar(self, populated_client: TestClient) -> None:
+        """GET /assets response contains the active class on the assets sidebar icon."""
+        response = populated_client.get("/assets")
+        # The Jinja template renders 'active' when current_page == 'assets'
+        text = response.text
+        has_active = 'class="sidebar-icon active"' in text or "sidebar-icon  active" in text
+        assert has_active
+
+
+class TestGraphNodeNavigation:
+    """Static analysis tests for graph.js click-to-navigate behavior (AC-1)."""
+
+    JS_PATH = STATIC_DIR / "js" / "graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_graph_js_click_navigates_to_asset_detail(self) -> None:
+        """graph.js contains navigation to /asset/ in the click handler."""
+        js = self._read_js()
+        assert "window.location.href = '/asset/' +" in js
+
+    def test_graph_js_shift_click_selects_for_execution(self) -> None:
+        """Click handler checks event.shiftKey for execution selection."""
+        js = self._read_js()
+        assert "event.shiftKey" in js or "shiftKey" in js
+
+    def test_graph_js_encodes_asset_id(self) -> None:
+        """encodeURIComponent is used in the navigation URL."""
+        js = self._read_js()
+        assert "encodeURIComponent(d.id)" in js
+
+
+class TestAssetDetailBackNavigation:
+    """Static analysis tests for asset_detail.html back navigation (AC-4)."""
+
+    TEMPLATES_DIR = TEMPLATES_DIR
+
+    def _read_template(self) -> str:
+        return (self.TEMPLATES_DIR / "asset_detail.html").read_text()
+
+    def test_asset_detail_uses_history_back(self) -> None:
+        """asset_detail.html contains history.back() for back navigation."""
+        html = self._read_template()
+        assert "history.back()" in html
+
+    def test_asset_detail_no_hardcoded_home_link(self) -> None:
+        """Back button does not use a hardcoded href='/' navigation target."""
+        html = self._read_template()
+        # The back link uses onclick + history.back(), not a direct href="/"
+        # Check that the back-link element uses href="#" (placeholder) not href="/"
+        assert 'class="back-link"' in html
+        # Ensure the back link href is "#" not "/"
+        import re
+
+        back_link_match = re.search(r'<a\s+href="([^"]*)"[^>]*class="back-link"', html)
+        assert back_link_match is not None
+        assert back_link_match.group(1) == "#"
+
+
+class TestAssetCatalogSchema:
+    """Tests for AssetCatalogItemSchema."""
+
+    def test_asset_catalog_item_schema_fields(self) -> None:
+        """AssetCatalogItemSchema has expected fields."""
+        from lattice.web.schemas import AssetCatalogItemSchema
+
+        item = AssetCatalogItemSchema(
+            id="test_asset",
+            name="test_asset",
+            group="default",
+        )
+        assert item.id == "test_asset"
+        assert item.name == "test_asset"
+        assert item.group == "default"
+        assert item.description is None
+        assert item.dependency_count == 0
+        assert item.dependent_count == 0
+        assert item.check_count == 0

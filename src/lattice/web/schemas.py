@@ -27,6 +27,20 @@ class NodeSchema(BaseModel):
     checks: list[CheckSchema] = []
 
 
+class AssetCatalogItemSchema(BaseModel):
+    """Summary schema for asset catalog listing."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    group: str
+    description: str | None = None
+    dependency_count: int = 0
+    dependent_count: int = 0
+    check_count: int = 0
+
+
 class EdgeSchema(BaseModel):
     """Graph edge representing a dependency relationship."""
 

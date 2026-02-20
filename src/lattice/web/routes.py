@@ -15,6 +15,7 @@ from lattice.observability import get_global_check_registry
 from lattice.plan import ExecutionPlan
 from lattice.registry import AssetRegistry
 from lattice.web.schemas import (
+    AssetCatalogItemSchema,
     AssetDetailSchema,
     CheckSchema,
     EdgeSchema,
@@ -53,6 +54,11 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     async def runs_page(request: Request) -> HTMLResponse:
         """Serve the active runs monitoring page."""
         return templates.TemplateResponse(request, "runs.html", {"current_page": "runs"})
+
+    @router.get("/assets", response_class=HTMLResponse)
+    async def assets_page(request: Request) -> HTMLResponse:
+        """Serve the asset catalog page."""
+        return templates.TemplateResponse(request, "assets.html", {"current_page": "assets"})
 
     @router.get("/asset/{key:path}/live", response_class=HTMLResponse)
     async def asset_live(request: Request, key: str) -> HTMLResponse:
@@ -112,6 +118,31 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     edges.append(EdgeSchema(source=str(dep), target=node_id))
 
         return GraphSchema(nodes=nodes, edges=edges)
+
+    @router.get("/api/assets", response_model=list[AssetCatalogItemSchema])
+    async def list_assets() -> list[AssetCatalogItemSchema]:
+        """List all registered assets for the catalog."""
+        graph = DependencyGraph.from_registry(registry)
+        check_registry = get_global_check_registry()
+
+        items: list[AssetCatalogItemSchema] = []
+        for asset_def in registry:
+            key = asset_def.key
+            asset_checks = check_registry.get_checks(key)
+
+            items.append(
+                AssetCatalogItemSchema(
+                    id=str(key),
+                    name=key.name,
+                    group=key.group,
+                    description=asset_def.description,
+                    dependency_count=len(asset_def.dependencies),
+                    dependent_count=len(graph.reverse_adjacency.get(key, ())),
+                    check_count=len(asset_checks),
+                )
+            )
+
+        return items
 
     @router.get("/api/assets/{key:path}", response_model=AssetDetailSchema)
     async def get_asset(key: str) -> AssetDetailSchema:
