@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/cooksterj/lattice/compare/v0.7.0...v0.8.0) (2026-02-20)
+
+
+### Features
+
+* Core and web architecture markdown documents to describe functionality have been added. ([0d7394b](https://github.com/cooksterj/lattice/commit/0d7394ba661f7ada37d57fea1ca53c892ef07ca7))
+* Implementation of phase 7. ([0a2aacf](https://github.com/cooksterj/lattice/commit/0a2aacf31475f85eac52ac6ff75328aae89fa01e))
+* Moved all sub-functions up a level and added testing. ([400cd84](https://github.com/cooksterj/lattice/commit/400cd84786c1dd12123b9b3449b94c3a95610da9))
+* The asset dependency scheme has been decoupled from the function declaration.  It is now handled directly in the asset decorator. ([353f17b](https://github.com/cooksterj/lattice/commit/353f17be9f58f9ba6375e6544355d26e2ceb437c))
+* Updates to the lattice_demo_run database to facilitate the persistance of recent updates. ([36da1de](https://github.com/cooksterj/lattice/commit/36da1de44afa218487ab5182c0546a4754f80988))
+
 ## [0.7.0](https://github.com/cooksterj/lattice/compare/v0.6.0...v0.7.0) (2026-02-08)
 
 
