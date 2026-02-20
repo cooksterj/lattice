@@ -1233,3 +1233,41 @@ class TestAssetCatalogSchema:
         assert item.dependency_count == 0
         assert item.dependent_count == 0
         assert item.check_count == 0
+
+
+class TestHeaderSidebarOffset:
+    """Static analysis tests for LAT-18: header offset accounts for sidebar rail."""
+
+    TEMPLATES_DIR = TEMPLATES_DIR
+
+    def _get_header_line(self, filename: str) -> str:
+        """Extract the <header ...> tag line from a template file."""
+        html = (self.TEMPLATES_DIR / filename).read_text()
+        for line in html.splitlines():
+            if "<header" in line:
+                return line
+        raise AssertionError(f"No <header tag found in {filename}")
+
+    def test_assets_header_not_left_zero(self) -> None:
+        """assets.html header uses left-[52px], not left-0."""
+        header_line = self._get_header_line("assets.html")
+        assert "left-[52px]" in header_line
+        assert "left-0" not in header_line
+
+    def test_history_header_not_left_zero(self) -> None:
+        """history.html header uses left-[52px], not left-0."""
+        header_line = self._get_header_line("history.html")
+        assert "left-[52px]" in header_line
+        assert "left-0" not in header_line
+
+    def test_asset_detail_header_not_left_zero(self) -> None:
+        """asset_detail.html header uses left-[52px], not left-0."""
+        header_line = self._get_header_line("asset_detail.html")
+        assert "left-[52px]" in header_line
+        assert "left-0" not in header_line
+
+    def test_graph_page_header_unchanged(self) -> None:
+        """index.html header still uses absolute positioning (graph page unaffected)."""
+        header_line = self._get_header_line("index.html")
+        assert "absolute" in header_line
+        assert "fixed" not in header_line
