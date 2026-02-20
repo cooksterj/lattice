@@ -1044,3 +1044,55 @@ class TestAssetHistoryAPI:
         data = response.json()
         assert data["total_runs"] == 0
         assert data["runs"] == []
+
+
+class TestMemoryPanelPositioning:
+    """Static analysis tests for LAT-16: memory panel not clipped by sidebar rail."""
+
+    CSS_PATH = STATIC_DIR / "css" / "styles.css"
+    JS_PATH = STATIC_DIR / "js" / "graph.js"
+
+    def _read_css(self) -> str:
+        return self.CSS_PATH.read_text()
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_memory_panel_left_accounts_for_sidebar_rail(self) -> None:
+        """Memory panel left offset accounts for the 52px sidebar rail."""
+        css = self._read_css()
+        assert "left: calc(52px + 1rem)" in css
+
+    def test_memory_panel_sidebar_open_rule_exists(self) -> None:
+        """.memory-panel.sidebar-open rule shifts panel when detail sidebar is open."""
+        css = self._read_css()
+        assert ".memory-panel.sidebar-open" in css
+        assert "left: calc(24rem + 1rem)" in css
+
+    def test_memory_panel_transition_includes_left(self) -> None:
+        """Memory panel transition includes left for smooth repositioning."""
+        css = self._read_css()
+        import re
+
+        panel_match = re.search(
+            r"\.memory-panel\s*\{[^}]*transition:[^;]*left[^;]*;",
+            css,
+            re.DOTALL,
+        )
+        assert panel_match is not None, "memory-panel transition should include 'left'"
+
+    def test_memory_panel_hidden_translatey(self) -> None:
+        """.memory-panel.hidden still uses translateY(120%) for slide-out animation."""
+        css = self._read_css()
+        assert "translateY(120%)" in css
+
+    def test_js_adds_sidebar_open_to_memory_panel(self) -> None:
+        """graph.js adds sidebar-open class to memory-panel when sidebar opens."""
+        js = self._read_js()
+        assert "getElementById('memory-panel')" in js
+        assert "classList.add('sidebar-open')" in js
+
+    def test_js_removes_sidebar_open_from_memory_panel(self) -> None:
+        """graph.js removes sidebar-open class from memory-panel when sidebar closes."""
+        js = self._read_js()
+        assert "classList.remove('sidebar-open')" in js
