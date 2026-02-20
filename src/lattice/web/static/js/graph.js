@@ -639,6 +639,8 @@ class LatticeGraph {
         // Move execution controls out of the way
         const execControls = document.querySelector('.execution-controls');
         if (execControls) execControls.classList.add('sidebar-open');
+        const memPanel = document.getElementById('memory-panel');
+        if (memPanel) memPanel.classList.add('sidebar-open');
 
         try {
             const response = await fetch(`/api/assets/${encodeURIComponent(node.id)}`);
@@ -747,6 +749,8 @@ class LatticeGraph {
         if (sidebar) sidebar.classList.add('translate-x-full');
         const execControls = document.querySelector('.execution-controls');
         if (execControls) execControls.classList.remove('sidebar-open');
+        const memPanel = document.getElementById('memory-panel');
+        if (memPanel) memPanel.classList.remove('sidebar-open');
     }
 
     updateExecuteButtonLabel() {
