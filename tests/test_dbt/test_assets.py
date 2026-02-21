@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +14,9 @@ from lattice.dbt.assets import (
     _build_asset_key,
     _build_dependency_keys,
     _create_stub_fn,
+    _filter_models,
+    _parse_select,
+    _run_dbt_parse,
     dbt_assets,
     load_dbt_manifest,
 )
@@ -274,3 +279,399 @@ class TestDbtAssetsDecorator:
 
         assert my_project.__name__ == "my_project"
         assert my_project.__doc__ == "My project docstring."
+
+    def test_decorator_with_project_dir(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """Decorator should work with project_dir kwarg."""
+        project_dir = minimal_manifest.parent
+
+        def fake_run(*_args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run):
+            # Place manifest where _run_dbt_parse expects it
+            target_dir = project_dir / "target"
+            target_dir.mkdir(exist_ok=True)
+            import shutil
+
+            shutil.copy(minimal_manifest, target_dir / "manifest.json")
+
+            @dbt_assets(project_dir=project_dir, registry=registry)
+            def my_project(assets):
+                pass
+
+        assert len(registry) == 2
+
+
+class TestRunDbtParse:
+    """Tests for the _run_dbt_parse helper."""
+
+    def test_missing_directory(self, tmp_path: Path) -> None:
+        """Non-existent directory should raise NotADirectoryError."""
+        with pytest.raises(NotADirectoryError):
+            _run_dbt_parse(tmp_path / "nonexistent")
+
+    def test_not_a_directory(self, tmp_path: Path) -> None:
+        """A file path should raise NotADirectoryError."""
+        file_path = tmp_path / "somefile.txt"
+        file_path.write_text("hello")
+        with pytest.raises(NotADirectoryError):
+            _run_dbt_parse(file_path)
+
+    def test_parse_failure_raises(self, tmp_path: Path) -> None:
+        """Non-zero exit code should raise RuntimeError."""
+
+        def fake_run(*_args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(returncode=1, stderr="Compilation Error")
+
+        with (
+            patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run),
+            pytest.raises(RuntimeError, match="Compilation Error"),
+        ):
+            _run_dbt_parse(tmp_path)
+
+    def test_manifest_not_found_after_parse(self, tmp_path: Path) -> None:
+        """FileNotFoundError when manifest missing after successful parse."""
+
+        def fake_run(*_args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with (
+            patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run),
+            pytest.raises(FileNotFoundError, match="manifest.json not found"),
+        ):
+            _run_dbt_parse(tmp_path)
+
+    def test_successful_parse(self, tmp_path: Path) -> None:
+        """Successful parse returns manifest path."""
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        manifest = target_dir / "manifest.json"
+        manifest.write_text("{}")
+
+        def fake_run(*_args, **kwargs):
+            from types import SimpleNamespace
+
+            assert kwargs["cwd"] == tmp_path
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run):
+            result = _run_dbt_parse(tmp_path)
+
+        assert result == manifest
+
+    def test_calls_dbt_with_correct_args(self, tmp_path: Path) -> None:
+        """Verify dbt is called with --no-partial-parse and correct cwd."""
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        (target_dir / "manifest.json").write_text("{}")
+
+        def fake_run(cmd, **kwargs):
+            from types import SimpleNamespace
+
+            assert cmd == ["dbt", "parse", "--no-partial-parse"]
+            assert kwargs["cwd"] == tmp_path
+            assert kwargs["capture_output"] is True
+            assert kwargs["text"] is True
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run):
+            _run_dbt_parse(tmp_path)
+
+
+class TestProjectDirIntegration:
+    """Tests for project_dir parameter in load_dbt_manifest and dbt_assets."""
+
+    def test_both_params_raises(self, tmp_path: Path, registry: AssetRegistry) -> None:
+        """Providing both manifest_path and project_dir raises ValueError."""
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            load_dbt_manifest(
+                tmp_path / "manifest.json",
+                project_dir=tmp_path,
+                registry=registry,
+            )
+
+    def test_neither_param_raises(self, registry: AssetRegistry) -> None:
+        """Providing neither manifest_path nor project_dir raises ValueError."""
+        with pytest.raises(ValueError, match="must be provided"):
+            load_dbt_manifest(registry=registry)
+
+    def test_project_dir_runs_dbt_parse(self, tmp_path: Path, registry: AssetRegistry) -> None:
+        """project_dir triggers dbt parse and loads the resulting manifest."""
+        # Write a minimal manifest where dbt parse would produce it.
+        target_dir = tmp_path / "target"
+        target_dir.mkdir()
+        manifest_data = {
+            "metadata": {"dbt_version": "1.7.0"},
+            "nodes": {
+                "model.proj.my_model": {
+                    "unique_id": "model.proj.my_model",
+                    "name": "my_model",
+                    "resource_type": "model",
+                    "description": "A model",
+                    "config": {"materialized": "table"},
+                    "depends_on": {"nodes": []},
+                    "schema": "public",
+                    "database": "db",
+                    "tags": [],
+                },
+            },
+        }
+        (target_dir / "manifest.json").write_text(json.dumps(manifest_data), encoding="utf-8")
+
+        def fake_run(*_args, **kwargs):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(returncode=0, stderr="")
+
+        with patch("lattice.dbt.assets.subprocess.run", side_effect=fake_run):
+            assets = load_dbt_manifest(project_dir=tmp_path, registry=registry)
+
+        assert len(assets) == 1
+        assert assets[0].key.name == "my_model"
+        assert len(registry) == 1
+
+
+class TestParseSelect:
+    """Tests for _parse_select helper."""
+
+    def test_valid_tag_selector(self) -> None:
+        """'tag:silver' should return ('tag', 'silver')."""
+        assert _parse_select("tag:silver") == ("tag", "silver")
+
+    def test_unsupported_selector(self) -> None:
+        """Non-tag selectors should raise ValueError."""
+        with pytest.raises(ValueError, match="Unsupported selector type"):
+            _parse_select("config:materialized")
+
+    def test_missing_value(self) -> None:
+        """'tag:' with no value should raise ValueError."""
+        with pytest.raises(ValueError, match="must not be empty"):
+            _parse_select("tag:")
+
+    def test_no_colon(self) -> None:
+        """Bare word without colon should raise ValueError."""
+        with pytest.raises(ValueError, match="expected format"):
+            _parse_select("silver")
+
+
+class TestFilterModels:
+    """Tests for _filter_models helper."""
+
+    def test_filters_by_tag(self) -> None:
+        """Only models with the matching tag should be returned."""
+        m1 = DbtModelInfo(unique_id="model.p.a", name="a", tags=("core",))
+        m2 = DbtModelInfo(unique_id="model.p.b", name="b", tags=("staging",))
+        m3 = DbtModelInfo(unique_id="model.p.c", name="c", tags=("core", "staging"))
+
+        result = _filter_models([m1, m2, m3], "tag:core")
+        assert [m.name for m in result] == ["a", "c"]
+
+    def test_no_matches_returns_empty(self) -> None:
+        """No matching tag should return an empty list."""
+        m1 = DbtModelInfo(unique_id="model.p.a", name="a", tags=("staging",))
+        assert _filter_models([m1], "tag:core") == []
+
+    def test_all_match(self) -> None:
+        """All models returned when all have the tag."""
+        models = [
+            DbtModelInfo(unique_id="model.p.a", name="a", tags=("core",)),
+            DbtModelInfo(unique_id="model.p.b", name="b", tags=("core",)),
+        ]
+        result = _filter_models(models, "tag:core")
+        assert len(result) == 2
+
+
+class TestSelectIntegration:
+    """Integration tests for select parameter with load_dbt_manifest and dbt_assets."""
+
+    def test_select_filters_manifest(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
+        """select='tag:core' should only register model_a (tagged 'core')."""
+        assets = load_dbt_manifest(minimal_manifest, select="tag:core", registry=registry)
+        assert len(assets) == 1
+        assert assets[0].key.name == "model_a"
+        assert len(registry) == 1
+
+    def test_select_with_no_matches(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
+        """No models match the tag — empty result and empty registry."""
+        assets = load_dbt_manifest(minimal_manifest, select="tag:nonexistent", registry=registry)
+        assert assets == []
+        assert len(registry) == 0
+
+    def test_decorator_with_select(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
+        """@dbt_assets with select should only register matching models."""
+        received: list = []
+
+        @dbt_assets(manifest=minimal_manifest, select="tag:core", registry=registry)
+        def my_project(assets):
+            received.extend(assets)
+
+        assert len(received) == 1
+        assert received[0].key.name == "model_a"
+        assert len(registry) == 1
+
+    def test_cross_tag_dependencies_preserved(
+        self, tmp_path: Path, registry: AssetRegistry
+    ) -> None:
+        """Filtered models should resolve dependencies on models outside the filter.
+
+        Simulates two decorator calls: one for tag:core, another for
+        tag:core_final where core_final depends on core.  The second
+        call should produce dependency edges pointing to the core models.
+        """
+        manifest_data = {
+            "metadata": {"dbt_version": "1.7.0"},
+            "nodes": {
+                "model.p.upstream": {
+                    "unique_id": "model.p.upstream",
+                    "name": "upstream",
+                    "resource_type": "model",
+                    "description": "Core model",
+                    "config": {"materialized": "table"},
+                    "depends_on": {"nodes": []},
+                    "schema": "public",
+                    "database": "db",
+                    "tags": ["core"],
+                },
+                "model.p.downstream": {
+                    "unique_id": "model.p.downstream",
+                    "name": "downstream",
+                    "resource_type": "model",
+                    "description": "Final model depending on core",
+                    "config": {"materialized": "table"},
+                    "depends_on": {"nodes": ["model.p.upstream"]},
+                    "schema": "public",
+                    "database": "db",
+                    "tags": ["core_final"],
+                },
+            },
+        }
+        manifest = tmp_path / "manifest.json"
+        manifest.write_text(json.dumps(manifest_data), encoding="utf-8")
+
+        # First decorator: register core models
+        load_dbt_manifest(manifest, select="tag:core", registry=registry)
+        assert len(registry) == 1
+
+        # Second decorator: register core_final models
+        assets = load_dbt_manifest(manifest, select="tag:core_final", registry=registry)
+        assert len(registry) == 2
+
+        # The downstream asset should have a dependency on upstream
+        downstream_def = assets[0]
+        assert downstream_def.key.name == "downstream"
+        expected_dep = AssetKey(name="upstream", group=DBT_GROUP)
+        assert expected_dep in downstream_def.dependencies
+
+
+class TestDepsParameter:
+    """Tests for the deps parameter on dbt_assets and load_dbt_manifest."""
+
+    def test_load_manifest_with_deps(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
+        """deps adds upstream dependency edges to every registered model."""
+        # Register core first
+        core_assets = load_dbt_manifest(minimal_manifest, select="tag:core", registry=registry)
+        assert len(core_assets) == 1
+
+        # Register staging with explicit deps on core
+        staging_assets = load_dbt_manifest(
+            minimal_manifest, select="tag:staging", deps=core_assets, registry=registry
+        )
+        assert len(staging_assets) == 1
+
+        staging_def = staging_assets[0]
+        core_key = AssetKey(name="model_a", group=DBT_GROUP)
+        assert core_key in staging_def.dependencies
+
+    def test_deps_deduplicates_with_manifest_deps(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """When manifest already declares a dep, deps should not duplicate it."""
+        # model_b already depends on model_a via manifest depends_on.
+        # Passing model_a as an explicit dep should not create a duplicate.
+        core_assets = load_dbt_manifest(minimal_manifest, select="tag:core", registry=registry)
+        staging_assets = load_dbt_manifest(
+            minimal_manifest, select="tag:staging", deps=core_assets, registry=registry
+        )
+
+        staging_def = staging_assets[0]
+        core_key = AssetKey(name="model_a", group=DBT_GROUP)
+        dep_list = list(staging_def.dependencies)
+        assert dep_list.count(core_key) == 1
+
+    def test_decorator_deps_links_groups(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """@dbt_assets deps parameter links groups via decorated functions."""
+
+        @dbt_assets(manifest=minimal_manifest, select="tag:core", registry=registry)
+        def core_models(assets):
+            pass
+
+        @dbt_assets(
+            manifest=minimal_manifest,
+            select="tag:staging",
+            deps=[core_models],
+            registry=registry,
+        )
+        def final_models(assets):
+            pass
+
+        assert len(registry) == 2
+
+        staging_key = AssetKey(name="model_b", group=DBT_GROUP)
+        staging_def = registry.get(staging_key)
+        core_key = AssetKey(name="model_a", group=DBT_GROUP)
+        assert core_key in staging_def.dependencies
+
+    def test_decorator_stores_dbt_assets_attr(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """Decorated function should have _dbt_assets attribute."""
+
+        @dbt_assets(manifest=minimal_manifest, select="tag:core", registry=registry)
+        def core_models(assets):
+            pass
+
+        assert hasattr(core_models, "_dbt_assets")
+        assert len(core_models._dbt_assets) == 1
+
+    def test_decorator_deps_rejects_non_decorated(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """Passing a non-@dbt_assets function as deps should raise TypeError."""
+
+        def not_decorated(assets):
+            pass
+
+        with pytest.raises(TypeError, match="was not decorated with @dbt_assets"):
+
+            @dbt_assets(
+                manifest=minimal_manifest,
+                deps=[not_decorated],
+                registry=registry,
+            )
+            def final_models(assets):
+                pass
+
+    def test_stub_param_count_includes_deps(
+        self, minimal_manifest: Path, registry: AssetRegistry
+    ) -> None:
+        """Stub function should have params for both manifest and explicit deps."""
+        import inspect
+
+        core_assets = load_dbt_manifest(minimal_manifest, select="tag:core", registry=registry)
+        staging_assets = load_dbt_manifest(
+            minimal_manifest, select="tag:staging", deps=core_assets, registry=registry
+        )
+
+        staging_def = staging_assets[0]
+        sig = inspect.signature(staging_def.fn)
+        assert len(sig.parameters) == len(staging_def.dependencies)

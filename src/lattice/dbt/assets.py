@@ -13,6 +13,7 @@ testing via ``dbt test`` and ``.yml`` schema tests.
 from __future__ import annotations
 
 import logging
+import subprocess
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, TypeVar
@@ -134,9 +135,107 @@ def _create_stub_fn(model: DbtModelInfo, dep_count: int) -> Any:
     return fn
 
 
+def _run_dbt_parse(project_dir: str | Path) -> Path:
+    """Run ``dbt parse`` in the given project directory and return the manifest path.
+
+    Parameters
+    ----------
+    project_dir : str or Path
+        Path to the dbt project root directory.
+
+    Returns
+    -------
+    Path
+        Path to the generated ``target/manifest.json``.
+
+    Raises
+    ------
+    NotADirectoryError
+        If *project_dir* does not exist or is not a directory.
+    RuntimeError
+        If ``dbt parse`` exits with a non-zero return code.
+    FileNotFoundError
+        If the manifest file is not found after a successful parse.
+    """
+    project_dir = Path(project_dir)
+    if not project_dir.is_dir():
+        raise NotADirectoryError(f"project_dir is not a directory: {project_dir}")
+
+    result = subprocess.run(  # noqa: S603, S607
+        ["dbt", "parse", "--no-partial-parse"],
+        cwd=project_dir,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"dbt parse failed (exit {result.returncode}):\n{result.stderr}")
+
+    manifest_path = project_dir / "target" / "manifest.json"
+    if not manifest_path.is_file():
+        raise FileNotFoundError(f"manifest.json not found after dbt parse: {manifest_path}")
+    return manifest_path
+
+
+def _parse_select(select: str) -> tuple[str, str]:
+    """Parse a select expression like ``tag:silver`` into (selector_type, value).
+
+    Parameters
+    ----------
+    select : str
+        A dbt-style select expression.  Currently only ``tag:<value>`` is
+        supported.
+
+    Returns
+    -------
+    tuple of (str, str)
+        The selector type and value, e.g. ``("tag", "silver")``.
+
+    Raises
+    ------
+    ValueError
+        If the expression is not in the form ``tag:<value>``.
+    """
+    if ":" not in select:
+        raise ValueError(f"Invalid select expression {select!r} — expected format 'tag:<value>'")
+    selector_type, _, value = select.partition(":")
+    if selector_type != "tag":
+        raise ValueError(f"Unsupported selector type {selector_type!r} — only 'tag' is supported")
+    if not value:
+        raise ValueError("Tag value must not be empty in select expression")
+    return (selector_type, value)
+
+
+def _filter_models(
+    models: list[DbtModelInfo],
+    select: str,
+) -> list[DbtModelInfo]:
+    """Filter parsed models using a dbt-style select expression.
+
+    Parameters
+    ----------
+    models : list of DbtModelInfo
+        The full list of parsed dbt models.
+    select : str
+        A dbt-style select expression (e.g. ``tag:silver``).
+
+    Returns
+    -------
+    list of DbtModelInfo
+        Only models matching the select expression.
+    """
+    selector_type, value = _parse_select(select)
+    if selector_type == "tag":
+        return [m for m in models if value in m.tags]
+    return models  # pragma: no cover
+
+
 def load_dbt_manifest(
-    manifest_path: str | Path,
+    manifest_path: str | Path | None = None,
     *,
+    project_dir: str | Path | None = None,
+    select: str | None = None,
+    deps: list[AssetDefinition] | None = None,
     registry: AssetRegistry | None = None,
 ) -> list[AssetDefinition]:
     """
@@ -145,10 +244,25 @@ def load_dbt_manifest(
     Each model is registered with ``group="dbt"`` and inter-model
     dependencies are preserved as Lattice dependency edges.
 
+    Exactly one of *manifest_path* or *project_dir* must be provided.
+    When *project_dir* is given, ``dbt parse --no-partial-parse`` is
+    executed automatically and the resulting manifest is loaded.
+
     Parameters
     ----------
-    manifest_path : str or Path
+    manifest_path : str, Path, or None
         Path to the dbt manifest.json file.
+    project_dir : str, Path, or None
+        Path to a dbt project directory.  If provided, ``dbt parse``
+        is run first and the manifest is read from
+        ``<project_dir>/target/manifest.json``.
+    select : str or None
+        Optional dbt-style select expression to filter models.
+        Currently supports ``tag:<value>`` (e.g. ``"tag:silver"``).
+    deps : list of AssetDefinition or None
+        Upstream asset definitions that every model in this load should
+        depend on.  Use this to create explicit group-level dependency
+        edges between separately filtered sets of models.
     registry : AssetRegistry or None
         Target asset registry. Defaults to the global registry.
 
@@ -159,21 +273,38 @@ def load_dbt_manifest(
 
     Raises
     ------
+    ValueError
+        If both or neither of *manifest_path* and *project_dir* are given.
     FileNotFoundError
         If the manifest file does not exist.
     ValueError
-        If the manifest is malformed.
+        If the manifest is malformed or *select* is invalid.
     """
+    if manifest_path is not None and project_dir is not None:
+        raise ValueError(
+            "manifest_path and project_dir are mutually exclusive — "
+            "provide one or the other, not both."
+        )
+    if manifest_path is None and project_dir is None:
+        raise ValueError("Either manifest_path or project_dir must be provided.")
+
+    if project_dir is not None:
+        manifest_path = _run_dbt_parse(project_dir)
+
     target_registry = registry if registry is not None else get_global_registry()
 
-    models = ManifestParser.parse(manifest_path)
-    model_map = {m.unique_id: m for m in models}
+    all_models = ManifestParser.parse(manifest_path)
+    model_map = {m.unique_id: m for m in all_models}
+
+    models = _filter_models(all_models, select) if select is not None else all_models
+    extra_dep_keys = tuple(d.key for d in deps) if deps else ()
 
     asset_defs: list[AssetDefinition] = []
 
     for model in models:
         asset_key = _build_asset_key(model)
-        dependencies = _build_dependency_keys(model, model_map)
+        manifest_deps = _build_dependency_keys(model, model_map)
+        dependencies = tuple(dict.fromkeys(manifest_deps + extra_dep_keys))
         stub_fn = _create_stub_fn(model, len(dependencies))
 
         metadata = {
@@ -208,8 +339,11 @@ def load_dbt_manifest(
 
 
 def dbt_assets(
-    manifest: str | Path,
+    manifest: str | Path | None = None,
     *,
+    project_dir: str | Path | None = None,
+    select: str | None = None,
+    deps: list[Callable[..., Any]] | None = None,
     registry: AssetRegistry | None = None,
 ) -> Callable[[F], F]:
     """
@@ -220,16 +354,41 @@ def dbt_assets(
     registered, receiving the list of created ``AssetDefinition`` objects
     as its sole argument.
 
+    Exactly one of *manifest* or *project_dir* must be provided.
+
     Usage::
 
         @dbt_assets(manifest="path/to/manifest.json")
         def jaffle_shop(assets):
             '''Jaffle-shop dbt project.'''
 
+        @dbt_assets(project_dir="/path/to/dbt/project")
+        def jaffle_shop(assets):
+            '''Runs dbt parse automatically.'''
+
+        @dbt_assets(manifest="path/to/manifest.json", select="tag:core")
+        def core_models(assets):
+            '''Core layer.'''
+
+        @dbt_assets(manifest="path/to/manifest.json", select="tag:core_final", deps=[core_models])
+        def final_models(assets):
+            '''Final layer — depends on core.'''
+
     Parameters
     ----------
-    manifest : str or Path
+    manifest : str, Path, or None
         Path to the dbt manifest.json file.
+    project_dir : str, Path, or None
+        Path to a dbt project directory.  ``dbt parse`` is run
+        automatically before loading the manifest.
+    select : str or None
+        Optional dbt-style select expression to filter models.
+        Currently supports ``tag:<value>`` (e.g. ``"tag:silver"``).
+    deps : list of callables or None
+        Functions previously decorated with ``@dbt_assets``.  Every
+        model registered by *this* decorator will depend on all assets
+        from the referenced groups, creating explicit group-level
+        dependency edges in the DAG.
     registry : AssetRegistry or None
         Target asset registry.  Defaults to the global registry.
 
@@ -241,10 +400,22 @@ def dbt_assets(
     """
 
     def decorator(fn: F) -> F:
+        dep_assets: list[AssetDefinition] = []
+        if deps:
+            for dep_fn in deps:
+                fn_assets = getattr(dep_fn, "_dbt_assets", None)
+                if fn_assets is None:
+                    raise TypeError(f"{dep_fn.__name__!r} was not decorated with @dbt_assets")
+                dep_assets.extend(fn_assets)
+
         assets = load_dbt_manifest(
             manifest,
+            project_dir=project_dir,
+            select=select,
+            deps=dep_assets or None,
             registry=registry,
         )
+        fn._dbt_assets = assets  # type: ignore[attr-defined]
         fn(assets)
         return fn
 
