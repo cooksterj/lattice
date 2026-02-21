@@ -13,7 +13,8 @@ This document maps how the core Lattice classes and functions interact, covering
 5. [IO Manager Abstraction](#io-manager-abstraction)
 6. [Observability Stack](#observability-stack)
 7. [CLI Interface](#cli-interface)
-8. [Diagrams](#diagrams)
+8. [dbt Integration](#dbt-integration)
+9. [Diagrams](#diagrams)
 
 ---
 
@@ -40,6 +41,12 @@ src/lattice/
 ├── logging/                 # Logging configuration
 │   ├── config.py            # configure_logging(), get_logger()
 │   └── logging.conf         # Default INI-style log config
+│
+├── dbt/                    # dbt manifest integration
+│   ├── __init__.py          # Public API: dbt_assets, load_dbt_manifest, DBT_GROUP
+│   ├── models.py            # DbtModelInfo (Pydantic model)
+│   ├── manifest.py          # ManifestParser for manifest.json
+│   └── assets.py            # @dbt_assets decorator, load_dbt_manifest, select/deps filtering
 │
 └── observability/           # Execution monitoring & history
     ├── __init__.py          # materialize_with_observability()
@@ -752,6 +759,150 @@ Output includes status icons, duration, asset counts, and optional sections for 
 
 ---
 
+## dbt Integration
+
+The `dbt/` module reads a dbt `manifest.json` and registers each model as a standard `AssetDefinition` in the Lattice `AssetRegistry` with `group="dbt"`. This allows dbt models to appear alongside native Lattice assets in the DAG graph, with inter-model dependencies preserved as Lattice dependency edges.
+
+dbt tests are intentionally not mapped to Lattice checks — dbt handles its own testing via `dbt test` and `.yml` schema tests.
+
+### DbtModelInfo
+
+`dbt/models.py` &mdash; Frozen Pydantic model representing a single dbt model extracted from the manifest.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `unique_id` | `str` | *(required)* | dbt unique identifier (e.g., `"model.project.model_name"`) |
+| `name` | `str` | *(required)* | Model name |
+| `description` | `str \| None` | `None` | Optional model description |
+| `materialization` | `str` | `"table"` | Materialization strategy (table, view, incremental) |
+| `schema_name` | `str \| None` | `None` | Target schema |
+| `database` | `str \| None` | `None` | Target database |
+| `depends_on` | `tuple[str, ...]` | `()` | Unique IDs of upstream model dependencies |
+| `tags` | `tuple[str, ...]` | `()` | Tags associated with this model |
+
+### ManifestParser
+
+`dbt/manifest.py` &mdash; Reads a dbt `manifest.json` and extracts model nodes.
+
+```python
+models = ManifestParser.parse("path/to/manifest.json")
+```
+
+**Parsing flow:**
+1. Read and validate JSON structure.
+2. Iterate `nodes` — filter to `resource_type == "model"`.
+3. For each model node, extract materialization from `config.materialized`, filter `depends_on.nodes` to model-only refs (prefix `"model."`), and collect `tags`.
+4. Return `list[DbtModelInfo]`.
+
+Non-model resource types (sources, seeds, tests, snapshots) are skipped.
+
+### `load_dbt_manifest()`
+
+`dbt/assets.py` &mdash; The main function that parses a manifest and registers dbt models as Lattice assets.
+
+```python
+def load_dbt_manifest(
+    manifest_path: str | Path | None = None,
+    *,
+    project_dir: str | Path | None = None,
+    select: str | None = None,
+    deps: list[AssetDefinition] | None = None,
+    registry: AssetRegistry | None = None,
+) -> list[AssetDefinition]
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `manifest_path` | `str \| Path \| None` | `None` | Path to manifest.json |
+| `project_dir` | `str \| Path \| None` | `None` | dbt project directory (runs `dbt parse` automatically) |
+| `select` | `str \| None` | `None` | Tag filter expression (e.g., `"tag:silver"`) |
+| `deps` | `list[AssetDefinition] \| None` | `None` | Upstream assets for group-level dependencies |
+| `registry` | `AssetRegistry \| None` | `None` | Target registry (defaults to global) |
+
+Exactly one of `manifest_path` or `project_dir` must be provided. When `project_dir` is given, `dbt parse --no-partial-parse` is executed first and the resulting `target/manifest.json` is loaded.
+
+**Registration flow:**
+
+1. Parse manifest into `list[DbtModelInfo]` via `ManifestParser.parse()`.
+2. Build `model_map` from *all* parsed models (enables cross-filter dependency resolution).
+3. Apply `select` filter if provided (only the filtered subset is registered).
+4. For each model in the filtered set:
+   - Build `AssetKey(name=model.name, group="dbt")`.
+   - Resolve manifest-level dependencies via `model_map` (dependencies outside the manifest are silently dropped).
+   - Merge `deps` keys (deduplicated with `dict.fromkeys` to avoid duplicates when the manifest already declares the same edge).
+   - Create a stub function with matching parameter count (see [Stub Functions](#stub-functions)).
+   - Register `AssetDefinition` with metadata (`source`, `materialization`, `schema`, `database`, `dbt_unique_id`, `tags`).
+
+### `@dbt_assets` Decorator
+
+`dbt/assets.py` &mdash; Decorator wrapping `load_dbt_manifest()` for declarative usage.
+
+```python
+@dbt_assets(manifest="path/to/manifest.json")
+def jaffle_shop(assets):
+    '''All models from the manifest.'''
+
+@dbt_assets(manifest="path/to/manifest.json", select="tag:core")
+def core_models(assets):
+    '''Only core-tagged models.'''
+
+@dbt_assets(manifest="path/to/manifest.json", select="tag:core_final", deps=[core_models])
+def final_models(assets):
+    '''Final layer — every model depends on all core models.'''
+```
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `manifest` | `str \| Path \| None` | `None` | Path to manifest.json |
+| `project_dir` | `str \| Path \| None` | `None` | dbt project directory |
+| `select` | `str \| None` | `None` | Tag filter expression |
+| `deps` | `list[Callable] \| None` | `None` | Previously `@dbt_assets`-decorated functions |
+| `registry` | `AssetRegistry \| None` | `None` | Target registry (defaults to global) |
+
+**Decorator behavior:**
+
+1. If `deps` is provided, extract `_dbt_assets` from each referenced function (raises `TypeError` if the function was not decorated with `@dbt_assets`).
+2. Call `load_dbt_manifest()` with all parameters.
+3. Store the returned asset list on the decorated function as `fn._dbt_assets` (enabling it to be referenced by downstream `deps`).
+4. Call `fn(assets)` once at decoration time.
+5. Return the original function unchanged.
+
+### Select & Tag Filtering
+
+The `select` parameter accepts dbt-style `tag:<value>` expressions to register only a subset of models from the manifest.
+
+**`_parse_select(select)`** splits on `:` and validates:
+- Must have format `tag:<value>` (no bare words, no empty values).
+- Only `tag` is supported as a selector type; other prefixes raise `ValueError`.
+
+**`_filter_models(models, select)`** applies the parsed expression:
+- For `tag`: returns only models where `value in model.tags`.
+
+**Cross-filter dependency resolution:** The `model_map` used for dependency resolution is built from *all* parsed models, not the filtered subset. This means a filtered model can still resolve dependencies on models outside its filter — critical for multi-decorator patterns where `tag:core_final` models depend on `tag:core` models declared by a separate decorator.
+
+### Group-Level Dependencies (`deps`)
+
+The `deps` parameter creates explicit dependency edges between groups of models registered by separate decorator calls. Every model registered by the current call receives additional dependency edges pointing to all assets in the `deps` list.
+
+```
+@dbt_assets(select="tag:core")          # Registers models A, B
+def core(assets): ...
+
+@dbt_assets(select="tag:final", deps=[core])  # Registers model C
+def final(assets): ...
+# C now depends on A and B (plus any manifest-level deps)
+```
+
+Dependency keys from `deps` are merged with manifest-level dependencies and deduplicated, so if the manifest already declares `C -> A`, the edge is not duplicated.
+
+### Stub Functions
+
+Each dbt model is registered with a generated stub function that satisfies the `AssetDefinition.fn` contract (parameter count must match dependency count). Stubs are generated via `exec()` with named parameters (`dep_0`, `dep_1`, ...) because `inspect.signature` on `*args` functions would break the executor's strict positional zip.
+
+Stubs return a metadata dict (`dbt_model`, `materialization`, `schema`, `database`) but are not intended to be invoked during real pipeline runs — dbt models are materialized by `dbt build`, not by Lattice's executor.
+
+---
+
 ## Diagrams
 
 ### Module Dependency Diagram
@@ -763,6 +914,7 @@ flowchart LR
     classDef io fill:#7b6b8a,stroke:#5a4d6b,color:#f0f0f0,rx:8,ry:8
     classDef obs fill:#5a8a72,stroke:#3d6b52,color:#f0f0f0,rx:8,ry:8
     classDef tool fill:#a0885a,stroke:#7a6840,color:#f0f0f0,rx:8,ry:8
+    classDef dbt fill:#5a7a8a,stroke:#3d5a6b,color:#f0f0f0,rx:8,ry:8
 
     subgraph CORE [" Core "]
         direction TB
@@ -809,6 +961,15 @@ flowchart LR
         history_mod --> obs_models_mod
     end
 
+    subgraph DBT [" dbt Integration "]
+        direction TB
+        dbt_assets_mod(["assets.py"]):::dbt
+        dbt_manifest_mod(["manifest.py"]):::dbt
+        dbt_models_mod(["models.py"]):::dbt
+
+        dbt_assets_mod --> dbt_manifest_mod --> dbt_models_mod
+    end
+
     cli_mod(["cli.py"]):::tool
 
     %% Cross-group edges
@@ -819,6 +980,8 @@ flowchart LR
     lineage_mod --> io_base
     obs_models_mod --> executor_mod
     cli_mod --> history_mod
+    dbt_assets_mod --> registry_mod
+    dbt_assets_mod --> models_mod
 ```
 
 ### Materialization Lifecycle
@@ -966,3 +1129,47 @@ flowchart LR
 ```
 
 Assets within the same level execute concurrently (up to `max_concurrency`). All assets in a level must complete before the next level begins. A failure in any asset causes its downstream dependents to be skipped.
+
+### dbt Registration & Filtering
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#4a5568', 'lineColor': '#a0aec0', 'fontSize': '13px'}}}%%
+flowchart TD
+    classDef phase fill:#5a7a8a,stroke:#3d5a6b,color:#f0f0f0,rx:8,ry:8
+    classDef decision fill:#a0885a,stroke:#7a6840,color:#f0f0f0
+    classDef result fill:#5a8a72,stroke:#3d6b52,color:#f0f0f0,rx:8,ry:8
+    classDef core fill:#4a6fa5,stroke:#345080,color:#f0f0f0,rx:8,ry:8
+
+    A(["@dbt_assets decorator"]):::phase
+    B(["ManifestParser.parse()"]):::phase
+    C(["All models + full model_map"]):::phase
+    D{"select provided?"}:::decision
+    E(["_filter_models(tag:value)"]):::phase
+    F(["Filtered model subset"]):::phase
+    G{"deps provided?"}:::decision
+    H(["Extract _dbt_assets from dep fns"]):::phase
+    I(["Merge extra_dep_keys"]):::phase
+
+    A -->|"manifest or project_dir"| B
+    B --> C
+    C --> D
+    D -- Yes --> E --> F
+    D -- No --> F
+    F --> G
+    G -- Yes --> H --> I
+    G -- No --> I
+
+    subgraph REG [" Per-model registration "]
+        direction TB
+        J(["_build_dependency_keys\n(resolves against full model_map)"]):::phase
+        K(["Deduplicate: manifest deps + extra deps"]):::phase
+        L(["_create_stub_fn(dep_count)"]):::phase
+        M(["AssetDefinition + metadata"]):::core
+        N(["registry.register()"]):::result
+    end
+
+    I --> J --> K --> L --> M --> N
+    N -->|"Store on fn._dbt_assets"| A
+```
+
+This diagram shows how `select` filtering and `deps` merging interact. The `model_map` is always built from all parsed models so that dependency resolution works across filter boundaries. The `deps` keys are deduplicated with manifest-level dependencies via `dict.fromkeys` to prevent duplicate edges when the manifest already declares the same dependency.
