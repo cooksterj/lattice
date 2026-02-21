@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.10.0](https://github.com/cooksterj/lattice/compare/v0.9.1...v0.10.0) (2026-02-21)
+
+
+### Features
+
+* add docker-compose.yml for one-command local development ([1432b24](https://github.com/cooksterj/lattice/commit/1432b240f19da76795b1ed70a9096e7fc3f498b4))
+* add Dockerfile and .dockerignore for container deployment ([310a97b](https://github.com/cooksterj/lattice/commit/310a97b36ad4d8bb392ac1979401dfd7f574f21a))
+* add environment variable configuration for container deployment ([2b2b96f](https://github.com/cooksterj/lattice/commit/2b2b96fd22ad7a6c31f2c9af12bc568a3fb046b3))
+* add GitHub Actions workflow to publish to AWS CodeArtifact ([2af5bc8](https://github.com/cooksterj/lattice/commit/2af5bc8caf2ae73d6148f6484409384b7e866c6d))
+
+
+### Bug Fixes
+
+* copy README.md into Docker build context for hatchling ([f2f3025](https://github.com/cooksterj/lattice/commit/f2f3025e26befe4a0e215dd07425a7170a759920))
+
+
+### Documentation
+
+* add deployment guide for Docker, ECS Fargate, and EC2 ([8441c0b](https://github.com/cooksterj/lattice/commit/8441c0b97f6c35ceeee9c07a39260f79a54a3dd9))
+* add library usage and Docker deployment guide to deployment.md ([3881507](https://github.com/cooksterj/lattice/commit/3881507d566ca7f5bfd485dee11fa69cca820160))
+
 ## [0.9.1](https://github.com/cooksterj/lattice/compare/v0.9.0...v0.9.1) (2026-02-21)
 
 
