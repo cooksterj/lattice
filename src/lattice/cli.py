@@ -18,14 +18,14 @@ def get_store(db_path: str | None = None) -> SQLiteRunHistoryStore:
     Parameters
     ----------
     db_path : str or None
-        Path to the database file. Defaults to 'lattice_runs.db'.
+        Path to the database file. Defaults to 'data/lattice_runs.db'.
 
     Returns
     -------
     SQLiteRunHistoryStore
         The history store instance.
     """
-    path = db_path or "lattice_runs.db"
+    path = db_path or "data/lattice_runs.db"
     return SQLiteRunHistoryStore(path)
 
 
@@ -176,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
         "--db",
         type=str,
         default=None,
-        help="Path to SQLite database (default: lattice_runs.db)",
+        help="Path to SQLite database (default: data/lattice_runs.db)",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")

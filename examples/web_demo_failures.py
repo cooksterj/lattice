@@ -322,7 +322,7 @@ def dashboard_has_all_sections(data: dict) -> bool:
 
 
 # Create a history store for run tracking
-history_store = SQLiteRunHistoryStore("lattice_demo_failures.db")
+history_store = SQLiteRunHistoryStore("data/lattice_demo_failures.db")
 
 
 if __name__ == "__main__":

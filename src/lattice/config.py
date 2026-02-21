@@ -11,7 +11,7 @@ LATTICE_HOST : str
 LATTICE_PORT : int
     Web server port.  Default ``8000``.
 LATTICE_DB_PATH : str
-    Path to the SQLite run-history database.  Default ``lattice_runs.db``.
+    Path to the SQLite run-history database.  Default ``data/lattice_runs.db``.
 LATTICE_MAX_CONCURRENCY : int
     Maximum number of concurrent asset executions in the
     :class:`~lattice.executor.AsyncExecutor`.  Default ``4``.
@@ -48,8 +48,8 @@ def get_port() -> int:
 
 
 def get_db_path() -> str:
-    """Return the configured database path, defaulting to ``lattice_runs.db``."""
-    return os.environ.get("LATTICE_DB_PATH", "lattice_runs.db")
+    """Return the configured database path, defaulting to ``data/lattice_runs.db``."""
+    return os.environ.get("LATTICE_DB_PATH", "data/lattice_runs.db")
 
 
 def get_max_concurrency() -> int:

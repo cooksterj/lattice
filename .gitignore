@@ -15,8 +15,8 @@ wheels/
 *.swp
 *.swo
 
-# Database
-lattice_demo_runs.db
+# Data
+data/
 
 # OS
 .DS_Store

@@ -40,7 +40,7 @@ class TestGetPort:
 class TestGetDbPath:
     def test_default(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
-            assert get_db_path() == "lattice_runs.db"
+            assert get_db_path() == "data/lattice_runs.db"
 
     def test_env_override(self) -> None:
         with patch.dict(os.environ, {"LATTICE_DB_PATH": "/data/runs.db"}):
