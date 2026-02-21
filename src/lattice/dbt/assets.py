@@ -291,6 +291,8 @@ def load_dbt_manifest(
     if project_dir is not None:
         manifest_path = _run_dbt_parse(project_dir)
 
+    assert manifest_path is not None  # guaranteed by validation above
+
     target_registry = registry if registry is not None else get_global_registry()
 
     all_models = ManifestParser.parse(manifest_path)

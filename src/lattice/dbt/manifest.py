@@ -34,7 +34,8 @@ def _extract_materialization(node: dict[str, Any]) -> str:
         The materialization strategy, defaults to "table".
     """
     config = node.get("config", {})
-    return config.get("materialized", "table")
+    materialization: str = config.get("materialized", "table")
+    return materialization
 
 
 def _extract_model_dependencies(node: dict[str, Any]) -> tuple[str, ...]:
