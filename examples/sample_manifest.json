@@ -1,0 +1,843 @@
+{
+  "metadata": {
+    "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v11/manifest.json",
+    "dbt_version": "1.7.0",
+    "generated_at": "2026-01-15T10:00:00.000000Z",
+    "project_name": "jaffle_shop",
+    "project_id": "a]cdbe0e4f1b049d0b2a5c8a1d3e6f7a8",
+    "user_id": null,
+    "send_anonymous_usage_stats": false,
+    "adapter_type": "postgres"
+  },
+  "nodes": {
+    "model.jaffle_shop.stg_customers": {
+      "raw_sql": "with source as (\n    select * from {{ source('raw', 'customers') }}\n),\nrenamed as (\n    select\n        id as customer_id,\n        first_name,\n        last_name,\n        email\n    from source\n)\nselect * from renamed",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "staging",
+      "fqn": ["jaffle_shop", "staging", "stg_customers"],
+      "unique_id": "model.jaffle_shop.stg_customers",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "staging/stg_customers.sql",
+      "original_file_path": "models/staging/stg_customers.sql",
+      "name": "stg_customers",
+      "resource_type": "model",
+      "alias": "stg_customers",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "8aaf3f82d6948a706a8fd6e40493a59446ab84436c800b9bb986d6af6d3dc073"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "view",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["staging", "customers"],
+      "refs": [],
+      "sources": [["raw", "customers"]],
+      "depends_on": {
+        "macros": [],
+        "nodes": ["source.jaffle_shop.raw.customers"]
+      },
+      "description": "Staged customer data from raw source",
+      "columns": {
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Primary key",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        }
+      },
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/staging/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/staging/stg_customers.sql",
+      "deferred": false,
+      "compiled_sql": "with source as (\n    select * from analytics.raw.customers\n),\nrenamed as (\n    select\n        id as customer_id,\n        first_name,\n        last_name,\n        email\n    from source\n)\nselect * from renamed",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"staging\".\"stg_customers\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.stg_orders": {
+      "raw_sql": "with source as (\n    select * from {{ source('raw', 'orders') }}\n),\nrenamed as (\n    select\n        id as order_id,\n        user_id as customer_id,\n        order_date,\n        status\n    from source\n)\nselect * from renamed",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "staging",
+      "fqn": ["jaffle_shop", "staging", "stg_orders"],
+      "unique_id": "model.jaffle_shop.stg_orders",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "staging/stg_orders.sql",
+      "original_file_path": "models/staging/stg_orders.sql",
+      "name": "stg_orders",
+      "resource_type": "model",
+      "alias": "stg_orders",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "view",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["staging", "orders"],
+      "refs": [],
+      "sources": [["raw", "orders"]],
+      "depends_on": {
+        "macros": [],
+        "nodes": ["source.jaffle_shop.raw.orders"]
+      },
+      "description": "Staged order data from raw source",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "description": "Primary key",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        }
+      },
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/staging/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/staging/stg_orders.sql",
+      "deferred": false,
+      "compiled_sql": "with source as (\n    select * from analytics.raw.orders\n),\nrenamed as (\n    select\n        id as order_id,\n        user_id as customer_id,\n        order_date,\n        status\n    from source\n)\nselect * from renamed",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"staging\".\"stg_orders\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.stg_payments": {
+      "raw_sql": "with source as (\n    select * from {{ source('raw', 'payments') }}\n),\nrenamed as (\n    select\n        id as payment_id,\n        order_id,\n        payment_method,\n        amount / 100 as amount\n    from source\n)\nselect * from renamed",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "staging",
+      "fqn": ["jaffle_shop", "staging", "stg_payments"],
+      "unique_id": "model.jaffle_shop.stg_payments",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "staging/stg_payments.sql",
+      "original_file_path": "models/staging/stg_payments.sql",
+      "name": "stg_payments",
+      "resource_type": "model",
+      "alias": "stg_payments",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "view",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["staging", "payments"],
+      "refs": [],
+      "sources": [["raw", "payments"]],
+      "depends_on": {
+        "macros": [],
+        "nodes": ["source.jaffle_shop.raw.payments"]
+      },
+      "description": "Staged payment data from raw source",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/staging/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/staging/stg_payments.sql",
+      "deferred": false,
+      "compiled_sql": "with source as (\n    select * from analytics.raw.payments\n),\nrenamed as (\n    select\n        id as payment_id,\n        order_id,\n        payment_method,\n        amount / 100 as amount\n    from source\n)\nselect * from renamed",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"staging\".\"stg_payments\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.customers": {
+      "raw_sql": "with customers as (\n    select * from {{ ref('stg_customers') }}\n),\norders as (\n    select * from {{ ref('stg_orders') }}\n),\npayments as (\n    select * from {{ ref('stg_payments') }}\n),\nfinal as (\n    select\n        customers.customer_id,\n        customers.first_name,\n        customers.last_name,\n        min(orders.order_date) as first_order,\n        max(orders.order_date) as most_recent_order,\n        count(orders.order_id) as number_of_orders,\n        coalesce(sum(payments.amount), 0) as customer_lifetime_value\n    from customers\n    left join orders using (customer_id)\n    left join payments on orders.order_id = payments.order_id\n    group by 1, 2, 3\n)\nselect * from final",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "customers"],
+      "unique_id": "model.jaffle_shop.customers",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "customers.sql",
+      "original_file_path": "models/customers.sql",
+      "name": "customers",
+      "resource_type": "model",
+      "alias": "customers",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["marts", "customers"],
+      "refs": [["stg_customers"], ["stg_orders"], ["stg_payments"]],
+      "sources": [],
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.jaffle_shop.stg_customers",
+          "model.jaffle_shop.stg_orders",
+          "model.jaffle_shop.stg_payments"
+        ]
+      },
+      "description": "Final customer table with order metrics",
+      "columns": {
+        "customer_id": {
+          "name": "customer_id",
+          "description": "Primary key",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        },
+        "customer_lifetime_value": {
+          "name": "customer_lifetime_value",
+          "description": "Total amount spent by the customer",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        }
+      },
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/customers.sql",
+      "deferred": false,
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"public\".\"customers\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.orders": {
+      "raw_sql": "with orders as (\n    select * from {{ ref('stg_orders') }}\n),\npayments as (\n    select * from {{ ref('stg_payments') }}\n),\nfinal as (\n    select\n        orders.order_id,\n        orders.customer_id,\n        orders.order_date,\n        orders.status,\n        coalesce(sum(payments.amount), 0) as amount\n    from orders\n    left join payments using (order_id)\n    group by 1, 2, 3, 4\n)\nselect * from final",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "orders"],
+      "unique_id": "model.jaffle_shop.orders",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "orders.sql",
+      "original_file_path": "models/orders.sql",
+      "name": "orders",
+      "resource_type": "model",
+      "alias": "orders",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["marts", "orders"],
+      "refs": [["stg_orders"], ["stg_payments"]],
+      "sources": [],
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.jaffle_shop.stg_orders",
+          "model.jaffle_shop.stg_payments"
+        ]
+      },
+      "description": "Final orders table with payment information",
+      "columns": {
+        "order_id": {
+          "name": "order_id",
+          "description": "Primary key",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        },
+        "status": {
+          "name": "status",
+          "description": "Order status: placed, shipped, completed, returned",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        }
+      },
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/orders.sql",
+      "deferred": false,
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"public\".\"orders\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.order_payments": {
+      "raw_sql": "{% set payment_methods = ['credit_card', 'coupon', 'bank_transfer', 'gift_card'] %}\n\nwith payments as (\n    select * from {{ ref('stg_payments') }}\n),\norders as (\n    select * from {{ ref('stg_orders') }}\n),\nfinal as (\n    select\n        orders.order_id,\n        {% for payment_method in payment_methods -%}\n        sum(case when payments.payment_method = '{{ payment_method }}' then payments.amount else 0 end) as {{ payment_method }}_amount\n        {%- if not loop.last %},{% endif -%}\n        {% endfor %}\n    from payments\n    left join orders using (order_id)\n    group by 1\n)\nselect * from final",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "order_payments"],
+      "unique_id": "model.jaffle_shop.order_payments",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "order_payments.sql",
+      "original_file_path": "models/order_payments.sql",
+      "name": "order_payments",
+      "resource_type": "model",
+      "alias": "order_payments",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "incremental",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["marts", "payments"],
+      "refs": [["stg_payments"], ["stg_orders"]],
+      "sources": [],
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.jaffle_shop.stg_payments",
+          "model.jaffle_shop.stg_orders"
+        ]
+      },
+      "description": "Order-level payment summary with amounts by method",
+      "columns": {
+        "payment_id": {
+          "name": "payment_id",
+          "description": "Primary key",
+          "meta": {},
+          "data_type": null,
+          "quote": null,
+          "tags": []
+        }
+      },
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/order_payments.sql",
+      "deferred": false,
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"public\".\"order_payments\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.customer_orders": {
+      "raw_sql": "with customers as (\n    select * from {{ ref('customers') }}\n),\norders as (\n    select * from {{ ref('orders') }}\n),\nfinal as (\n    select\n        customers.customer_id,\n        customers.first_name,\n        customers.last_name,\n        count(orders.order_id) as order_count,\n        sum(orders.amount) as total_amount\n    from customers\n    left join orders using (customer_id)\n    group by 1, 2, 3\n)\nselect * from final",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "customer_orders"],
+      "unique_id": "model.jaffle_shop.customer_orders",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "customer_orders.sql",
+      "original_file_path": "models/customer_orders.sql",
+      "name": "customer_orders",
+      "resource_type": "model",
+      "alias": "customer_orders",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["marts", "analytics"],
+      "refs": [["customers"], ["orders"]],
+      "sources": [],
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.jaffle_shop.customers",
+          "model.jaffle_shop.orders"
+        ]
+      },
+      "description": "Customer-level order aggregates",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/customer_orders.sql",
+      "deferred": false,
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"public\".\"customer_orders\"",
+      "created_at": 1736935200.0
+    },
+    "model.jaffle_shop.revenue_daily": {
+      "raw_sql": "with orders as (\n    select * from {{ ref('orders') }}\n),\norder_payments as (\n    select * from {{ ref('order_payments') }}\n),\nfinal as (\n    select\n        orders.order_date as date_day,\n        count(distinct orders.order_id) as order_count,\n        sum(orders.amount) as total_revenue\n    from orders\n    left join order_payments using (order_id)\n    group by 1\n)\nselect * from final",
+      "compiled": true,
+      "database": "analytics",
+      "schema": "analytics",
+      "fqn": ["jaffle_shop", "revenue_daily"],
+      "unique_id": "model.jaffle_shop.revenue_daily",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "revenue_daily.sql",
+      "original_file_path": "models/revenue_daily.sql",
+      "name": "revenue_daily",
+      "resource_type": "model",
+      "alias": "revenue_daily",
+      "checksum": {
+        "name": "sha256",
+        "checksum": "b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9"
+      },
+      "config": {
+        "enabled": true,
+        "materialized": "incremental",
+        "persist_docs": {},
+        "post-hook": [],
+        "pre-hook": [],
+        "vars": {},
+        "quoting": {},
+        "column_types": {},
+        "alias": null,
+        "schema": null,
+        "database": null,
+        "tags": [],
+        "full_refresh": null
+      },
+      "tags": ["analytics", "revenue"],
+      "refs": [["orders"], ["order_payments"]],
+      "sources": [],
+      "depends_on": {
+        "macros": [],
+        "nodes": [
+          "model.jaffle_shop.orders",
+          "model.jaffle_shop.order_payments"
+        ]
+      },
+      "description": "Daily revenue aggregation from orders and payments",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "patch_path": "models/schema.yml",
+      "build_path": "target/compiled/jaffle_shop/models/revenue_daily.sql",
+      "deferred": false,
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "relation_name": "\"analytics\".\"analytics\".\"revenue_daily\"",
+      "created_at": 1736935200.0
+    },
+    "test.jaffle_shop.not_null_customers_customer_id": {
+      "raw_sql": "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
+      "test_metadata": {
+        "namespace": null,
+        "name": "not_null",
+        "kwargs": {
+          "column_name": "customer_id",
+          "model": "ref('customers')"
+        }
+      },
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "schema_test", "not_null_customers_customer_id"],
+      "unique_id": "test.jaffle_shop.not_null_customers_customer_id",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "schema_test/not_null_customers_customer_id.sql",
+      "original_file_path": "models/schema.yml",
+      "name": "not_null_customers_customer_id",
+      "resource_type": "test",
+      "alias": "not_null_customers_customer_id",
+      "checksum": {"name": "none", "checksum": ""},
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "severity": "ERROR",
+        "tags": []
+      },
+      "tags": ["schema"],
+      "refs": [["customers"]],
+      "sources": [],
+      "depends_on": {
+        "macros": ["macro.dbt.test_not_null"],
+        "nodes": ["model.jaffle_shop.customers"]
+      },
+      "description": "Customer ID must not be null",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "compiled_sql": "select count(*) as validation_errors from (select customer_id from analytics.public.customers where customer_id is null) validation_errors",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "column_name": "customer_id",
+      "created_at": 1736935200.0
+    },
+    "test.jaffle_shop.unique_customers_customer_id": {
+      "raw_sql": "{{ config(severity='ERROR') }}{{ test_unique(**_dbt_schema_test_kwargs) }}",
+      "test_metadata": {
+        "namespace": null,
+        "name": "unique",
+        "kwargs": {
+          "column_name": "customer_id",
+          "model": "ref('customers')"
+        }
+      },
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "schema_test", "unique_customers_customer_id"],
+      "unique_id": "test.jaffle_shop.unique_customers_customer_id",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "schema_test/unique_customers_customer_id.sql",
+      "original_file_path": "models/schema.yml",
+      "name": "unique_customers_customer_id",
+      "resource_type": "test",
+      "alias": "unique_customers_customer_id",
+      "checksum": {"name": "none", "checksum": ""},
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "severity": "ERROR",
+        "tags": []
+      },
+      "tags": ["schema"],
+      "refs": [["customers"]],
+      "sources": [],
+      "depends_on": {
+        "macros": ["macro.dbt.test_unique"],
+        "nodes": ["model.jaffle_shop.customers"]
+      },
+      "description": "Customer ID must be unique",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "compiled_sql": "select count(*) as validation_errors from (select customer_id from analytics.public.customers where customer_id is not null group by customer_id having count(*) > 1) validation_errors",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "column_name": "customer_id",
+      "created_at": 1736935200.0
+    },
+    "test.jaffle_shop.not_null_orders_order_id": {
+      "raw_sql": "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
+      "test_metadata": {
+        "namespace": null,
+        "name": "not_null",
+        "kwargs": {
+          "column_name": "order_id",
+          "model": "ref('orders')"
+        }
+      },
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "schema_test", "not_null_orders_order_id"],
+      "unique_id": "test.jaffle_shop.not_null_orders_order_id",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "schema_test/not_null_orders_order_id.sql",
+      "original_file_path": "models/schema.yml",
+      "name": "not_null_orders_order_id",
+      "resource_type": "test",
+      "alias": "not_null_orders_order_id",
+      "checksum": {"name": "none", "checksum": ""},
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "severity": "ERROR",
+        "tags": []
+      },
+      "tags": ["schema"],
+      "refs": [["orders"]],
+      "sources": [],
+      "depends_on": {
+        "macros": ["macro.dbt.test_not_null"],
+        "nodes": ["model.jaffle_shop.orders"]
+      },
+      "description": "Order ID must not be null",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "compiled_sql": "select count(*) as validation_errors from (select order_id from analytics.public.orders where order_id is null) validation_errors",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "column_name": "order_id",
+      "created_at": 1736935200.0
+    },
+    "test.jaffle_shop.accepted_values_orders_status": {
+      "raw_sql": "{{ config(severity='ERROR') }}{{ test_accepted_values(**_dbt_schema_test_kwargs) }}",
+      "test_metadata": {
+        "namespace": null,
+        "name": "accepted_values",
+        "kwargs": {
+          "column_name": "status",
+          "values": ["placed", "shipped", "completed", "returned"],
+          "model": "ref('orders')"
+        }
+      },
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "schema_test", "accepted_values_orders_status"],
+      "unique_id": "test.jaffle_shop.accepted_values_orders_status",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "schema_test/accepted_values_orders_status.sql",
+      "original_file_path": "models/schema.yml",
+      "name": "accepted_values_orders_status",
+      "resource_type": "test",
+      "alias": "accepted_values_orders_status",
+      "checksum": {"name": "none", "checksum": ""},
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "severity": "ERROR",
+        "tags": []
+      },
+      "tags": ["schema"],
+      "refs": [["orders"]],
+      "sources": [],
+      "depends_on": {
+        "macros": ["macro.dbt.test_accepted_values"],
+        "nodes": ["model.jaffle_shop.orders"]
+      },
+      "description": "Order status must be one of: placed, shipped, completed, returned",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "column_name": "status",
+      "created_at": 1736935200.0
+    },
+    "test.jaffle_shop.not_null_order_payments_payment_id": {
+      "raw_sql": "{{ config(severity='ERROR') }}{{ test_not_null(**_dbt_schema_test_kwargs) }}",
+      "test_metadata": {
+        "namespace": null,
+        "name": "not_null",
+        "kwargs": {
+          "column_name": "payment_id",
+          "model": "ref('order_payments')"
+        }
+      },
+      "compiled": true,
+      "database": "analytics",
+      "schema": "public",
+      "fqn": ["jaffle_shop", "schema_test", "not_null_order_payments_payment_id"],
+      "unique_id": "test.jaffle_shop.not_null_order_payments_payment_id",
+      "package_name": "jaffle_shop",
+      "root_path": "/usr/src/app",
+      "path": "schema_test/not_null_order_payments_payment_id.sql",
+      "original_file_path": "models/schema.yml",
+      "name": "not_null_order_payments_payment_id",
+      "resource_type": "test",
+      "alias": "not_null_order_payments_payment_id",
+      "checksum": {"name": "none", "checksum": ""},
+      "config": {
+        "enabled": true,
+        "materialized": "table",
+        "severity": "ERROR",
+        "tags": []
+      },
+      "tags": ["schema"],
+      "refs": [["order_payments"]],
+      "sources": [],
+      "depends_on": {
+        "macros": ["macro.dbt.test_not_null"],
+        "nodes": ["model.jaffle_shop.order_payments"]
+      },
+      "description": "Payment ID must not be null",
+      "columns": {},
+      "meta": {},
+      "docs": {"show": true},
+      "compiled_sql": "",
+      "extra_ctes_injected": true,
+      "extra_ctes": [],
+      "column_name": "payment_id",
+      "created_at": 1736935200.0
+    }
+  },
+  "sources": {
+    "source.jaffle_shop.raw.customers": {
+      "database": "analytics",
+      "schema": "raw",
+      "name": "customers",
+      "resource_type": "source",
+      "package_name": "jaffle_shop",
+      "path": "models/staging/schema.yml",
+      "original_file_path": "models/staging/schema.yml",
+      "unique_id": "source.jaffle_shop.raw.customers",
+      "fqn": ["jaffle_shop", "raw", "customers"],
+      "source_name": "raw",
+      "source_description": "Raw jaffle_shop data",
+      "loader": "seed",
+      "identifier": "raw_customers",
+      "description": "Raw customer data",
+      "columns": {},
+      "meta": {},
+      "tags": [],
+      "config": {"enabled": true},
+      "loaded_at_field": null,
+      "freshness": {"warn_after": null, "error_after": null, "filter": null},
+      "created_at": 1736935200.0
+    },
+    "source.jaffle_shop.raw.orders": {
+      "database": "analytics",
+      "schema": "raw",
+      "name": "orders",
+      "resource_type": "source",
+      "package_name": "jaffle_shop",
+      "path": "models/staging/schema.yml",
+      "original_file_path": "models/staging/schema.yml",
+      "unique_id": "source.jaffle_shop.raw.orders",
+      "fqn": ["jaffle_shop", "raw", "orders"],
+      "source_name": "raw",
+      "source_description": "Raw jaffle_shop data",
+      "loader": "seed",
+      "identifier": "raw_orders",
+      "description": "Raw order data",
+      "columns": {},
+      "meta": {},
+      "tags": [],
+      "config": {"enabled": true},
+      "loaded_at_field": null,
+      "freshness": {"warn_after": null, "error_after": null, "filter": null},
+      "created_at": 1736935200.0
+    },
+    "source.jaffle_shop.raw.payments": {
+      "database": "analytics",
+      "schema": "raw",
+      "name": "payments",
+      "resource_type": "source",
+      "package_name": "jaffle_shop",
+      "path": "models/staging/schema.yml",
+      "original_file_path": "models/staging/schema.yml",
+      "unique_id": "source.jaffle_shop.raw.payments",
+      "fqn": ["jaffle_shop", "raw", "payments"],
+      "source_name": "raw",
+      "source_description": "Raw jaffle_shop data",
+      "loader": "seed",
+      "identifier": "raw_payments",
+      "description": "Raw payment data",
+      "columns": {},
+      "meta": {},
+      "tags": [],
+      "config": {"enabled": true},
+      "loaded_at_field": null,
+      "freshness": {"warn_after": null, "error_after": null, "filter": null},
+      "created_at": 1736935200.0
+    }
+  },
+  "macros": {},
+  "docs": {},
+  "exposures": {},
+  "selectors": {},
+  "disabled": [],
+  "parent_map": {
+    "model.jaffle_shop.stg_customers": ["source.jaffle_shop.raw.customers"],
+    "model.jaffle_shop.stg_orders": ["source.jaffle_shop.raw.orders"],
+    "model.jaffle_shop.stg_payments": ["source.jaffle_shop.raw.payments"],
+    "model.jaffle_shop.customers": ["model.jaffle_shop.stg_customers", "model.jaffle_shop.stg_orders", "model.jaffle_shop.stg_payments"],
+    "model.jaffle_shop.orders": ["model.jaffle_shop.stg_orders", "model.jaffle_shop.stg_payments"],
+    "model.jaffle_shop.order_payments": ["model.jaffle_shop.stg_payments", "model.jaffle_shop.stg_orders"],
+    "model.jaffle_shop.customer_orders": ["model.jaffle_shop.customers", "model.jaffle_shop.orders"],
+    "model.jaffle_shop.revenue_daily": ["model.jaffle_shop.orders", "model.jaffle_shop.order_payments"]
+  },
+  "child_map": {
+    "source.jaffle_shop.raw.customers": ["model.jaffle_shop.stg_customers"],
+    "source.jaffle_shop.raw.orders": ["model.jaffle_shop.stg_orders"],
+    "source.jaffle_shop.raw.payments": ["model.jaffle_shop.stg_payments"],
+    "model.jaffle_shop.stg_customers": ["model.jaffle_shop.customers"],
+    "model.jaffle_shop.stg_orders": ["model.jaffle_shop.customers", "model.jaffle_shop.orders", "model.jaffle_shop.order_payments"],
+    "model.jaffle_shop.stg_payments": ["model.jaffle_shop.customers", "model.jaffle_shop.orders", "model.jaffle_shop.order_payments"],
+    "model.jaffle_shop.customers": ["model.jaffle_shop.customer_orders", "test.jaffle_shop.not_null_customers_customer_id", "test.jaffle_shop.unique_customers_customer_id"],
+    "model.jaffle_shop.orders": ["model.jaffle_shop.customer_orders", "model.jaffle_shop.revenue_daily", "test.jaffle_shop.not_null_orders_order_id", "test.jaffle_shop.accepted_values_orders_status"],
+    "model.jaffle_shop.order_payments": ["model.jaffle_shop.revenue_daily", "test.jaffle_shop.not_null_order_payments_payment_id"]
+  }
+}

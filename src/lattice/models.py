@@ -71,6 +71,8 @@ class AssetDefinition(BaseModel):
         The return type annotation. Can be type, GenericAlias, or None.
     description : str or None
         Optional human-readable description.
+    metadata : dict[str, Any] or None
+        Optional metadata dictionary (e.g., dbt model info).
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -80,6 +82,7 @@ class AssetDefinition(BaseModel):
     dependencies: tuple[AssetKey, ...] = Field(default_factory=tuple)
     return_type: Any = None  # Can be type, GenericAlias, or None
     description: str | None = None
+    metadata: dict[str, Any] | None = None
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """

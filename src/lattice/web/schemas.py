@@ -1,5 +1,7 @@
 """Pydantic schemas for graph and asset API responses."""
 
+from typing import Any
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -25,6 +27,7 @@ class NodeSchema(BaseModel):
     dependency_count: int = 0
     dependent_count: int = 0
     checks: list[CheckSchema] = []
+    metadata: dict[str, Any] | None = None
 
 
 class AssetCatalogItemSchema(BaseModel):
@@ -39,6 +42,7 @@ class AssetCatalogItemSchema(BaseModel):
     dependency_count: int = 0
     dependent_count: int = 0
     check_count: int = 0
+    metadata: dict[str, Any] | None = None
 
 
 class EdgeSchema(BaseModel):
@@ -72,6 +76,7 @@ class AssetDetailSchema(BaseModel):
     dependencies: list[str]
     dependents: list[str]
     checks: list[CheckSchema] = []
+    metadata: dict[str, Any] | None = None
 
 
 class PlanStepSchema(BaseModel):

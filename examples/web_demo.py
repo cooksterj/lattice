@@ -14,9 +14,10 @@ from lattice import configure_logging
 configure_logging()
 
 import logging  # noqa: E402
+import pathlib  # noqa: E402
 import time  # noqa: E402
 
-from lattice import AssetKey, SQLiteRunHistoryStore, asset  # noqa: E402
+from lattice import AssetKey, SQLiteRunHistoryStore, asset, dbt_assets  # noqa: E402
 from lattice.web import serve  # noqa: E402
 
 logger = logging.getLogger("lattice")
@@ -296,6 +297,13 @@ def executive_dashboard(revenue: dict, stats: dict, products: dict) -> dict:
 def dashboard_has_all_sections(data: dict) -> bool:
     """Dashboard must have revenue, users, and products sections."""
     return all(key in data for key in ["revenue", "users", "products"])
+
+
+# dbt integration: register all models from the sample manifest as Lattice assets
+@dbt_assets(manifest=pathlib.Path(__file__).parent / "sample_manifest.json")
+def jaffle_shop(assets):
+    """Jaffle-shop dbt project (sample manifest)."""
+    logger.info("Loaded %d dbt assets from jaffle_shop manifest", len(assets))
 
 
 # Create a history store for run tracking

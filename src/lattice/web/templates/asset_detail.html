@@ -680,6 +680,16 @@
                         <div>${checksHtml}</div>
                     </div>
                 </div>
+                ${data.metadata ? `
+                <div class="asset-meta" style="margin-top: 0.5rem;">
+                    ${Object.entries(data.metadata).map(([k, v]) => `
+                    <div class="asset-meta-item">
+                        <div class="asset-meta-label">${k.toUpperCase()}</div>
+                        <div class="asset-meta-value">${Array.isArray(v) ? v.join(', ') : v}</div>
+                    </div>
+                    `).join('')}
+                </div>
+                ` : ''}
             `;
         } catch (e) {
             console.error('Failed to load asset info:', e);

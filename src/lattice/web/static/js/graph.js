@@ -10,6 +10,7 @@ const GROUP_COLORS = {
     data: {start: '#c45270', end: '#6e2038', stroke: '#d46a86'},       // Brighter Rose
     ml: {start: '#d0b454', end: '#6e5c20', stroke: '#dcc468'},         // Brighter Amber
     etl: {start: '#cf7a56', end: '#6e3420', stroke: '#d99070'},        // Brighter Coral
+    dbt: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'},        // dbt Orange
 };
 
 class LatticeGraph {
@@ -692,6 +693,20 @@ class LatticeGraph {
                 : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NO CHECKS ]</span>'}
                     </div>
                 </div>
+
+                ${data.metadata ? `
+                <div class="detail-section">
+                    <div class="detail-label">Metadata</div>
+                    <div style="display: flex; flex-direction: column; gap: 6px;">
+                        ${Object.entries(data.metadata).map(([k, v]) => `
+                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
+                                <span style="color: #8282a0; letter-spacing: 0.05em;">${k.toUpperCase()}</span>
+                                <span style="color: #d0b454; font-family: 'Space Mono', monospace;">${Array.isArray(v) ? v.join(', ') : v}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
 
                 <div class="detail-section">
                     <div class="detail-label">Dependencies (${data.dependencies.length})</div>

@@ -109,6 +109,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     dependency_count=len(asset_def.dependencies),
                     dependent_count=len(graph.reverse_adjacency.get(key, ())),
                     checks=checks,
+                    metadata=asset_def.metadata,
                 )
             )
 
@@ -139,6 +140,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     dependency_count=len(asset_def.dependencies),
                     dependent_count=len(graph.reverse_adjacency.get(key, ())),
                     check_count=len(asset_checks),
+                    metadata=asset_def.metadata,
                 )
             )
 
@@ -182,6 +184,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             dependencies=[str(dep) for dep in asset_def.dependencies],
             dependents=[str(dep) for dep in graph.reverse_adjacency.get(asset_key, ())],
             checks=checks,
+            metadata=asset_def.metadata,
         )
 
     @router.get("/api/plan", response_model=PlanSchema)
