@@ -1,0 +1,27 @@
+# Lattice — local development with Docker Compose
+#
+# Start:  docker compose up
+# Stop:   docker compose down
+# Rebuild after code changes:  docker compose up --build
+#
+# Run history persists in ./data/ across container restarts.
+
+services:
+  lattice:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      LATTICE_HOST: "0.0.0.0"
+      LATTICE_PORT: "8000"
+      LATTICE_DB_PATH: /app/data/lattice_runs.db
+      LATTICE_MAX_CONCURRENCY: "4"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    restart: unless-stopped
