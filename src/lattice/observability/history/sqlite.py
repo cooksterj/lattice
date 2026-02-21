@@ -48,8 +48,21 @@ class SQLiteRunHistoryStore(RunHistoryStore):
         Use ":memory:" for an in-memory database.
     """
 
-    def __init__(self, db_path: str | Path = "lattice_runs.db") -> None:
-        """Initialize the store and create tables if needed."""
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        """Initialize the store and create tables if needed.
+
+        Parameters
+        ----------
+        db_path : str, Path, or None
+            Path to the SQLite database file.
+            When *None*, reads ``LATTICE_DB_PATH`` env var (default
+            ``lattice_runs.db``).  Use ``":memory:"`` for an in-memory
+            database.
+        """
+        if db_path is None:
+            from lattice.config import get_db_path
+
+            db_path = get_db_path()
         self._db_path = str(db_path)
         self._is_memory = self._db_path == ":memory:"
         # For in-memory databases, keep a persistent connection

@@ -100,8 +100,8 @@ def create_app(
 
 def serve(
     registry: AssetRegistry | None = None,
-    host: str = "127.0.0.1",
-    port: int = 8000,
+    host: str | None = None,
+    port: int | None = None,
     history_store: RunHistoryStore | None = None,
 ) -> None:
     """
@@ -111,16 +111,23 @@ def serve(
     ----------
     registry : AssetRegistry or None
         The asset registry to visualize. Defaults to global registry.
-    host : str
-        Host to bind to. Defaults to localhost.
-    port : int
-        Port to listen on. Defaults to 8000.
+    host : str or None
+        Host to bind to. When *None*, reads ``LATTICE_HOST`` env var
+        (default ``127.0.0.1``).
+    port : int or None
+        Port to listen on. When *None*, reads ``LATTICE_PORT`` env var
+        (default ``8000``).
     history_store : RunHistoryStore or None
         Optional history store for run history visualization.
     """
     import uvicorn
 
-    logger.info("Starting Lattice web server on %s:%d", host, port)
+    from lattice.config import get_host, get_port
+
+    resolved_host = host if host is not None else get_host()
+    resolved_port = port if port is not None else get_port()
+
+    logger.info("Starting Lattice web server on %s:%d", resolved_host, resolved_port)
 
     app = create_app(registry, history_store=history_store)
-    uvicorn.run(app, host=host, port=port)
+    uvicorn.run(app, host=resolved_host, port=resolved_port)
