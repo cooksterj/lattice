@@ -306,8 +306,8 @@ def jaffle_shop(assets):
     logger.info("Loaded %d dbt assets from jaffle_shop manifest", len(assets))
 
 
-# Create a history store for run tracking
-history_store = SQLiteRunHistoryStore("lattice_demo_runs.db")
+# Create a history store for run tracking (uses LATTICE_DB_PATH env var or default)
+history_store = SQLiteRunHistoryStore()
 
 
 if __name__ == "__main__":
@@ -315,4 +315,4 @@ if __name__ == "__main__":
     print("Open http://localhost:8000 in your browser")
     print("Visit http://localhost:8000/history to see run history")
     print("Press Ctrl+C to stop\n")
-    serve(host="127.0.0.1", port=8000, history_store=history_store)
+    serve(history_store=history_store)

@@ -1,0 +1,52 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv
+venv
+
+# IDE and editor
+.idea
+.vscode
+*.swp
+*.swo
+
+# Testing and development
+tests/
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov/
+.hypothesis
+
+# CI/CD
+.github
+
+# Documentation and planning
+.planning/
+PROJECT_PLAN.md
+CHANGELOG.md
+
+# Claude Code configuration
+.claude
+
+# Database files (will be created at runtime via volume mount)
+*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Pre-commit
+.pre-commit-config.yaml
