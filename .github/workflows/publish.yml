@@ -1,0 +1,47 @@
+name: Publish to CodeArtifact
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubCodeArtifactRole
+          aws-region: us-east-1
+
+      - name: Get CodeArtifact auth token
+        run: |
+          echo "CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+            --domain cookiejar \
+            --query authorizationToken \
+            --output text)" >> "$GITHUB_ENV"
+
+      - name: Get CodeArtifact repository endpoint
+        run: |
+          echo "CODEARTIFACT_REPO_URL=$(aws codeartifact get-repository-endpoint \
+            --domain cookiejar \
+            --repository sandbox-packages \
+            --format pypi \
+            --query repositoryEndpoint \
+            --output text)" >> "$GITHUB_ENV"
+
+      - name: Build package
+        run: uv build
+
+      - name: Publish to CodeArtifact
+        run: |
+          uv publish \
+            --publish-url "${CODEARTIFACT_REPO_URL}" \
+            --token "aws:${CODEARTIFACT_AUTH_TOKEN}"
