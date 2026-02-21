@@ -80,21 +80,39 @@ def _create_stub_fn(model: DbtModelInfo, dep_count: int) -> Any:
     """
     Create a stub function for a dbt model asset.
 
-    dbt models don't execute Python code, so this stub returns a dict
-    with the model's metadata. The function signature includes one
-    parameter per dependency so the executor's strict zip passes.
+    Every ``AssetDefinition`` requires a callable ``fn`` whose parameter
+    count exactly matches the number of declared dependencies — the
+    executor enforces this with a strict ``zip`` between parameter names
+    and upstream results.  Since dbt models are materialised by
+    ``dbt build`` (not by Lattice's Python executor), these stubs are
+    placeholders that satisfy that contract so dbt models can appear in
+    the DAG graph alongside native Lattice assets.
+
+    The function is generated via ``exec()`` rather than a simple
+    ``*args`` signature because ``inspect.signature`` on an ``*args``
+    function reports parameter names like ``('args', 'kwargs')``, which
+    causes the executor's strict zip to fail when the dependency count
+    differs.  Generating named parameters (``dep_0``, ``dep_1``, ...)
+    ensures an exact match.
+
+    In practice these stubs should never be invoked during a real
+    pipeline run; they exist solely to keep the ``AssetDefinition.fn``
+    contract intact.
 
     Parameters
     ----------
     model : DbtModelInfo
         The dbt model to create a stub for.
     dep_count : int
-        Number of dependency parameters to accept.
+        Number of dependency parameters to accept.  Must match the
+        number of resolved upstream dependencies for this model.
 
     Returns
     -------
     Callable
-        A stub function that accepts dependency args and returns metadata.
+        A stub function that accepts *dep_count* positional args and
+        returns a metadata dict (model name, materialization, schema,
+        database).
     """
     param_names = [f"dep_{i}" for i in range(dep_count)]
     param_list = ", ".join(param_names) if param_names else ""
