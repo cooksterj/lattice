@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/cooksterj/lattice/compare/v0.9.0...v0.9.1) (2026-02-21)
+
+
+### Bug Fixes
+
+* Resolve mypy type errors in dbt manifest and assets modules ([27e0e78](https://github.com/cooksterj/lattice/commit/27e0e786b7a0b4e6f0288c006b9532a80b6e452e))
+
 ## [0.9.0](https://github.com/cooksterj/lattice/compare/v0.8.0...v0.9.0) (2026-02-21)
 
 
