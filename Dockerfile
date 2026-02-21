@@ -19,7 +19,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv venv /opt/venv && \
     uv pip install --python /opt/venv/bin/python --requirement pyproject.toml --extra web
 
-# Copy source code and install the package itself
+# Copy source code and README (required by hatchling build) then install
+COPY README.md ./
 COPY src/ src/
 RUN uv pip install --python /opt/venv/bin/python --no-deps .
 
