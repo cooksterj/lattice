@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from lattice.dbt.models import DbtModelInfo, DbtTestInfo
+from lattice.dbt.models import DbtModelInfo
 
 
 class TestDbtModelInfo:
@@ -62,43 +62,3 @@ class TestDbtModelInfo:
         a = DbtModelInfo(unique_id="model.proj.x", name="x")
         b = DbtModelInfo(unique_id="model.proj.y", name="y")
         assert a != b
-
-
-class TestDbtTestInfo:
-    """Tests for the DbtTestInfo frozen model."""
-
-    def test_create_minimal(self) -> None:
-        """Create a test info with only required fields."""
-        test = DbtTestInfo(
-            unique_id="test.proj.not_null_foo_id",
-            name="not_null_foo_id",
-            test_type="not_null",
-            depends_on_model="model.proj.foo",
-        )
-        assert test.unique_id == "test.proj.not_null_foo_id"
-        assert test.name == "not_null_foo_id"
-        assert test.test_type == "not_null"
-        assert test.depends_on_model == "model.proj.foo"
-        assert test.description is None
-
-    def test_create_with_description(self) -> None:
-        """Create a test info with description."""
-        test = DbtTestInfo(
-            unique_id="test.proj.unique_foo_id",
-            name="unique_foo_id",
-            test_type="unique",
-            depends_on_model="model.proj.foo",
-            description="ID must be unique",
-        )
-        assert test.description == "ID must be unique"
-
-    def test_frozen(self) -> None:
-        """DbtTestInfo should be immutable."""
-        test = DbtTestInfo(
-            unique_id="test.proj.t",
-            name="t",
-            test_type="not_null",
-            depends_on_model="model.proj.m",
-        )
-        with pytest.raises(ValidationError):
-            test.name = "new"  # type: ignore[misc]

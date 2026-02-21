@@ -7,21 +7,15 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
-from lattice import AssetRegistry, get_global_check_registry
+from lattice import AssetRegistry
 from lattice.dbt.assets import load_dbt_manifest
 from lattice.web.app import create_app
 
 
 @pytest.fixture
 def dbt_registry(minimal_manifest: Path, registry: AssetRegistry) -> AssetRegistry:
-    """Load dbt assets into an isolated registry with global check registry."""
-    # Routes use get_global_check_registry(), so register checks there
-    # (autouse fixture clears it before each test)
-    load_dbt_manifest(
-        minimal_manifest,
-        registry=registry,
-        check_registry=get_global_check_registry(),
-    )
+    """Load dbt assets into an isolated registry."""
+    load_dbt_manifest(minimal_manifest, registry=registry)
     return registry
 
 
@@ -94,14 +88,6 @@ class TestAssetsEndpoint:
         assert model_a["metadata"] is not None
         assert model_a["metadata"]["source"] == "dbt"
 
-    def test_list_check_count(self, dbt_client: TestClient) -> None:
-        """Model A should show 1 check in the catalog."""
-        resp = dbt_client.get("/api/assets")
-        data = resp.json()
-
-        model_a = next(a for a in data if a["name"] == "model_a")
-        assert model_a["check_count"] == 1
-
 
 class TestAssetDetailEndpoint:
     """Tests for /api/assets/{key} with dbt assets."""
@@ -126,14 +112,6 @@ class TestAssetDetailEndpoint:
         assert data["metadata"]["materialization"] == "table"
         assert data["metadata"]["schema"] == "public"
         assert data["metadata"]["database"] == "testdb"
-
-    def test_detail_includes_checks(self, dbt_client: TestClient) -> None:
-        """Asset detail should list registered checks."""
-        resp = dbt_client.get("/api/assets/dbt/model_a")
-        data = resp.json()
-
-        assert len(data["checks"]) == 1
-        assert data["checks"][0]["name"] == "not_null_model_a_id"
 
     def test_detail_dependencies(self, dbt_client: TestClient) -> None:
         """Model B detail should show Model A as dependency."""

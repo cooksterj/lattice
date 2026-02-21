@@ -15,22 +15,17 @@ class TestManifestParser:
     """Tests for ManifestParser.parse class method."""
 
     def test_parse_minimal_manifest(self, minimal_manifest: Path) -> None:
-        """Parse a minimal manifest with two models and one test."""
-        models, tests = ManifestParser.parse(minimal_manifest)
+        """Parse a minimal manifest with two models."""
+        models = ManifestParser.parse(minimal_manifest)
 
         assert len(models) == 2
-        assert len(tests) == 1
 
         model_names = {m.name for m in models}
         assert model_names == {"model_a", "model_b"}
 
-        assert tests[0].name == "not_null_model_a_id"
-        assert tests[0].test_type == "not_null"
-        assert tests[0].depends_on_model == "model.test_project.model_a"
-
     def test_parse_model_fields(self, minimal_manifest: Path) -> None:
         """Verify parsed model fields are correct."""
-        models, _ = ManifestParser.parse(minimal_manifest)
+        models = ManifestParser.parse(minimal_manifest)
         model_map = {m.name: m for m in models}
 
         model_a = model_map["model_a"]
@@ -43,7 +38,7 @@ class TestManifestParser:
 
     def test_parse_model_dependencies(self, minimal_manifest: Path) -> None:
         """Model B should depend on Model A."""
-        models, _ = ManifestParser.parse(minimal_manifest)
+        models = ManifestParser.parse(minimal_manifest)
         model_map = {m.name: m for m in models}
 
         model_b = model_map["model_b"]
@@ -79,24 +74,22 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        models, _ = ManifestParser.parse(path)
+        models = ManifestParser.parse(path)
         model_map = {m.name: m for m in models}
         assert model_map["m"].depends_on == ("model.proj.upstream",)
 
     def test_parse_empty_manifest(self, empty_manifest: Path) -> None:
-        """An empty manifest returns no models or tests."""
-        models, tests = ManifestParser.parse(empty_manifest)
+        """An empty manifest returns no models."""
+        models = ManifestParser.parse(empty_manifest)
         assert models == []
-        assert tests == []
 
     def test_parse_sample_manifest(self, sample_manifest_path: Path) -> None:
         """Parse the full sample jaffle_shop manifest."""
         if not sample_manifest_path.exists():
             pytest.skip("sample_manifest.json not found")
 
-        models, tests = ManifestParser.parse(sample_manifest_path)
+        models = ManifestParser.parse(sample_manifest_path)
         assert len(models) == 8
-        assert len(tests) == 5
 
         model_names = {m.name for m in models}
         assert "stg_customers" in model_names
@@ -147,7 +140,7 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        models, tests = ManifestParser.parse(path)
+        models = ManifestParser.parse(path)
         assert len(models) == 1
         assert models[0].name == "ok"
 
@@ -165,28 +158,8 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        models, tests = ManifestParser.parse(path)
+        models = ManifestParser.parse(path)
         assert len(models) == 0
-
-    def test_skips_test_without_model_dep(self, tmp_path: Path) -> None:
-        """Skip tests that have no model dependency."""
-        manifest: dict[str, Any] = {
-            "nodes": {
-                "test.proj.orphan": {
-                    "unique_id": "test.proj.orphan",
-                    "name": "orphan_test",
-                    "resource_type": "test",
-                    "depends_on": {"nodes": ["source.proj.raw.data"]},
-                    "test_metadata": {"name": "not_null"},
-                    "tags": [],
-                },
-            },
-        }
-        path = tmp_path / "manifest.json"
-        path.write_text(json.dumps(manifest))
-
-        models, tests = ManifestParser.parse(path)
-        assert len(tests) == 0
 
     def test_default_materialization(self, tmp_path: Path) -> None:
         """Default materialization should be 'table' when config is empty."""
@@ -205,27 +178,19 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        models, _ = ManifestParser.parse(path)
+        models = ManifestParser.parse(path)
         assert models[0].materialization == "table"
 
-    def test_default_test_type(self, tmp_path: Path) -> None:
-        """Default test type should be 'generic' when test_metadata is empty."""
+    def test_ignores_test_nodes(self, tmp_path: Path) -> None:
+        """Test nodes should not be parsed as models."""
         manifest: dict[str, Any] = {
             "nodes": {
-                "model.proj.m": {
-                    "unique_id": "model.proj.m",
-                    "name": "m",
-                    "resource_type": "model",
-                    "config": {},
-                    "depends_on": {"nodes": []},
-                    "tags": [],
-                },
-                "test.proj.t": {
-                    "unique_id": "test.proj.t",
-                    "name": "t",
+                "test.proj.not_null_id": {
+                    "unique_id": "test.proj.not_null_id",
+                    "name": "not_null_id",
                     "resource_type": "test",
                     "depends_on": {"nodes": ["model.proj.m"]},
-                    "test_metadata": {},
+                    "test_metadata": {"name": "not_null"},
                     "tags": [],
                 },
             },
@@ -233,11 +198,11 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        _, tests = ManifestParser.parse(path)
-        assert tests[0].test_type == "generic"
+        models = ManifestParser.parse(path)
+        assert models == []
 
     def test_ignores_source_nodes(self, tmp_path: Path) -> None:
-        """Source nodes should not be parsed as models or tests."""
+        """Source nodes should not be parsed as models."""
         manifest: dict[str, Any] = {
             "nodes": {
                 "source.proj.raw.data": {
@@ -252,6 +217,5 @@ class TestManifestParser:
         path = tmp_path / "manifest.json"
         path.write_text(json.dumps(manifest))
 
-        models, tests = ManifestParser.parse(path)
+        models = ManifestParser.parse(path)
         assert models == []
-        assert tests == []

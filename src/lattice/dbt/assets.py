@@ -5,6 +5,9 @@ This module provides the ``dbt_assets`` decorator and the lower-level
 ``load_dbt_manifest`` function.  Both read a dbt manifest.json and
 register each model as an individual AssetDefinition in the
 AssetRegistry with the "dbt" group.
+
+dbt tests are not mapped to Lattice checks — dbt handles its own
+testing via ``dbt test`` and ``.yml`` schema tests.
 """
 
 from __future__ import annotations
@@ -15,13 +18,8 @@ from pathlib import Path
 from typing import Any, TypeVar
 
 from lattice.dbt.manifest import ManifestParser
-from lattice.dbt.models import DbtModelInfo, DbtTestInfo
+from lattice.dbt.models import DbtModelInfo
 from lattice.models import AssetDefinition, AssetKey
-from lattice.observability.checks import (
-    CheckDefinition,
-    CheckRegistry,
-    get_global_check_registry,
-)
 from lattice.registry import AssetRegistry, get_global_registry
 
 F = TypeVar("F", bound=Callable[..., Any])
@@ -118,89 +116,16 @@ def _create_stub_fn(model: DbtModelInfo, dep_count: int) -> Any:
     return fn
 
 
-def _create_check_fn(test: DbtTestInfo) -> Any:
-    """
-    Create a check function for a dbt test.
-
-    Parameters
-    ----------
-    test : DbtTestInfo
-        The dbt test to create a check for.
-
-    Returns
-    -------
-    Callable
-        A check function that always returns True (dbt tests are declarative).
-    """
-
-    def check_fn(value: Any) -> bool:
-        return True
-
-    check_fn.__name__ = test.name
-    check_fn.__doc__ = test.description or f"dbt test: {test.test_type}"
-    return check_fn
-
-
-def _register_checks(
-    tests: list[DbtTestInfo],
-    model_map: dict[str, DbtModelInfo],
-    check_registry: CheckRegistry,
-) -> int:
-    """
-    Register dbt tests as Lattice checks.
-
-    Parameters
-    ----------
-    tests : list of DbtTestInfo
-        The dbt tests to register.
-    model_map : dict
-        Mapping of unique_id to DbtModelInfo.
-    check_registry : CheckRegistry
-        The check registry to register in.
-
-    Returns
-    -------
-    int
-        Number of checks registered.
-    """
-    count = 0
-    for test in tests:
-        if test.depends_on_model not in model_map:
-            logger.warning(
-                "Test %s depends on unknown model %s, skipping",
-                test.name,
-                test.depends_on_model,
-            )
-            continue
-
-        model = model_map[test.depends_on_model]
-        asset_key = _build_asset_key(model)
-
-        check_def = CheckDefinition(
-            name=test.name,
-            asset_key=asset_key,
-            fn=_create_check_fn(test),
-            description=test.description,
-        )
-        check_registry.register(check_def)
-        count += 1
-        logger.debug("Registered dbt check: %s for %s", test.name, asset_key)
-
-    return count
-
-
 def load_dbt_manifest(
     manifest_path: str | Path,
     *,
     registry: AssetRegistry | None = None,
-    check_registry: CheckRegistry | None = None,
 ) -> list[AssetDefinition]:
     """
     Load a dbt manifest.json and register all models as Lattice assets.
 
     Each model is registered with ``group="dbt"`` and inter-model
-    dependencies are preserved as Lattice dependency edges. dbt tests
-    are mapped to CheckDefinition entries in the check registry.
+    dependencies are preserved as Lattice dependency edges.
 
     Parameters
     ----------
@@ -208,8 +133,6 @@ def load_dbt_manifest(
         Path to the dbt manifest.json file.
     registry : AssetRegistry or None
         Target asset registry. Defaults to the global registry.
-    check_registry : CheckRegistry or None
-        Target check registry. Defaults to the global check registry.
 
     Returns
     -------
@@ -224,11 +147,8 @@ def load_dbt_manifest(
         If the manifest is malformed.
     """
     target_registry = registry if registry is not None else get_global_registry()
-    target_check_registry = (
-        check_registry if check_registry is not None else get_global_check_registry()
-    )
 
-    models, tests = ManifestParser.parse(manifest_path)
+    models = ManifestParser.parse(manifest_path)
     model_map = {m.unique_id: m for m in models}
 
     asset_defs: list[AssetDefinition] = []
@@ -260,11 +180,9 @@ def load_dbt_manifest(
         asset_defs.append(asset_def)
         logger.info("Registered dbt asset: %s", asset_key)
 
-    check_count = _register_checks(tests, model_map, target_check_registry)
     logger.info(
-        "Loaded %d dbt models and %d checks from %s",
+        "Loaded %d dbt models from %s",
         len(asset_defs),
-        check_count,
         Path(manifest_path).name,
     )
 
@@ -275,7 +193,6 @@ def dbt_assets(
     manifest: str | Path,
     *,
     registry: AssetRegistry | None = None,
-    check_registry: CheckRegistry | None = None,
 ) -> Callable[[F], F]:
     """
     Decorator that loads a dbt manifest and registers all models as assets.
@@ -297,8 +214,6 @@ def dbt_assets(
         Path to the dbt manifest.json file.
     registry : AssetRegistry or None
         Target asset registry.  Defaults to the global registry.
-    check_registry : CheckRegistry or None
-        Target check registry.  Defaults to the global check registry.
 
     Returns
     -------
@@ -311,7 +226,6 @@ def dbt_assets(
         assets = load_dbt_manifest(
             manifest,
             registry=registry,
-            check_registry=check_registry,
         )
         fn(assets)
         return fn

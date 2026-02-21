@@ -8,8 +8,6 @@ from typing import Any
 
 import pytest
 
-from lattice.observability.checks import CheckRegistry
-
 
 @pytest.fixture
 def sample_manifest_path() -> Path:
@@ -19,7 +17,7 @@ def sample_manifest_path() -> Path:
 
 @pytest.fixture
 def minimal_manifest(tmp_path: Path) -> Path:
-    """Create a minimal valid dbt manifest with two models and one test."""
+    """Create a minimal valid dbt manifest with two models."""
     manifest: dict[str, Any] = {
         "metadata": {
             "dbt_schema_version": "https://schemas.getdbt.com/dbt/manifest/v11/manifest.json",
@@ -49,15 +47,6 @@ def minimal_manifest(tmp_path: Path) -> Path:
                 "database": "testdb",
                 "tags": ["staging"],
             },
-            "test.test_project.not_null_model_a_id": {
-                "unique_id": "test.test_project.not_null_model_a_id",
-                "name": "not_null_model_a_id",
-                "resource_type": "test",
-                "description": "ID must not be null",
-                "depends_on": {"nodes": ["model.test_project.model_a"]},
-                "test_metadata": {"name": "not_null"},
-                "tags": [],
-            },
         },
     }
     path = tmp_path / "manifest.json"
@@ -75,9 +64,3 @@ def empty_manifest(tmp_path: Path) -> Path:
     path = tmp_path / "empty_manifest.json"
     path.write_text(json.dumps(manifest), encoding="utf-8")
     return path
-
-
-@pytest.fixture
-def check_registry() -> CheckRegistry:
-    """Provide a fresh isolated check registry."""
-    return CheckRegistry()

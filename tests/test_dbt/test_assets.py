@@ -11,15 +11,12 @@ from lattice.dbt import DBT_GROUP
 from lattice.dbt.assets import (
     _build_asset_key,
     _build_dependency_keys,
-    _create_check_fn,
     _create_stub_fn,
-    _register_checks,
     dbt_assets,
     load_dbt_manifest,
 )
-from lattice.dbt.models import DbtModelInfo, DbtTestInfo
+from lattice.dbt.models import DbtModelInfo
 from lattice.models import AssetKey
-from lattice.observability.checks import CheckRegistry
 
 
 class TestBuildAssetKey:
@@ -144,78 +141,12 @@ class TestCreateStubFn:
         assert len(sig.parameters) == 2
 
 
-class TestCreateCheckFn:
-    """Tests for _create_check_fn helper."""
-
-    def test_returns_callable(self) -> None:
-        """Check function should be callable."""
-        test = DbtTestInfo(
-            unique_id="test.proj.t",
-            name="not_null_id",
-            test_type="not_null",
-            depends_on_model="model.proj.m",
-        )
-        fn = _create_check_fn(test)
-        assert callable(fn)
-
-    def test_always_returns_true(self) -> None:
-        """dbt check stubs always return True (declarative tests)."""
-        test = DbtTestInfo(
-            unique_id="test.proj.t",
-            name="not_null_id",
-            test_type="not_null",
-            depends_on_model="model.proj.m",
-        )
-        fn = _create_check_fn(test)
-        assert fn(None) is True
-        assert fn("anything") is True
-
-
-class TestRegisterChecks:
-    """Tests for _register_checks helper."""
-
-    def test_registers_checks_for_known_models(self, check_registry: CheckRegistry) -> None:
-        """Checks for known models should be registered."""
-        model = DbtModelInfo(unique_id="model.proj.m", name="m")
-        test = DbtTestInfo(
-            unique_id="test.proj.t",
-            name="not_null_m_id",
-            test_type="not_null",
-            depends_on_model="model.proj.m",
-        )
-        model_map = {"model.proj.m": model}
-
-        count = _register_checks([test], model_map, check_registry)
-        assert count == 1
-
-        key = AssetKey(name="m", group=DBT_GROUP)
-        checks = check_registry.get_checks(key)
-        assert len(checks) == 1
-        assert checks[0].name == "not_null_m_id"
-
-    def test_skips_unknown_model_dependency(self, check_registry: CheckRegistry) -> None:
-        """Checks depending on unknown models should be skipped."""
-        test = DbtTestInfo(
-            unique_id="test.proj.t",
-            name="not_null_missing_id",
-            test_type="not_null",
-            depends_on_model="model.proj.missing",
-        )
-
-        count = _register_checks([test], {}, check_registry)
-        assert count == 0
-
-
 class TestLoadDbtManifest:
     """Tests for the main load_dbt_manifest function."""
 
-    def test_loads_minimal_manifest(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
+    def test_loads_minimal_manifest(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
         """Load a minimal manifest and verify asset registration."""
-        assets = load_dbt_manifest(
-            minimal_manifest, registry=registry, check_registry=check_registry
-        )
+        assets = load_dbt_manifest(minimal_manifest, registry=registry)
 
         assert len(assets) == 2
         assert len(registry) == 2
@@ -226,32 +157,17 @@ class TestLoadDbtManifest:
         assert key_a in registry
         assert key_b in registry
 
-    def test_preserves_dependencies(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
+    def test_preserves_dependencies(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
         """Inter-model dependencies should be preserved as AssetKey references."""
-        load_dbt_manifest(minimal_manifest, registry=registry, check_registry=check_registry)
+        load_dbt_manifest(minimal_manifest, registry=registry)
         key_b = AssetKey(name="model_b", group=DBT_GROUP)
         asset_b = registry.get(key_b)
 
         assert AssetKey(name="model_a", group=DBT_GROUP) in asset_b.dependencies
 
-    def test_registers_checks(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
-        """dbt tests should be registered as checks."""
-        load_dbt_manifest(minimal_manifest, registry=registry, check_registry=check_registry)
-
-        key_a = AssetKey(name="model_a", group=DBT_GROUP)
-        checks = check_registry.get_checks(key_a)
-        assert len(checks) == 1
-        assert checks[0].name == "not_null_model_a_id"
-
-    def test_asset_metadata(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
+    def test_asset_metadata(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
         """Assets should carry dbt metadata."""
-        load_dbt_manifest(minimal_manifest, registry=registry, check_registry=check_registry)
+        load_dbt_manifest(minimal_manifest, registry=registry)
         key_a = AssetKey(name="model_a", group=DBT_GROUP)
         asset_def = registry.get(key_a)
 
@@ -264,42 +180,34 @@ class TestLoadDbtManifest:
         assert asset_def.metadata["tags"] == ["core"]
 
     def test_asset_return_type_is_dict(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
+        self, minimal_manifest: Path, registry: AssetRegistry
     ) -> None:
         """dbt assets should have return_type=dict."""
-        load_dbt_manifest(minimal_manifest, registry=registry, check_registry=check_registry)
+        load_dbt_manifest(minimal_manifest, registry=registry)
         key_a = AssetKey(name="model_a", group=DBT_GROUP)
         assert registry.get(key_a).return_type is dict
 
-    def test_asset_description(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
+    def test_asset_description(self, minimal_manifest: Path, registry: AssetRegistry) -> None:
         """Asset description should match model description."""
-        load_dbt_manifest(minimal_manifest, registry=registry, check_registry=check_registry)
+        load_dbt_manifest(minimal_manifest, registry=registry)
         key_a = AssetKey(name="model_a", group=DBT_GROUP)
         assert registry.get(key_a).description == "First model"
 
     def test_empty_manifest_returns_empty(
-        self, empty_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
+        self, empty_manifest: Path, registry: AssetRegistry
     ) -> None:
         """Loading an empty manifest should return no assets."""
-        assets = load_dbt_manifest(empty_manifest, registry=registry, check_registry=check_registry)
+        assets = load_dbt_manifest(empty_manifest, registry=registry)
         assert assets == []
         assert len(registry) == 0
 
-    def test_file_not_found(
-        self, tmp_path: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
+    def test_file_not_found(self, tmp_path: Path, registry: AssetRegistry) -> None:
         """Raise FileNotFoundError for missing file."""
         with pytest.raises(FileNotFoundError):
-            load_dbt_manifest(
-                tmp_path / "missing.json",
-                registry=registry,
-                check_registry=check_registry,
-            )
+            load_dbt_manifest(tmp_path / "missing.json", registry=registry)
 
     def test_uses_global_registries_by_default(self, minimal_manifest: Path) -> None:
-        """When no registries are passed, global ones should be used."""
+        """When no registry is passed, global one should be used."""
         from lattice import get_global_registry
 
         assets = load_dbt_manifest(minimal_manifest)
@@ -312,15 +220,12 @@ class TestLoadDbtManifest:
         self,
         sample_manifest_path: Path,
         registry: AssetRegistry,
-        check_registry: CheckRegistry,
     ) -> None:
         """Load the full sample jaffle_shop manifest."""
         if not sample_manifest_path.exists():
             pytest.skip("sample_manifest.json not found")
 
-        assets = load_dbt_manifest(
-            sample_manifest_path, registry=registry, check_registry=check_registry
-        )
+        assets = load_dbt_manifest(sample_manifest_path, registry=registry)
 
         assert len(assets) == 8
         assert len(registry) == 8
@@ -329,21 +234,16 @@ class TestLoadDbtManifest:
         for asset_def in assets:
             assert asset_def.key.group == DBT_GROUP
 
-        # Verify checks were registered
-        customers_key = AssetKey(name="customers", group=DBT_GROUP)
-        customer_checks = check_registry.get_checks(customers_key)
-        assert len(customer_checks) == 2
-
 
 class TestDbtAssetsDecorator:
     """Tests for the @dbt_assets decorator."""
 
     def test_decorator_registers_assets(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
+        self, minimal_manifest: Path, registry: AssetRegistry
     ) -> None:
         """Decorator should register all manifest models into the registry."""
 
-        @dbt_assets(manifest=minimal_manifest, registry=registry, check_registry=check_registry)
+        @dbt_assets(manifest=minimal_manifest, registry=registry)
         def my_project(assets):
             pass
 
@@ -352,38 +252,25 @@ class TestDbtAssetsDecorator:
         assert AssetKey(name="model_b", group=DBT_GROUP) in registry
 
     def test_decorator_calls_function_body(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
+        self, minimal_manifest: Path, registry: AssetRegistry
     ) -> None:
         """The decorated function body should execute with the asset list."""
         received: list = []
 
-        @dbt_assets(manifest=minimal_manifest, registry=registry, check_registry=check_registry)
+        @dbt_assets(manifest=minimal_manifest, registry=registry)
         def my_project(assets):
             received.extend(assets)
 
         assert len(received) == 2
 
     def test_decorator_returns_original_function(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
+        self, minimal_manifest: Path, registry: AssetRegistry
     ) -> None:
         """Decorator should return the original function unchanged."""
 
-        @dbt_assets(manifest=minimal_manifest, registry=registry, check_registry=check_registry)
+        @dbt_assets(manifest=minimal_manifest, registry=registry)
         def my_project(assets):
             """My project docstring."""
 
         assert my_project.__name__ == "my_project"
         assert my_project.__doc__ == "My project docstring."
-
-    def test_decorator_registers_checks(
-        self, minimal_manifest: Path, registry: AssetRegistry, check_registry: CheckRegistry
-    ) -> None:
-        """Decorator should register dbt tests as checks."""
-
-        @dbt_assets(manifest=minimal_manifest, registry=registry, check_registry=check_registry)
-        def my_project(assets):
-            pass
-
-        key_a = AssetKey(name="model_a", group=DBT_GROUP)
-        checks = check_registry.get_checks(key_a)
-        assert len(checks) == 1

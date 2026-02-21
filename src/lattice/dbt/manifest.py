@@ -2,8 +2,9 @@
 Parser for dbt manifest.json files.
 
 This module provides the ManifestParser class which reads a dbt
-manifest.json file and extracts model and test information into
-structured Pydantic models.
+manifest.json file and extracts model information into structured
+Pydantic models. dbt tests are intentionally not parsed — dbt
+handles its own testing via ``dbt test`` and ``.yml`` schema tests.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from lattice.dbt.models import DbtModelInfo, DbtTestInfo
+from lattice.dbt.models import DbtModelInfo
 
 logger = logging.getLogger(__name__)
 
@@ -58,46 +59,6 @@ def _extract_model_dependencies(node: dict[str, Any]) -> tuple[str, ...]:
     return tuple(dep for dep in all_deps if dep.startswith("model."))
 
 
-def _extract_test_type(node: dict[str, Any]) -> str:
-    """
-    Extract the test type from a dbt test node.
-
-    Parameters
-    ----------
-    node : dict
-        A dbt manifest test node dictionary.
-
-    Returns
-    -------
-    str
-        The test type name (e.g., "not_null", "unique").
-    """
-    test_metadata = node.get("test_metadata", {})
-    return test_metadata.get("name", "generic")
-
-
-def _extract_test_model_dependency(node: dict[str, Any]) -> str | None:
-    """
-    Extract the model that a dbt test depends on.
-
-    Parameters
-    ----------
-    node : dict
-        A dbt manifest test node dictionary.
-
-    Returns
-    -------
-    str or None
-        The unique_id of the first model dependency, or None.
-    """
-    depends_on = node.get("depends_on", {})
-    all_deps = depends_on.get("nodes", [])
-    for dep in all_deps:
-        if dep.startswith("model."):
-            return dep
-    return None
-
-
 def _parse_model_node(unique_id: str, node: dict[str, Any]) -> DbtModelInfo:
     """
     Parse a single dbt model node into a DbtModelInfo.
@@ -131,45 +92,16 @@ def _parse_model_node(unique_id: str, node: dict[str, Any]) -> DbtModelInfo:
     )
 
 
-def _parse_test_node(unique_id: str, node: dict[str, Any]) -> DbtTestInfo | None:
-    """
-    Parse a single dbt test node into a DbtTestInfo.
-
-    Parameters
-    ----------
-    unique_id : str
-        The node's unique identifier.
-    node : dict
-        The raw node dictionary from the manifest.
-
-    Returns
-    -------
-    DbtTestInfo or None
-        Parsed test information, or None if the test has no model dependency.
-    """
-    model_dep = _extract_test_model_dependency(node)
-    if model_dep is None:
-        logger.warning("Test %s has no model dependency, skipping", unique_id)
-        return None
-
-    return DbtTestInfo(
-        unique_id=unique_id,
-        name=node["name"],
-        test_type=_extract_test_type(node),
-        depends_on_model=model_dep,
-        description=node.get("description"),
-    )
-
-
 class ManifestParser:
     """
     Parser for dbt manifest.json files.
 
-    Extracts model and test information from the manifest's nodes section.
+    Extracts model information from the manifest's nodes section.
+    dbt tests are not parsed — dbt handles testing via ``dbt test``.
     """
 
     @classmethod
-    def parse(cls, manifest_path: str | Path) -> tuple[list[DbtModelInfo], list[DbtTestInfo]]:
+    def parse(cls, manifest_path: str | Path) -> list[DbtModelInfo]:
         """
         Parse a dbt manifest.json file.
 
@@ -180,8 +112,8 @@ class ManifestParser:
 
         Returns
         -------
-        tuple of (list of DbtModelInfo, list of DbtTestInfo)
-            Extracted models and tests.
+        list of DbtModelInfo
+            Extracted models.
 
         Raises
         ------
@@ -207,7 +139,6 @@ class ManifestParser:
             raise ValueError("Manifest 'nodes' must be a JSON object")
 
         models: list[DbtModelInfo] = []
-        tests: list[DbtTestInfo] = []
 
         for unique_id, node in nodes.items():
             if not isinstance(node, dict):
@@ -224,19 +155,9 @@ class ManifestParser:
                 except (KeyError, ValueError) as e:
                     logger.warning("Failed to parse model %s: %s", unique_id, e)
 
-            elif resource_type == "test":
-                try:
-                    test = _parse_test_node(unique_id, node)
-                    if test is not None:
-                        tests.append(test)
-                        logger.debug("Parsed dbt test: %s", test.name)
-                except (KeyError, ValueError) as e:
-                    logger.warning("Failed to parse test %s: %s", unique_id, e)
-
         logger.info(
-            "Parsed %d models and %d tests from %s",
+            "Parsed %d models from %s",
             len(models),
-            len(tests),
             path.name,
         )
-        return models, tests
+        return models

@@ -1,7 +1,7 @@
 """
 Pydantic models for dbt manifest data.
 
-This module defines data models for representing dbt models and tests
+This module defines data models for representing dbt models
 extracted from a dbt manifest.json file.
 """
 
@@ -44,30 +44,3 @@ class DbtModelInfo(BaseModel):
     database: str | None = None
     depends_on: tuple[str, ...] = Field(default_factory=tuple)
     tags: tuple[str, ...] = Field(default_factory=tuple)
-
-
-class DbtTestInfo(BaseModel):
-    """
-    Metadata for a single dbt test extracted from manifest.json.
-
-    Attributes
-    ----------
-    unique_id : str
-        The dbt unique identifier for the test.
-    name : str
-        The test name.
-    test_type : str
-        The test type (e.g., "not_null", "unique", "accepted_values").
-    depends_on_model : str
-        The unique_id of the model this test applies to.
-    description : str or None
-        Optional test description.
-    """
-
-    model_config = ConfigDict(frozen=True)
-
-    unique_id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    test_type: str = Field(..., min_length=1)
-    depends_on_model: str = Field(..., min_length=1)
-    description: str | None = None

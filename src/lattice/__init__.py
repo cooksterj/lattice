@@ -95,7 +95,6 @@ except ImportError:
 from lattice.dbt import (  # noqa: F401
     DBT_GROUP,
     DbtModelInfo,
-    DbtTestInfo,
     ManifestParser,
     dbt_assets,
     load_dbt_manifest,
@@ -105,7 +104,6 @@ __all__.extend(
     [
         "DBT_GROUP",
         "DbtModelInfo",
-        "DbtTestInfo",
         "ManifestParser",
         "dbt_assets",
         "load_dbt_manifest",
