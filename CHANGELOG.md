@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.9.0](https://github.com/cooksterj/lattice/compare/v0.8.0...v0.9.0) (2026-02-21)
+
+
+### Features
+
+* Add dbt manifest integration (LAT-2) ([00af09e](https://github.com/cooksterj/lattice/commit/00af09ed0b53205567f449336d57b2e1bc956c1b))
+* Add select and deps parameters for tag-based dbt model filtering ([971d75b](https://github.com/cooksterj/lattice/commit/971d75b0948084f2cd208840670a91eff7dd526e))
+* Added asset level detail as a browsable web page. ([7ca3bec](https://github.com/cooksterj/lattice/commit/7ca3bec3306c1ac4449c9b970fa8d0cf9a26900d))
+* Adjusted the sidebar and header to not overlap while navigating. ([66b1431](https://github.com/cooksterj/lattice/commit/66b14315eb531a51d92b0f56c0fe6a83db62da66))
+* Bolster testing coverage output through the existing CI github action. ([aaebfac](https://github.com/cooksterj/lattice/commit/aaebfac23ea59ca592b54417f3ba8194e73690d6))
+
+
+### Documentation
+
+* Add dbt integration section to core architecture ([d3e2b5e](https://github.com/cooksterj/lattice/commit/d3e2b5ea59bfc95794ed32acc806b74d0c85a9f6))
+* Expand _create_stub_fn docstring to explain why stubs exist ([83a813f](https://github.com/cooksterj/lattice/commit/83a813f5f25c4747697074caaab437542a008b4b))
+
 ## [0.8.0](https://github.com/cooksterj/lattice/compare/v0.7.0...v0.8.0) (2026-02-20)
 
 
