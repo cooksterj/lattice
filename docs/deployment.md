@@ -1,16 +1,135 @@
 # Deployment Guide
 
-This document covers deploying Lattice as a Docker container in three scenarios: local development, AWS ECS Fargate, and EC2.
+This document covers deploying Lattice as a Docker container. It starts with using Lattice as a library in your own project, then covers local Docker, AWS ECS Fargate, and EC2 deployment scenarios.
 
 ---
 
 ## Table of Contents
 
-1. [Architecture Decision](#architecture-decision)
-2. [Environment Variables](#environment-variables)
-3. [Local Docker](#local-docker)
-4. [AWS ECS Fargate](#aws-ecs-fargate)
-5. [AWS EC2](#aws-ec2)
+1. [Using Lattice as a Library](#using-lattice-as-a-library)
+2. [Architecture Decision](#architecture-decision)
+3. [Environment Variables](#environment-variables)
+4. [Local Docker](#local-docker)
+5. [AWS ECS Fargate](#aws-ecs-fargate)
+6. [AWS EC2](#aws-ec2)
+
+---
+
+## Using Lattice as a Library
+
+When building your own pipeline project that imports Lattice as a dependency, follow these steps to go from an empty repository to a running Docker deployment.
+
+### 1. Add Lattice to your project
+
+```bash
+# With uv
+uv add lattice[web]
+
+# With pip
+pip install lattice[web]
+```
+
+The `[web]` extra includes FastAPI, uvicorn, Jinja2, and psutil for the visualization server.
+
+### 2. Define your pipeline
+
+Create a Python file that defines assets using the `@asset` decorator and starts the web server:
+
+```python
+# my_pipeline.py
+from lattice import asset, SQLiteRunHistoryStore, configure_logging
+from lattice.web import serve
+
+configure_logging()
+
+
+@asset
+def raw_sales() -> list[dict]:
+    """Fetch sales from database."""
+    return [{"id": 1, "amount": 99.99}]
+
+
+@asset(deps=["raw_sales"])
+def cleaned_sales(raw_sales: list[dict]) -> list[dict]:
+    """Validate and clean sales records."""
+    return [s for s in raw_sales if s["amount"] > 0]
+
+
+@asset(group="analytics", deps=["cleaned_sales"])
+def revenue_report(cleaned_sales: list[dict]) -> dict:
+    """Aggregate daily revenue."""
+    return {"total": sum(s["amount"] for s in cleaned_sales)}
+
+
+# Uses LATTICE_DB_PATH env var when no explicit path is given
+history_store = SQLiteRunHistoryStore()
+
+if __name__ == "__main__":
+    serve(history_store=history_store)
+```
+
+Key points:
+
+- `@asset` decorators register to a global registry automatically — `serve()` discovers them with no extra wiring.
+- `serve()` reads `LATTICE_HOST` and `LATTICE_PORT` from environment variables, so your code doesn't need to hardcode `0.0.0.0` for Docker.
+- `SQLiteRunHistoryStore()` with no arguments reads `LATTICE_DB_PATH` from the environment — point it at a mounted volume for persistence.
+
+### 3. Create a Dockerfile for your project
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Install dependencies
+COPY pyproject.toml uv.lock ./
+RUN uv venv /opt/venv && \
+    uv pip install --python /opt/venv/bin/python -r pyproject.toml
+
+# Copy your pipeline code
+COPY my_pipeline.py ./
+
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Container-friendly defaults
+ENV LATTICE_HOST=0.0.0.0 \
+    LATTICE_PORT=8000 \
+    LATTICE_DB_PATH=/app/data/lattice_runs.db
+
+RUN mkdir -p /app/data
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+
+CMD ["python", "my_pipeline.py"]
+```
+
+### 4. Create a docker-compose.yml
+
+```yaml
+services:
+  pipeline:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      LATTICE_HOST: "0.0.0.0"
+      LATTICE_DB_PATH: /app/data/lattice_runs.db
+```
+
+### 5. Run it
+
+```bash
+docker compose up
+```
+
+Open `http://localhost:8000` to see the full DAG visualization and execution UI. Run history persists in `./data/` across container restarts.
 
 ---
 
