@@ -15,6 +15,9 @@ wheels/
 *.swp
 *.swo
 
+# Database
+lattice_demo_runs.db
+
 # OS
 .DS_Store
 /.claude/settings.json
