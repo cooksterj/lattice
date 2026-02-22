@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.1](https://github.com/cooksterj/lattice/compare/v0.10.0...v0.10.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* **release:** use env vars for uv publish CodeArtifact auth ([67b1ab9](https://github.com/cooksterj/lattice/commit/67b1ab9bf2da79b73de131b5443c2378ac4fcba8))
+
 ## [0.10.0](https://github.com/cooksterj/lattice/compare/v0.9.1...v0.10.0) (2026-02-21)
 
 
