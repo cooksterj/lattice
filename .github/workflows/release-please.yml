@@ -7,12 +7,54 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  id-token: write
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
       - uses: googleapis/release-please-action@v4
+        id: release
         with:
           release-type: python
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+
+      - uses: actions/checkout@v4
+        if: ${{ steps.release.outputs.release_created }}
+
+      - uses: astral-sh/setup-uv@v4
+        if: ${{ steps.release.outputs.release_created }}
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ steps.release.outputs.release_created }}
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubCodeArtifactRole
+          aws-region: us-east-1
+
+      - name: Get CodeArtifact auth token
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+            --domain cookiejar \
+            --query authorizationToken \
+            --output text)" >> "$GITHUB_ENV"
+
+      - name: Get CodeArtifact repository endpoint
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          echo "CODEARTIFACT_REPO_URL=$(aws codeartifact get-repository-endpoint \
+            --domain cookiejar \
+            --repository sandbox-packages \
+            --format pypi \
+            --query repositoryEndpoint \
+            --output text)" >> "$GITHUB_ENV"
+
+      - name: Build package
+        if: ${{ steps.release.outputs.release_created }}
+        run: uv build
+
+      - name: Publish to CodeArtifact
+        if: ${{ steps.release.outputs.release_created }}
+        run: |
+          uv publish \
+            --publish-url "${CODEARTIFACT_REPO_URL}" \
+            --token "aws:${CODEARTIFACT_AUTH_TOKEN}"
