@@ -54,7 +54,8 @@ jobs:
 
       - name: Publish to CodeArtifact
         if: ${{ steps.release.outputs.release_created }}
-        run: |
-          uv publish \
-            --publish-url "${CODEARTIFACT_REPO_URL}" \
-            --token "aws:${CODEARTIFACT_AUTH_TOKEN}"
+        env:
+          UV_PUBLISH_URL: ${{ env.CODEARTIFACT_REPO_URL }}
+          UV_PUBLISH_USERNAME: aws
+          UV_PUBLISH_PASSWORD: ${{ env.CODEARTIFACT_AUTH_TOKEN }}
+        run: uv publish
