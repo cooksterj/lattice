@@ -68,6 +68,8 @@ uv run python examples/web_demo.py
 
 Then open http://localhost:8000 in your browser.
 
+![Lattice web visualization demo](docs/web-demo.gif)
+
 The visualization features:
 - Left-to-right hierarchical layout showing dependency flow
 - Interactive nodes (click for details, drag to reposition)
@@ -118,23 +120,3 @@ The config file uses Python's INI-based [logging.config.fileConfig](https://docs
 | INFO | Asset registration, execution start/complete, server startup |
 | WARNING | Cycle detection, missing assets |
 | ERROR | Execution failures with stack traces |
-
-## Contributing
-
-This project uses [Conventional Commits](https://www.conventionalcommits.org/) for automated releases.
-
-| Prefix | Purpose | Version Bump |
-|--------|---------|--------------|
-| `feat:` | New feature | Minor (0.1.0 → 0.2.0) |
-| `fix:` | Bug fix | Patch (0.1.0 → 0.1.1) |
-| `chore:` | Maintenance | None |
-| `docs:` | Documentation | None |
-| `feat!:` | Breaking change | Major (0.1.0 → 1.0.0) |
-
-Examples:
-```
-feat: add dependency graph resolution
-fix: handle empty registry in asset decorator
-docs: update README with development instructions
-chore: update dev dependencies
-```
