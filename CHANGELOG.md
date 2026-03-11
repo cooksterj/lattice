@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.3](https://github.com/cooksterj/lattice/compare/v0.10.2...v0.10.3) (2026-03-11)
+
+
+### Bug Fixes
+
+* **readme:** center web demo gif ([3a296ce](https://github.com/cooksterj/lattice/commit/3a296ce0dd79ddfd36fb6e85726757ef904b24da))
+
 ## [0.10.2](https://github.com/cooksterj/lattice/compare/v0.10.1...v0.10.2) (2026-03-11)
 
 
