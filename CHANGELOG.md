@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.2](https://github.com/cooksterj/lattice/compare/v0.10.1...v0.10.2) (2026-03-11)
+
+
+### Documentation
+
+* add web visualization demo gif ([01730a2](https://github.com/cooksterj/lattice/commit/01730a288d12a142ad44d6d76c19e905f64f0c04))
+
 ## [0.10.1](https://github.com/cooksterj/lattice/compare/v0.10.0...v0.10.1) (2026-02-22)
 
 
