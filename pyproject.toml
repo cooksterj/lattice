@@ -1,6 +1,6 @@
     [project]
 name = "lattice"
-version = "0.10.2"
+version = "0.10.3"
 description = "An asset-centric orchestration framework"
 readme = "README.md"
 authors = [
