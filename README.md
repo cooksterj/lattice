@@ -68,7 +68,9 @@ uv run python examples/web_demo.py
 
 Then open http://localhost:8000 in your browser.
 
-![Lattice web visualization demo](docs/web-demo.gif)
+<p align="center">
+  <img src="docs/web-demo.gif" alt="Lattice web visualization demo" width="900" />
+</p>
 
 The visualization features:
 - Left-to-right hierarchical layout showing dependency flow
