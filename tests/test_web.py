@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from lattice import AssetKey, AssetRegistry, SQLiteRunHistoryStore, asset
 from lattice.observability.models import RunRecord
 from lattice.web.app import STATIC_DIR, TEMPLATES_DIR, create_app
-from lattice.web.execution import ExecutionManager
+from lattice.web.execution_manager import ExecutionManager
 from lattice.web.schemas_execution import ExecutionStartRequest
 
 
@@ -495,12 +495,12 @@ class TestExecutionManager:
 
 def _create_app_with_manager(registry: AssetRegistry, manager: ExecutionManager) -> FastAPI:
     """Create a test app with a specific ExecutionManager."""
-    from lattice.web.execution import (
+    from lattice.web.routes import create_router
+    from lattice.web.routes_execution import (
         create_asset_websocket_router,
         create_execution_router,
         create_websocket_router,
     )
-    from lattice.web.routes import create_router
     from lattice.web.routes_history import create_history_router
 
     app = FastAPI()
