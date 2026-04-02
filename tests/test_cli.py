@@ -59,7 +59,7 @@ class TestCmdList:
             limit = 20
             status = None
 
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = cmd_list(Args())
 
         assert result == 0
@@ -72,7 +72,7 @@ class TestCmdList:
             limit = 20
             status = None
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_list(Args())
 
         assert result == 0
@@ -87,7 +87,7 @@ class TestCmdList:
             limit = 20
             status = "completed"
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_list(Args())
 
         assert result == 0
@@ -103,7 +103,7 @@ class TestCmdList:
             limit = 1
             status = None
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_list(Args())
 
         assert result == 0
@@ -130,7 +130,7 @@ class TestCmdShow:
             assets = False
             all = False
 
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = cmd_show(Args())
 
         assert result == 1
@@ -147,7 +147,7 @@ class TestCmdShow:
             assets = False
             all = False
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -166,7 +166,7 @@ class TestCmdShow:
             assets = False
             all = False
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -184,7 +184,7 @@ class TestCmdShow:
             assets = False
             all = False
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -202,7 +202,7 @@ class TestCmdShow:
             assets = False
             all = False
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -220,7 +220,7 @@ class TestCmdShow:
             assets = True
             all = False
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -238,7 +238,7 @@ class TestCmdShow:
             assets = False
             all = True
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_show(Args())
 
         assert result == 0
@@ -257,7 +257,7 @@ class TestCmdDelete:
             db = None
             run_id = "run0000"
 
-        with patch("lattice.cli.get_store", return_value=sample_records):
+        with patch("lattice.cli.cli.get_store", return_value=sample_records):
             result = cmd_delete(Args())
 
         assert result == 0
@@ -272,7 +272,7 @@ class TestCmdDelete:
             db = None
             run_id = "nonexistent"
 
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = cmd_delete(Args())
 
         assert result == 1
@@ -290,20 +290,20 @@ class TestMain:
         assert "usage:" in captured.out.lower() or "Available commands" in captured.out
 
     def test_list_command(self, store, capsys):
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = main(["list"])
 
         assert result == 0
 
     def test_show_command(self, store, capsys):
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = main(["show", "test123"])
 
         # Will return 1 because run doesn't exist, but parsing worked
         assert result == 1
 
     def test_delete_command(self, store, capsys):
-        with patch("lattice.cli.get_store", return_value=store):
+        with patch("lattice.cli.cli.get_store", return_value=store):
             result = main(["delete", "test123"])
 
         assert result == 1  # Not found

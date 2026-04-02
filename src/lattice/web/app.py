@@ -11,13 +11,13 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from lattice.registry import AssetRegistry, get_global_registry
-from lattice.web.execution import (
-    ExecutionManager,
+from lattice.web.execution_manager import ExecutionManager
+from lattice.web.routes import create_router
+from lattice.web.routes_execution import (
     create_asset_websocket_router,
     create_execution_router,
     create_websocket_router,
 )
-from lattice.web.routes import create_router
 from lattice.web.routes_history import create_history_router
 
 # TYPE_CHECKING block for imports only needed by type checkers (mypy, pyright).
