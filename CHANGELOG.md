@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.0](https://github.com/cooksterj/lattice/compare/v0.10.3...v0.11.0) (2026-04-02)
+
+
+### Features
+
+* add justfile and refactor modules into packages ([f501e38](https://github.com/cooksterj/lattice/commit/f501e380281b12ddafe16b770b0c5e37f54f8b97))
+* add justfile for common dev tasks ([4a895ef](https://github.com/cooksterj/lattice/commit/4a895ef95312f309434c74191b90dcf297fcfc75))
+
 ## [0.10.3](https://github.com/cooksterj/lattice/compare/v0.10.2...v0.10.3) (2026-03-11)
 
 
