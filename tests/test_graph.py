@@ -489,7 +489,7 @@ class TestDfsCycleDetect:
 
     def test_simple_two_node_cycle(self) -> None:
         """Two nodes forming a cycle are detected."""
-        from lattice.graph import _dfs_cycle_detect
+        from lattice.graph.algorithms import _dfs_cycle_detect
 
         key_a = AssetKey(name="a")
         key_b = AssetKey(name="b")
@@ -506,7 +506,7 @@ class TestDfsCycleDetect:
 
     def test_no_cycle(self) -> None:
         """Acyclic graph produces no cycles."""
-        from lattice.graph import _dfs_cycle_detect
+        from lattice.graph.algorithms import _dfs_cycle_detect
 
         key_a = AssetKey(name="a")
         key_b = AssetKey(name="b")
@@ -523,7 +523,7 @@ class TestDfsCycleDetect:
 
     def test_external_dep_skipped(self) -> None:
         """Dependency not in color dict is gracefully skipped."""
-        from lattice.graph import _dfs_cycle_detect
+        from lattice.graph.algorithms import _dfs_cycle_detect
 
         key_a = AssetKey(name="a")
         key_external = AssetKey(name="external")
@@ -545,7 +545,7 @@ class TestComputeLevel:
 
     def test_root_node_returns_zero(self) -> None:
         """Node with no dependencies returns level 0."""
-        from lattice.graph import _compute_level
+        from lattice.graph.algorithms import _compute_level
 
         key_a = AssetKey(name="a")
         adjacency: dict[AssetKey, tuple[AssetKey, ...]] = {key_a: ()}
@@ -559,7 +559,7 @@ class TestComputeLevel:
 
     def test_linear_chain_depth(self) -> None:
         """Node at end of a -> b -> c chain returns level 2."""
-        from lattice.graph import _compute_level
+        from lattice.graph.algorithms import _compute_level
 
         key_a = AssetKey(name="a")
         key_b = AssetKey(name="b")
@@ -582,7 +582,7 @@ class TestComputeLevel:
 
     def test_memoization(self) -> None:
         """Second call for same key reuses cached value from levels dict."""
-        from lattice.graph import _compute_level
+        from lattice.graph.algorithms import _compute_level
 
         key_a = AssetKey(name="a")
         adjacency: dict[AssetKey, tuple[AssetKey, ...]] = {key_a: ()}

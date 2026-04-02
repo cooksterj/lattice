@@ -239,7 +239,7 @@ class TestWrapperMetadata:
 
     def test_sync_wrapper_preserves_name(self) -> None:
         """Sync wrapper preserves __name__."""
-        from lattice.asset import _create_sync_wrapper
+        from lattice.asset.helpers import _create_sync_wrapper
 
         def my_function() -> int:
             return 42
@@ -249,7 +249,7 @@ class TestWrapperMetadata:
 
     def test_sync_wrapper_preserves_doc(self) -> None:
         """Sync wrapper preserves __doc__."""
-        from lattice.asset import _create_sync_wrapper
+        from lattice.asset.helpers import _create_sync_wrapper
 
         def my_function() -> int:
             """My docstring."""
@@ -260,7 +260,7 @@ class TestWrapperMetadata:
 
     def test_sync_wrapper_delegates_correctly(self) -> None:
         """Sync wrapper calls through to the original function."""
-        from lattice.asset import _create_sync_wrapper
+        from lattice.asset.helpers import _create_sync_wrapper
 
         def add(a: int, b: int) -> int:
             return a + b
@@ -270,7 +270,7 @@ class TestWrapperMetadata:
 
     def test_async_wrapper_preserves_name(self) -> None:
         """Async wrapper preserves __name__."""
-        from lattice.asset import _create_async_wrapper
+        from lattice.asset.helpers import _create_async_wrapper
 
         async def my_async_fn() -> int:
             return 42
@@ -280,7 +280,7 @@ class TestWrapperMetadata:
 
     def test_async_wrapper_preserves_doc(self) -> None:
         """Async wrapper preserves __doc__."""
-        from lattice.asset import _create_async_wrapper
+        from lattice.asset.helpers import _create_async_wrapper
 
         async def my_async_fn() -> int:
             """Async docstring."""
@@ -293,7 +293,7 @@ class TestWrapperMetadata:
         """Async wrapper is recognized as a coroutine function."""
         import inspect
 
-        from lattice.asset import _create_async_wrapper
+        from lattice.asset.helpers import _create_async_wrapper
 
         async def my_async_fn() -> int:
             return 42
@@ -307,7 +307,7 @@ class TestAssetDecoratorFunction:
 
     def test_produces_correct_asset_with_checks(self, registry: AssetRegistry) -> None:
         """_asset_decorator creates an AssetWithChecks with correct attributes."""
-        from lattice.asset import _asset_decorator
+        from lattice.asset.asset import _asset_decorator
         from lattice.observability.checks import AssetWithChecks
 
         def my_func() -> int:
@@ -323,7 +323,7 @@ class TestAssetDecoratorFunction:
 
     def test_explicit_key_and_description(self, registry: AssetRegistry) -> None:
         """_asset_decorator respects explicit key and description."""
-        from lattice.asset import _asset_decorator
+        from lattice.asset.asset import _asset_decorator
 
         def my_func() -> int:
             return 42
