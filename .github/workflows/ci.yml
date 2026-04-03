@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  test-matrix:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -38,16 +38,6 @@ jobs:
         if: always()
         run: python .github/scripts/test_summary.py
 
-  testExpected:
-    runs-on: ubuntu-latest
-    needs: [test, lint]
-    if: always()
-    steps:
-      - run: |
-          if [[ "${{ needs.test.result }}" != "success" || "${{ needs.lint.result }}" != "success" ]]; then
-            exit 1
-          fi
-
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -64,3 +54,13 @@ jobs:
 
       - name: Check formatting
         run: uv run ruff format --check src tests
+
+  test:
+    runs-on: ubuntu-latest
+    needs: [test-matrix, lint]
+    if: always()
+    steps:
+      - run: |
+          if [[ "${{ needs.test-matrix.result }}" != "success" || "${{ needs.lint.result }}" != "success" ]]; then
+            exit 1
+          fi
