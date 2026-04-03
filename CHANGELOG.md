@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.12.0](https://github.com/cooksterj/lattice/compare/v0.11.0...v0.12.0) (2026-04-03)
+
+
+### Features
+
+* **web:** add execution type icons to graph nodes ([a775c79](https://github.com/cooksterj/lattice/commit/a775c7926ae4c62ab7fcb72ac6c4ff80db82252b))
+
+
+### Bug Fixes
+
+* **web:** lower execution controls position on graph page ([729911c](https://github.com/cooksterj/lattice/commit/729911c279a2113c6d6ee9a177e11c764c596ea8))
+* **web:** resolve mypy no-any-return in execution type resolver ([b0930b1](https://github.com/cooksterj/lattice/commit/b0930b11c076d0f9ff81c2492fd610c51ab56deb))
+
 ## [0.11.0](https://github.com/cooksterj/lattice/compare/v0.10.3...v0.11.0) (2026-04-02)
 
 
