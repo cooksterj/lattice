@@ -32,7 +32,7 @@ def _resolve_execution_type(metadata: dict[str, Any] | None) -> str:
     if metadata is not None:
         source = metadata.get("source")
         if source in {"dbt", "shell"}:
-            return source
+            return str(source)
     return "python"
 
 
