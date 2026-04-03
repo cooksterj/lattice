@@ -13,6 +13,13 @@ const GROUP_COLORS = {
     dbt: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'},        // dbt Orange
 };
 
+// Execution type → symbol ID (defined in setupDefs)
+const EXECUTION_TYPE_ICONS = {
+    dbt:    'icon-dbt',
+    python: 'icon-python',
+    shell:  'icon-shell',
+};
+
 class LatticeGraph {
     constructor(container) {
         this.container = container;
@@ -190,6 +197,41 @@ class LatticeGraph {
                 .attr('offset', '100%')
                 .attr('stop-color', colors.end);
         });
+
+        // === EXECUTION TYPE ICON SYMBOLS ===
+        // dbt logo (Simple Icons)
+        const dbtSymbol = defs.append('symbol')
+            .attr('id', 'icon-dbt')
+            .attr('viewBox', '0 0 24 24');
+        dbtSymbol.append('path')
+            .attr('fill', '#e87d3e')
+            .attr('d', 'M17.9 9.38a8.15 8.15 0 0 0-3.04-3.12l1.77.84a10.29 10.29 0 0 1 3.74 3l3.23-5.93a2.85 2.85 0 0 0-.06-2.96 2.86 2.86 0 0 0-3.57-.86l-5.87 3.21a4.36 4.36 0 0 1-4.18 0L4.18.41a2.85 2.85 0 0 0-2.96.06A2.86 2.86 0 0 0 .35 3.97l3.2 5.94a4.36 4.36 0 0 1 0 4.18l-3.13 5.74a2.86 2.86 0 0 0 .09 3 2.86 2.86 0 0 0 3.54.84l6.06-3.3a10.29 10.29 0 0 1-3-3.75l-.84-1.77a8.15 8.15 0 0 0 3.12 3.04l10.58 5.78a2.86 2.86 0 0 0 3.54-.84 2.87 2.87 0 0 0 .08-3L17.9 9.38zm3.38-7.74a1.09 1.09 0 1 1 0 2.18 1.09 1.09 0 0 1 0-2.18zM2.74 3.82a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18zm0 18.54a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18zm10.36-11.45a2.17 2.17 0 0 0-2.18 2.17c0 .62.26 1.2.7 1.61a2.72 2.72 0 1 1 3.07-4.48 2.16 2.16 0 0 0-1.6-.7v.4zm8.18 11.45a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18z');
+
+        // Python logo (Simple Icons)
+        const pySymbol = defs.append('symbol')
+            .attr('id', 'icon-python')
+            .attr('viewBox', '0 0 24 24');
+        pySymbol.append('path')
+            .attr('fill', '#68b5c2')
+            .attr('d', 'M14.25.18l.9.2.73.26.59.3.45.32.34.34.25.34.16.33.1.3.04.26.02.2-.01.13V8.5l-.05.63-.13.55-.21.46-.26.38-.3.31-.33.25-.35.19-.35.14-.33.1-.3.07-.26.04-.21.02H8.77l-.69.05-.59.14-.5.22-.41.27-.33.32-.27.35-.2.36-.15.37-.1.35-.07.32-.04.27-.02.21v3.06H3.17l-.21-.03-.28-.07-.32-.12-.35-.18-.36-.26-.36-.36-.35-.46-.32-.59-.28-.73-.21-.88-.14-1.05-.05-1.23.06-1.22.16-1.04.24-.87.32-.71.36-.57.4-.44.42-.33.42-.24.4-.16.36-.1.32-.05.24-.01h.16l.06.01h8.16v-.83H6.18l-.01-2.75-.02-.37.05-.34.11-.31.17-.28.25-.26.31-.23.38-.2.44-.18.51-.15.58-.12.64-.1.71-.06.77-.04.84-.02 1.27.05zm-6.3 1.98l-.23.33-.08.41.08.41.23.34.33.22.41.09.41-.09.33-.22.23-.34.08-.41-.08-.41-.23-.33-.33-.22-.41-.09-.41.09zm13.09 3.95l.28.06.32.12.35.18.36.27.36.35.35.47.32.59.28.73.21.88.14 1.04.05 1.23-.06 1.23-.16 1.04-.24.86-.32.71-.36.57-.4.45-.42.33-.42.24-.4.16-.36.09-.32.05-.24.02-.16-.01h-8.22v.82h5.84l.01 2.76.02.36-.05.34-.11.31-.17.29-.25.25-.31.24-.38.2-.44.17-.51.15-.58.13-.64.09-.71.07-.77.04-.84.01-1.27-.04-1.07-.14-.9-.2-.73-.25-.59-.3-.45-.33-.34-.34-.25-.34-.16-.33-.1-.3-.04-.25-.02-.2.01-.13v-5.34l.05-.64.13-.54.21-.46.26-.38.3-.32.33-.24.35-.2.35-.14.33-.1.3-.06.26-.04.21-.02.13-.01h5.84l.69-.05.59-.14.5-.21.41-.28.33-.32.27-.35.2-.36.15-.36.1-.35.07-.32.04-.28.02-.21V6.07h2.09l.14.01zm-6.47 14.25l-.23.33-.08.41.08.41.23.33.33.23.41.08.41-.08.33-.23.23-.33.08-.41-.08-.41-.23-.33-.33-.23-.41-.08-.41.08z');
+
+        // Shell / terminal icon
+        const shellSymbol = defs.append('symbol')
+            .attr('id', 'icon-shell')
+            .attr('viewBox', '0 0 24 24');
+        shellSymbol.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', '#9680b8')
+            .attr('stroke-width', 2.5)
+            .attr('stroke-linecap', 'round')
+            .attr('stroke-linejoin', 'round')
+            .attr('d', 'M4 17l6-5-6-5');
+        shellSymbol.append('path')
+            .attr('fill', 'none')
+            .attr('stroke', '#9680b8')
+            .attr('stroke-width', 2.5)
+            .attr('stroke-linecap', 'round')
+            .attr('d', 'M12 19h8');
     }
 
     async loadData() {
@@ -318,6 +360,26 @@ class LatticeGraph {
                     .append('title')
                     .text(check.name);
             });
+        });
+
+        // Execution type icons (bottom-right corner of node)
+        this.nodeElements.each(function(d) {
+            const symbolId = EXECUTION_TYPE_ICONS[d.execution_type];
+            if (!symbolId) return;
+
+            const node = d3.select(this);
+            const halfWidth = d._nodeWidth / 2;
+            const iconSize = 12;
+            const padding = 3;
+
+            node.append('use')
+                .attr('class', 'exec-type-icon')
+                .attr('href', `#${symbolId}`)
+                .attr('width', iconSize)
+                .attr('height', iconSize)
+                .attr('x', halfWidth - iconSize - padding)
+                .attr('y', 22 - iconSize - padding)
+                .style('opacity', 0.85);
         });
 
         // Compute hierarchical layout (left-to-right)
@@ -663,6 +725,14 @@ class LatticeGraph {
                 <div class="detail-section">
                     <div class="detail-label">Group</div>
                     <div class="detail-value" style="letter-spacing: 0.1em;">${data.group.toUpperCase()}</div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="detail-label">Execution Type</div>
+                    <div class="detail-value" style="display: flex; align-items: center; gap: 8px; letter-spacing: 0.1em;">
+                        <svg width="16" height="16"><use href="#${EXECUTION_TYPE_ICONS[data.execution_type] || 'icon-python'}"/></svg>
+                        <span>${(data.execution_type || 'python').toUpperCase()}</span>
+                    </div>
                 </div>
 
                 ${data.return_type ? `

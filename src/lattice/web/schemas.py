@@ -28,6 +28,7 @@ class NodeSchema(BaseModel):
     dependent_count: int = 0
     checks: list[CheckSchema] = []
     metadata: dict[str, Any] | None = None
+    execution_type: str = "python"
 
 
 class AssetCatalogItemSchema(BaseModel):
@@ -43,6 +44,7 @@ class AssetCatalogItemSchema(BaseModel):
     dependent_count: int = 0
     check_count: int = 0
     metadata: dict[str, Any] | None = None
+    execution_type: str = "python"
 
 
 class EdgeSchema(BaseModel):
@@ -77,6 +79,7 @@ class AssetDetailSchema(BaseModel):
     dependents: list[str]
     checks: list[CheckSchema] = []
     metadata: dict[str, Any] | None = None
+    execution_type: str = "python"
 
 
 class PlanStepSchema(BaseModel):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse
@@ -25,6 +25,15 @@ from lattice.web.schemas import (
     PlanSchema,
     PlanStepSchema,
 )
+
+
+def _resolve_execution_type(metadata: dict[str, Any] | None) -> str:
+    """Derive execution type from asset metadata."""
+    if metadata is not None:
+        source = metadata.get("source")
+        if source in {"dbt", "shell"}:
+            return str(source)
+    return "python"
 
 
 def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRouter:
@@ -110,6 +119,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     dependent_count=len(graph.reverse_adjacency.get(key, ())),
                     checks=checks,
                     metadata=asset_def.metadata,
+                    execution_type=_resolve_execution_type(asset_def.metadata),
                 )
             )
 
@@ -141,6 +151,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
                     dependent_count=len(graph.reverse_adjacency.get(key, ())),
                     check_count=len(asset_checks),
                     metadata=asset_def.metadata,
+                    execution_type=_resolve_execution_type(asset_def.metadata),
                 )
             )
 
@@ -185,6 +196,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             dependents=[str(dep) for dep in graph.reverse_adjacency.get(asset_key, ())],
             checks=checks,
             metadata=asset_def.metadata,
+            execution_type=_resolve_execution_type(asset_def.metadata),
         )
 
     @router.get("/api/plan", response_model=PlanSchema)

@@ -13,6 +13,7 @@ from fastapi.templating import Jinja2Templates
 from fastapi.testclient import TestClient
 
 from lattice import AssetKey, AssetRegistry, SQLiteRunHistoryStore, asset
+from lattice.models import AssetDefinition
 from lattice.observability.models import RunRecord
 from lattice.web.app import STATIC_DIR, TEMPLATES_DIR, create_app
 from lattice.web.execution_manager import ExecutionManager
@@ -181,6 +182,36 @@ class TestGraphEndpoint:
         assert source_node["return_type"] == "dict"
         assert source_node["dependency_count"] == 0
         assert source_node["dependent_count"] == 1
+
+    def test_graph_node_has_execution_type(self, populated_client: TestClient) -> None:
+        """Graph nodes include execution_type field defaulting to 'python'."""
+        response = populated_client.get("/api/graph")
+        data = response.json()
+
+        for node in data["nodes"]:
+            assert node["execution_type"] == "python"
+
+    def test_graph_node_dbt_execution_type(self, registry: AssetRegistry) -> None:
+        """Asset with metadata source='dbt' resolves to execution_type='dbt'."""
+        registry.register(
+            AssetDefinition(
+                key=AssetKey(name="dbt_model"),
+                fn=lambda: "dbt",
+                dependencies=(),
+                description="A dbt model.",
+                return_type=str,
+                metadata={"source": "dbt"},
+            )
+        )
+
+        app = create_app(registry)
+        client = TestClient(app)
+
+        response = client.get("/api/graph")
+        data = response.json()
+
+        dbt_node = next(n for n in data["nodes"] if n["id"] == "dbt_model")
+        assert dbt_node["execution_type"] == "dbt"
 
 
 class TestAssetDetailEndpoint:
@@ -1234,6 +1265,17 @@ class TestAssetCatalogSchema:
         assert item.dependent_count == 0
         assert item.check_count == 0
 
+    def test_asset_catalog_item_has_execution_type(self) -> None:
+        """AssetCatalogItemSchema defaults execution_type to 'python'."""
+        from lattice.web.schemas import AssetCatalogItemSchema
+
+        item = AssetCatalogItemSchema(
+            id="test_asset",
+            name="test_asset",
+            group="default",
+        )
+        assert item.execution_type == "python"
+
 
 class TestHeaderSidebarOffset:
     """Static analysis tests for LAT-18: header offset accounts for sidebar rail."""
@@ -1271,3 +1313,22 @@ class TestHeaderSidebarOffset:
         header_line = self._get_header_line("index.html")
         assert "absolute" in header_line
         assert "fixed" not in header_line
+
+
+class TestExecutionTypeIcons:
+    """Static analysis tests for LAT-20: execution type icons on graph nodes."""
+
+    JS_PATH = STATIC_DIR / "js" / "graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_graph_js_has_execution_type_icons_constant(self) -> None:
+        """graph.js contains the EXECUTION_TYPE_ICONS constant."""
+        js = self._read_js()
+        assert "EXECUTION_TYPE_ICONS" in js
+
+    def test_graph_js_has_exec_type_icon_class(self) -> None:
+        """graph.js renders elements with the exec-type-icon class."""
+        js = self._read_js()
+        assert "exec-type-icon" in js
