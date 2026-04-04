@@ -21,6 +21,8 @@ data/
 # OS
 .DS_Store
 /.claude/settings.json
+/.agents/
+/.opencode/
 
 tmux-client-*.log
 /.claude/
