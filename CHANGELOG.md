@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/cooksterj/lattice/compare/v0.12.0...v0.13.0) (2026-04-04)
+
+
+### Features
+
+* **dbt:** allow custom groups for dbt assets ([c544b9c](https://github.com/cooksterj/lattice/commit/c544b9cc60cb52f3853a24270c9ee397b0af9894))
+* **web:** add grouped asset overview pages ([63e168d](https://github.com/cooksterj/lattice/commit/63e168da35ed93181c467432efb3da70ed1e5ea7))
+
 ## [0.12.0](https://github.com/cooksterj/lattice/compare/v0.11.0...v0.12.0) (2026-04-03)
 
 
