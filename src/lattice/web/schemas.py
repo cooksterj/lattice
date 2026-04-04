@@ -56,6 +56,17 @@ class EdgeSchema(BaseModel):
     target: str
 
 
+class ExternalEdgeSchema(BaseModel):
+    """Edge crossing a group boundary to or from an external asset."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    target: str
+    external_asset: str
+    direction: str
+
+
 class GraphSchema(BaseModel):
     """Complete graph data for visualization."""
 
@@ -63,6 +74,68 @@ class GraphSchema(BaseModel):
 
     nodes: list[NodeSchema]
     edges: list[EdgeSchema]
+
+
+class AssetGroupSchema(BaseModel):
+    """Named group of assets with summary metadata."""
+
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    asset_count: int
+    assets: list[AssetCatalogItemSchema]
+
+
+class GroupedAssetsSchema(BaseModel):
+    """Assets partitioned into named groups and ungrouped standalone assets."""
+
+    model_config = ConfigDict(frozen=True)
+
+    groups: list[AssetGroupSchema]
+    ungrouped_assets: list[AssetCatalogItemSchema]
+
+
+class GroupGraphSchema(BaseModel):
+    """Dependency subgraph scoped to a single asset group."""
+
+    model_config = ConfigDict(frozen=True)
+
+    group_name: str
+    nodes: list[NodeSchema]
+    edges: list[EdgeSchema]
+    external_edges: list[ExternalEdgeSchema]
+
+
+class OverviewNodeSchema(BaseModel):
+    """Node in the overview meta-graph (group super-node or standalone asset)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    id: str
+    name: str
+    node_type: str
+    asset_count: int
+    group: str
+    execution_type: str | None = None
+    check_count: int = 0
+
+
+class OverviewEdgeSchema(BaseModel):
+    """Edge in the overview meta-graph."""
+
+    model_config = ConfigDict(frozen=True)
+
+    source: str
+    target: str
+
+
+class OverviewGraphSchema(BaseModel):
+    """Meta-graph showing groups and standalone assets with connections."""
+
+    model_config = ConfigDict(frozen=True)
+
+    nodes: list[OverviewNodeSchema]
+    edges: list[OverviewEdgeSchema]
 
 
 class AssetDetailSchema(BaseModel):

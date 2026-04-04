@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Asset Pipeline{% endblock %}
+{% block title %}{{ group_name }} // LATTICE{% endblock %}
 {% block head_extra %}
 <script src="https://d3js.org/d3.v7.min.js"></script>
 {% endblock %}
@@ -25,14 +25,13 @@
                 </div>
                 <div class="title-container">
                     <h1 class="title-main">LATTICE</h1>
-                    <div class="title-sub">ASSET ORCHESTRATION SYSTEM</div>
+                    <div class="title-sub">GROUP // {{ group_name | replace("_", " ") | upper }}</div>
                 </div>
             </div>
             <div class="flex items-center gap-3">
                 <nav class="flex items-center gap-1">
                     <a href="/" class="nav-link">HOME</a>
-                    <a href="/pipeline" class="nav-link active">PIPELINE</a>
-                    <a href="/history" class="nav-link">HISTORY</a>
+                    <a href="/pipeline" class="nav-link">PIPELINE</a>
                 </nav>
                 <div class="header-divider"></div>
                 <div class="status-display">
@@ -60,8 +59,8 @@
         </header>
 
         <!-- Graph Container -->
-        <div id="graph-container" class="w-full h-full">
-            <svg id="graph"></svg>
+        <div id="group-graph-container" class="w-full h-full" data-group-name="{{ group_name }}">
+            <svg id="group-graph"></svg>
         </div>
 
         <!-- Loading Overlay -->
@@ -74,8 +73,6 @@
             </div>
         </div>
     </div>
-
-
 </div>
 
 <!-- Tooltip -->
@@ -83,5 +80,5 @@
 </div>
 {% endblock %}
 {% block scripts %}
-<script src="/static/js/graph.js?v=22"></script>
+<script src="/static/js/group_graph.js?v=1"></script>
 {% endblock %}

@@ -17,11 +17,18 @@ from lattice.registry import AssetRegistry
 from lattice.web.schemas import (
     AssetCatalogItemSchema,
     AssetDetailSchema,
+    AssetGroupSchema,
     CheckSchema,
     EdgeSchema,
+    ExternalEdgeSchema,
     GraphSchema,
+    GroupedAssetsSchema,
+    GroupGraphSchema,
     HealthSchema,
     NodeSchema,
+    OverviewEdgeSchema,
+    OverviewGraphSchema,
+    OverviewNodeSchema,
     PlanSchema,
     PlanStepSchema,
 )
@@ -55,9 +62,21 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     router = APIRouter()
 
     @router.get("/", response_class=HTMLResponse)
-    async def index(request: Request) -> HTMLResponse:
-        """Serve the main visualization page."""
-        return templates.TemplateResponse(request, "index.html", {"current_page": "graph"})
+    async def groups_page(request: Request) -> HTMLResponse:
+        """Serve the groups landing page."""
+        return templates.TemplateResponse(request, "groups.html", {"current_page": "groups"})
+
+    @router.get("/pipeline", response_class=HTMLResponse)
+    async def pipeline_page(request: Request) -> HTMLResponse:
+        """Serve the full pipeline visualization page."""
+        return templates.TemplateResponse(request, "index.html", {"current_page": "pipeline"})
+
+    @router.get("/group/{name}", response_class=HTMLResponse)
+    async def group_detail_page(request: Request, name: str) -> HTMLResponse:
+        """Serve the group detail page with dependency graph."""
+        return templates.TemplateResponse(
+            request, "group_detail.html", {"group_name": name, "current_page": "groups"}
+        )
 
     @router.get("/runs", response_class=HTMLResponse)
     async def runs_page(request: Request) -> HTMLResponse:
@@ -73,7 +92,7 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     async def asset_live(request: Request, key: str) -> HTMLResponse:
         """Serve the asset live monitoring page."""
         return templates.TemplateResponse(
-            request, "asset_live.html", {"asset_key": key, "current_page": "graph"}
+            request, "asset_live.html", {"asset_key": key, "current_page": "pipeline"}
         )
 
     @router.get("/asset/{key:path}", response_class=HTMLResponse)
@@ -156,6 +175,196 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
             )
 
         return items
+
+    @router.get("/api/assets/overview", response_model=OverviewGraphSchema)
+    async def get_overview_graph() -> OverviewGraphSchema:
+        """Get a meta-graph showing groups and standalone assets with connections."""
+        check_registry = get_global_check_registry()
+
+        # Partition assets by group
+        groups_map: dict[str, set[AssetKey]] = {}
+        standalone: set[AssetKey] = set()
+
+        for asset_def in registry:
+            key = asset_def.key
+            if key.group == "default":
+                standalone.add(key)
+            else:
+                groups_map.setdefault(key.group, set()).add(key)
+
+        # Build nodes
+        nodes: list[OverviewNodeSchema] = []
+        for group_name, keys in sorted(groups_map.items()):
+            group_check_count = sum(len(check_registry.get_checks(k)) for k in keys)
+            nodes.append(
+                OverviewNodeSchema(
+                    id=f"group:{group_name}",
+                    name=group_name,
+                    node_type="group",
+                    asset_count=len(keys),
+                    group=group_name,
+                    check_count=group_check_count,
+                )
+            )
+
+        for key in sorted(standalone, key=str):
+            asset_def = registry.get(key)
+            nodes.append(
+                OverviewNodeSchema(
+                    id=str(key),
+                    name=key.name,
+                    node_type="asset",
+                    asset_count=1,
+                    group="default",
+                    execution_type=_resolve_execution_type(asset_def.metadata),
+                    check_count=len(check_registry.get_checks(key)),
+                )
+            )
+
+        # Build deduplicated edges
+        edge_set: set[tuple[str, str]] = set()
+
+        for asset_def in registry:
+            key = asset_def.key
+            target_node = f"group:{key.group}" if key.group != "default" else str(key)
+
+            for dep in asset_def.dependencies:
+                if dep not in registry:
+                    continue
+                source_node = f"group:{dep.group}" if dep.group != "default" else str(dep)
+
+                # Skip self-loops (intra-group edges collapse)
+                if source_node == target_node:
+                    continue
+
+                edge_set.add((source_node, target_node))
+
+        edges = [OverviewEdgeSchema(source=src, target=tgt) for src, tgt in sorted(edge_set)]
+
+        return OverviewGraphSchema(nodes=nodes, edges=edges)
+
+    @router.get("/api/assets/grouped", response_model=GroupedAssetsSchema)
+    async def get_grouped_assets() -> GroupedAssetsSchema:
+        """Get assets organized into named groups and ungrouped standalone assets."""
+        graph = DependencyGraph.from_registry(registry)
+        check_registry = get_global_check_registry()
+
+        groups_map: dict[str, list[AssetCatalogItemSchema]] = {}
+        ungrouped: list[AssetCatalogItemSchema] = []
+
+        for asset_def in registry:
+            key = asset_def.key
+            asset_checks = check_registry.get_checks(key)
+
+            item = AssetCatalogItemSchema(
+                id=str(key),
+                name=key.name,
+                group=key.group,
+                description=asset_def.description,
+                dependency_count=len(asset_def.dependencies),
+                dependent_count=len(graph.reverse_adjacency.get(key, ())),
+                check_count=len(asset_checks),
+                metadata=asset_def.metadata,
+                execution_type=_resolve_execution_type(asset_def.metadata),
+            )
+
+            if key.group == "default":
+                ungrouped.append(item)
+            else:
+                groups_map.setdefault(key.group, []).append(item)
+
+        groups = [
+            AssetGroupSchema(name=name, asset_count=len(assets), assets=assets)
+            for name, assets in sorted(groups_map.items())
+        ]
+
+        return GroupedAssetsSchema(groups=groups, ungrouped_assets=ungrouped)
+
+    @router.get("/api/groups/{name}/graph", response_model=GroupGraphSchema)
+    async def get_group_graph(name: str) -> GroupGraphSchema:
+        """Get dependency subgraph scoped to a single asset group."""
+        graph = DependencyGraph.from_registry(registry)
+        check_registry = get_global_check_registry()
+
+        # Collect assets in this group
+        group_keys: set[AssetKey] = set()
+        for asset_def in registry:
+            if asset_def.key.group == name:
+                group_keys.add(asset_def.key)
+
+        if not group_keys:
+            raise HTTPException(status_code=404, detail=f"Group '{name}' not found") from None
+
+        nodes: list[NodeSchema] = []
+        edges: list[EdgeSchema] = []
+        external_edges: list[ExternalEdgeSchema] = []
+
+        for asset_def in registry:
+            key = asset_def.key
+            if key not in group_keys:
+                continue
+
+            node_id = str(key)
+            return_type = None
+            if asset_def.return_type is not None:
+                return_type = getattr(asset_def.return_type, "__name__", str(asset_def.return_type))
+
+            asset_checks = check_registry.get_checks(key)
+            checks = [
+                CheckSchema(name=check.name, description=check.description)
+                for check in asset_checks
+            ]
+
+            nodes.append(
+                NodeSchema(
+                    id=node_id,
+                    name=key.name,
+                    group=key.group,
+                    description=asset_def.description,
+                    return_type=return_type,
+                    dependency_count=len(asset_def.dependencies),
+                    dependent_count=len(graph.reverse_adjacency.get(key, ())),
+                    checks=checks,
+                    metadata=asset_def.metadata,
+                    execution_type=_resolve_execution_type(asset_def.metadata),
+                )
+            )
+
+            # Intra-group edges and external inbound edges
+            for dep in asset_def.dependencies:
+                if dep in group_keys:
+                    edges.append(EdgeSchema(source=str(dep), target=node_id))
+                elif dep in registry:
+                    external_edges.append(
+                        ExternalEdgeSchema(
+                            source=str(dep),
+                            target=node_id,
+                            external_asset=str(dep),
+                            direction="inbound",
+                        )
+                    )
+
+        # External outbound edges (assets outside group that depend on group assets)
+        for asset_def in registry:
+            if asset_def.key in group_keys:
+                continue
+            for dep in asset_def.dependencies:
+                if dep in group_keys:
+                    external_edges.append(
+                        ExternalEdgeSchema(
+                            source=str(dep),
+                            target=str(asset_def.key),
+                            external_asset=str(asset_def.key),
+                            direction="outbound",
+                        )
+                    )
+
+        return GroupGraphSchema(
+            group_name=name,
+            nodes=nodes,
+            edges=edges,
+            external_edges=external_edges,
+        )
 
     @router.get("/api/assets/{key:path}", response_model=AssetDetailSchema)
     async def get_asset(key: str) -> AssetDetailSchema:
