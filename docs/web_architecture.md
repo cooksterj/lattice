@@ -23,17 +23,23 @@ src/lattice/web/
 ├── routes.py               # Graph visualization & asset detail endpoints
 ├── routes_history.py       # Run history & analytics endpoints
 ├── execution.py            # ExecutionManager, execution endpoints, WebSocket routes
-├── schemas.py              # Graph/Asset API schemas
+├── schemas.py              # Graph/Asset/Overview API schemas
 ├── schemas_execution.py    # Execution API schemas
 ├── templates/
 │   ├── base.html           # Shared layout: sidebar rail, theme toggle, corners
-│   ├── index.html          # Main D3.js graph visualization
+│   ├── groups.html         # Group overview landing page (home)
+│   ├── group_detail.html   # Single-group asset dependency graph
+│   ├── index.html          # Full pipeline D3.js graph visualization
+│   ├── assets.html         # Asset catalog listing
 │   ├── runs.html           # Active execution monitoring
 │   ├── asset_live.html     # Per-asset live log streaming
 │   ├── asset_detail.html   # Asset run history & metrics
 │   └── history.html        # Overall run history & analytics
 └── static/
-    ├── js/graph.js         # LatticeGraph class (D3.js)
+    ├── js/
+    │   ├── graph.js            # LatticeGraph class (full pipeline view)
+    │   ├── overview_graph.js   # OverviewGraph class (group overview + SPA navigation)
+    │   └── group_graph.js      # GroupGraph class (single-group detail view)
     └── css/styles.css      # Muted mission-control theme
 ```
 
@@ -87,7 +93,10 @@ def serve(
 
 | Method | Path | Template | Description |
 |--------|------|----------|-------------|
-| GET | `/` | `index.html` | Main graph visualization |
+| GET | `/` | `groups.html` | Group overview landing page |
+| GET | `/pipeline` | `index.html` | Full pipeline graph visualization |
+| GET | `/group/{name}` | `group_detail.html` | Single-group asset dependency graph |
+| GET | `/assets` | `assets.html` | Asset catalog listing |
 | GET | `/runs` | `runs.html` | Active execution monitoring |
 | GET | `/asset/{key:path}/live` | `asset_live.html` | Per-asset live log stream |
 | GET | `/asset/{key:path}` | `asset_detail.html` | Asset run history |
@@ -97,13 +106,31 @@ def serve(
 | Method | Path | Response Schema | Description |
 |--------|------|-----------------|-------------|
 | GET | `/api/graph` | `GraphSchema` | Full node/edge graph data |
+| GET | `/api/assets/overview` | `OverviewGraphSchema` | Meta-graph of groups and standalone assets |
+| GET | `/api/groups/{name}/graph` | `GroupGraphSchema` | Dependency subgraph scoped to a single group |
+| GET | `/api/assets` | `list[AssetCatalogItemSchema]` | All registered assets for the catalog |
+| GET | `/api/assets/grouped` | `GroupedAssetsSchema` | Assets organized into named groups |
 | GET | `/api/assets/{key:path}` | `AssetDetailSchema` | Single asset metadata, deps, dependents, checks |
 | GET | `/api/plan` | `PlanSchema` | Execution plan (optional `?target=` query param) |
 | GET | `/health` | `HealthSchema` | Health check with version and asset count |
 
 **`GET /api/graph`** builds the graph by iterating all registered assets:
-- Each asset becomes a `NodeSchema` with `id`, `name`, `group`, `description`, `return_type`, `dependency_count`, `dependent_count`, and `checks`.
+- Each asset becomes a `NodeSchema` with `id`, `name`, `group`, `description`, `return_type`, `dependency_count`, `dependent_count`, `checks`, `metadata`, and `execution_type`.
 - Each dependency edge becomes an `EdgeSchema` with `source` (dependency) and `target` (dependent).
+
+**`GET /api/assets/overview`** builds a meta-graph where:
+- Named groups become `OverviewNodeSchema` super-nodes (`node_type: "group"`) with aggregate `asset_count` and `check_count`.
+- Standalone assets (group `"default"`) become individual `OverviewNodeSchema` nodes (`node_type: "asset"`).
+- Cross-group dependencies become deduplicated `OverviewEdgeSchema` edges; intra-group edges collapse.
+
+**`GET /api/groups/{name}/graph`** returns a `GroupGraphSchema` with:
+- `nodes`: all assets within the group as `NodeSchema` entries.
+- `edges`: intra-group dependency edges.
+- `external_edges`: `ExternalEdgeSchema` entries for dependencies crossing the group boundary (both `inbound` and `outbound`).
+
+**`GET /api/assets`** returns a flat list of `AssetCatalogItemSchema` with summary fields (`check_count`, `execution_type`).
+
+**`GET /api/assets/grouped`** returns a `GroupedAssetsSchema` with assets partitioned into named `AssetGroupSchema` entries and `ungrouped_assets`.
 
 **`GET /api/assets/{key}`** returns an `AssetDetailSchema` including:
 - `dependencies`: list of upstream asset keys.
@@ -148,10 +175,18 @@ All history endpoints gracefully return empty results when `history_store` is `N
 
 | Schema | Key Fields |
 |--------|------------|
-| `NodeSchema` | `id`, `name`, `group`, `description`, `return_type`, `dependency_count`, `dependent_count`, `checks` |
+| `NodeSchema` | `id`, `name`, `group`, `description`, `return_type`, `dependency_count`, `dependent_count`, `checks`, `metadata`, `execution_type` |
 | `EdgeSchema` | `source`, `target` |
 | `GraphSchema` | `nodes: list[NodeSchema]`, `edges: list[EdgeSchema]` |
-| `AssetDetailSchema` | `id`, `name`, `group`, `dependencies`, `dependents`, `checks` |
+| `OverviewNodeSchema` | `id`, `name`, `node_type`, `asset_count`, `group`, `execution_type`, `check_count` |
+| `OverviewEdgeSchema` | `source`, `target` |
+| `OverviewGraphSchema` | `nodes: list[OverviewNodeSchema]`, `edges: list[OverviewEdgeSchema]` |
+| `GroupGraphSchema` | `group_name`, `nodes: list[NodeSchema]`, `edges: list[EdgeSchema]`, `external_edges: list[ExternalEdgeSchema]` |
+| `ExternalEdgeSchema` | `source`, `target`, `external_asset`, `direction` |
+| `AssetCatalogItemSchema` | `id`, `name`, `group`, `description`, `dependency_count`, `dependent_count`, `check_count`, `metadata`, `execution_type` |
+| `AssetGroupSchema` | `name`, `asset_count`, `assets: list[AssetCatalogItemSchema]` |
+| `GroupedAssetsSchema` | `groups: list[AssetGroupSchema]`, `ungrouped_assets: list[AssetCatalogItemSchema]` |
+| `AssetDetailSchema` | `id`, `name`, `group`, `dependencies`, `dependents`, `checks`, `metadata`, `execution_type` |
 | `CheckSchema` | `name`, `description` |
 | `PlanStepSchema` | `order`, `id`, `name`, `group` |
 | `PlanSchema` | `target`, `steps`, `total_assets` |
@@ -297,16 +332,42 @@ Log entries flow from worker threads to WebSocket clients through a thread-safe 
 ### Template Hierarchy
 
 All pages extend `base.html` which provides:
-- **Sidebar rail** (52px left nav) with 3 icons: Graph (`/`), Runs (`/runs`), History (`/history`).
+- **Sidebar rail** (52px left nav) with 5 icons: Home (`/`), Pipeline (`/pipeline`), Runs (`/runs`), History (`/history`), Assets (`/assets`).
 - **Theme system**: dark mode default, toggled via button, persisted in `localStorage`.
 - **Corner decorations**: fixed 60px accent elements at all four corners with glow effects.
 - **Template blocks**: `title`, `head_extra`, `body_class`, `main_class`, `content`, `scripts`.
 
 ### Pages
 
-#### `index.html` &mdash; Graph Visualization
+#### `groups.html` &mdash; Group Overview (Home)
 
-The main dashboard. Loads `graph.js` (with cache buster `?v=18`) and the D3.js CDN.
+The landing page at `/`. Loads `overview_graph.js` and the D3.js CDN. Renders a meta-graph where each named asset group is a super-node and standalone assets appear individually.
+
+| Element | Description |
+|---------|-------------|
+| Header bar | Logo with glow, title "ASSET GROUPS", nav links, node count, relayout button, theme toggle |
+| SVG graph | Full-viewport D3.js hierarchical DAG of group super-nodes |
+| Loading overlay | Triple-ring spinner shown during initial data fetch |
+| Tooltip | Hover tooltip with group/asset name and metadata |
+
+Clicking a group node triggers SPA navigation to the group detail view via History API `pushState`. Browser back/forward is handled via `popstate`.
+
+#### `group_detail.html` &mdash; Group Detail
+
+Served at `/group/{name}`. Loads `group_graph.js` and the D3.js CDN. Renders the intra-group asset dependency subgraph.
+
+| Element | Description |
+|---------|-------------|
+| Header bar | Logo, title with group name, nav links, node count, relayout button, theme toggle |
+| SVG graph | Full-viewport D3.js hierarchical DAG of assets within the group |
+| Loading overlay | Triple-ring spinner during data fetch |
+| Tooltip | Hover tooltip with asset details |
+
+The group detail view is also reachable via SPA transition from the overview graph (clicking a group super-node).
+
+#### `index.html` &mdash; Full Pipeline
+
+The full pipeline graph at `/pipeline`. Loads `graph.js` and the D3.js CDN. Shows every asset across all groups in a single force-directed DAG.
 
 | Element | Description |
 |---------|-------------|
@@ -317,6 +378,10 @@ The main dashboard. Loads `graph.js` (with cache buster `?v=18`) and the D3.js C
 | Execution controls | Bottom-right: date picker (single/range), execute button |
 | Memory panel | Bottom-left: current/peak RSS, sparkline chart (hidden until execution starts) |
 | Progress indicator | Current asset name, counter, spinner (hidden until execution starts) |
+
+#### `assets.html` &mdash; Asset Catalog
+
+Asset catalog at `/assets`. Displays a searchable, grouped listing of all registered assets with metadata, dependency counts, and check counts.
 
 #### `runs.html` &mdash; Active Runs
 
@@ -364,9 +429,59 @@ High-level analytics dashboard.
 | Recent runs table | Filterable by status; clickable for modal details |
 | Modal (4 tabs) | ASSETS, CHECKS, LOGS, LINEAGE |
 
+### `overview_graph.js` &mdash; OverviewGraph Class
+
+D3.js hierarchical graph for the group overview landing page. Manages SPA navigation between the overview meta-graph and group detail views.
+
+#### Initialization
+
+```
+constructor(container)
+  -> setupSVG()           // Create SVG, measure viewport
+  -> setupZoom()          // d3.zoom, scale 0.1-4x
+  -> setupDefs()          // Gradients, glow filters
+  -> loadData()           // GET /api/assets/overview -> nodes[], edges[]
+  -> render()             // Draw edges, group/asset nodes, labels, check slivers
+  -> setupEventListeners()// Hover, click, drag, relayout, theme toggle
+  -> hideLoading()        // Fade out spinner overlay
+```
+
+#### SPA Navigation
+
+Clicking a group node transitions in-place to the group detail view:
+1. Fetches `GET /api/groups/{name}/graph`.
+2. Replaces the SVG content with the intra-group asset subgraph.
+3. Pushes `/group/{name}` via `history.pushState()`.
+4. Updates the header subtitle and node count.
+
+Browser back/forward is handled via a `popstate` listener that restores the appropriate view. The `currentView` property tracks whether the graph is showing `'overview'` or `'group'`.
+
+#### Drag Behavior
+
+Captures the dragged DOM element on `dragstart` to avoid issues with `event.sourceEvent.target` shifting during `mousemove`. A `_isDragging` flag suppresses tooltip re-entry events triggered by SVG node transform changes. Edge paths are recalculated on every drag tick via `updateEdgePaths()` (overview) or `_updateGroupEdgePaths()` (group detail).
+
+#### Check Slivers on Groups
+
+Group super-nodes display a single check sliver regardless of how many checks exist across constituent assets. This avoids visual clutter on groups with many checks.
+
+### `group_graph.js` &mdash; GroupGraph Class
+
+D3.js hierarchical graph for the standalone group detail page at `/group/{name}`. Renders the intra-group asset dependency subgraph with external edge indicators.
+
+```
+constructor(container, groupName)
+  -> setupSVG()
+  -> setupZoom()
+  -> setupDefs()
+  -> loadData()           // GET /api/groups/{groupName}/graph
+  -> render()             // Draw intra-group edges, asset nodes, labels, check slivers
+  -> setupEventListeners()
+  -> hideLoading()
+```
+
 ### `graph.js` &mdash; LatticeGraph Class
 
-D3.js force-directed graph visualization with real-time execution monitoring.
+D3.js force-directed graph visualization for the full pipeline view at `/pipeline`, with real-time execution monitoring.
 
 #### Initialization
 
@@ -498,7 +613,10 @@ flowchart LR
 
     subgraph FRONTEND [" Frontend "]
         direction TB
+        groups_page(["groups.html + overview_graph.js"]):::frontend
+        group_detail_page(["group_detail.html + group_graph.js"]):::frontend
         index_page(["index.html + graph.js"]):::frontend
+        assets_page(["assets.html"]):::frontend
         runs_page(["runs.html"]):::frontend
         live_page(["asset_live.html"]):::frontend
         detail_page(["asset_detail.html"]):::frontend
@@ -531,9 +649,13 @@ flowchart LR
     mgr --> memory
     mgr --> log_queue
 
+    groups_page -->|"GET /api/assets/overview"| graph_router
+    groups_page -->|"GET /api/groups/name/graph"| graph_router
+    group_detail_page -->|"GET /api/groups/name/graph"| graph_router
     index_page -->|"GET /api/graph"| graph_router
     index_page -->|"POST /api/execution/start"| exec_router
     index_page -->|"WS /ws/execution"| ws_exec
+    assets_page -->|"GET /api/assets"| graph_router
     runs_page -->|"WS /ws/execution"| ws_exec
     live_page -->|"WS /ws/asset/key"| ws_asset
     detail_page -->|"GET /api/history/assets/key"| history_router
@@ -561,7 +683,7 @@ sequenceDiagram
 
     rect rgba(74, 111, 165, 0.1)
         Note right of User: Page load
-        User ->> Browser: Visit /
+        User ->> Browser: Visit /pipeline
         Browser ->> API: GET /api/graph
         API -->> Browser: GraphSchema (nodes, edges)
         Note over Browser: Render D3.js DAG
@@ -649,27 +771,34 @@ flowchart TD
     classDef api fill:#5a8a72,stroke:#3d6b52,color:#f0f0f0,rx:8,ry:8
     classDef wsbox fill:#7b6b8a,stroke:#5a4d6b,color:#f0f0f0,rx:8,ry:8
 
-    index(["/ — Graph"]):::page
+    groups(["/ — Group Overview"]):::page
+    group_detail(["/group/name — Group Detail"]):::page
+    pipeline(["/pipeline — Full Pipeline"]):::page
+    assets_catalog(["/assets — Asset Catalog"]):::page
     runs(["/runs — Active Runs"]):::page
     history(["/history — Run History"]):::page
     detail(["/asset/key — Asset Detail"]):::page
     live(["/asset/key/live — Live Logs"]):::page
 
-    index -->|"sidebar rail"| runs
-    index -->|"sidebar rail"| history
-    runs -->|"sidebar rail"| index
-    runs -->|"sidebar rail"| history
-    history -->|"sidebar rail"| index
-    history -->|"sidebar rail"| runs
+    groups -->|"sidebar rail"| pipeline
+    groups -->|"sidebar rail"| runs
+    groups -->|"sidebar rail"| history
+    groups -->|"sidebar rail"| assets_catalog
+    groups -->|"click group node (SPA)"| group_detail
+    group_detail -->|"browser back (SPA)"| groups
 
-    index -->|"click node → sidebar → view history"| detail
-    detail -->|"← BACK TO GRAPH"| index
+    pipeline -->|"sidebar rail"| groups
+    pipeline -->|"click node → sidebar → view history"| detail
+    detail -->|"← BACK TO GRAPH"| pipeline
     runs -->|"click asset row"| live
     live -->|"← RUNS"| runs
 
     subgraph REST [" REST APIs consumed "]
         direction LR
+        api_overview(["GET /api/assets/overview"]):::api
+        api_group_graph(["GET /api/groups/name/graph"]):::api
         api_graph(["GET /api/graph"]):::api
+        api_assets_list(["GET /api/assets"]):::api
         api_assets(["GET /api/assets/key"]):::api
         api_exec(["POST /api/execution/start"]):::api
         api_status(["GET /api/execution/status"]):::api
@@ -682,10 +811,14 @@ flowchart TD
         ws_asset_ep(["WS /ws/asset/key"]):::wsbox
     end
 
-    index --> api_graph
-    index --> api_assets
-    index --> api_exec
-    index --> ws_exec_ep
+    groups --> api_overview
+    groups --> api_group_graph
+    group_detail --> api_group_graph
+    pipeline --> api_graph
+    pipeline --> api_assets
+    pipeline --> api_exec
+    pipeline --> ws_exec_ep
+    assets_catalog --> api_assets_list
     runs --> api_status
     runs --> ws_exec_ep
     live --> api_assets
