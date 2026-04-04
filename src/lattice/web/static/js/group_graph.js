@@ -1,33 +1,36 @@
 /**
- * Lattice Graph Visualization
- * D3.js force-directed graph with interactive features
+ * Lattice Group Graph Visualization
+ * Stripped-down variant of graph.js for rendering a dependency graph
+ * scoped to a single asset group, with external dependency stubs.
  */
 
-// Muted mission control palette for asset groups
+// Reuse the same palette and icon constants as graph.js
 const GROUP_COLORS = {
-    default: {start: '#8068a8', end: '#2e2048', stroke: '#9680b8'},    // Brighter Purple
-    analytics: {start: '#68b5c2', end: '#24545e', stroke: '#7ec8d4'},  // Brighter Teal
-    data: {start: '#c45270', end: '#6e2038', stroke: '#d46a86'},       // Brighter Rose
-    ml: {start: '#d0b454', end: '#6e5c20', stroke: '#dcc468'},         // Brighter Amber
-    etl: {start: '#cf7a56', end: '#6e3420', stroke: '#d99070'},        // Brighter Coral
-    dbt: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'},        // dbt Orange
-    jaffle_shop: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'}, // dbt Orange
+    default: {start: '#8068a8', end: '#2e2048', stroke: '#9680b8'},
+    analytics: {start: '#68b5c2', end: '#24545e', stroke: '#7ec8d4'},
+    data: {start: '#c45270', end: '#6e2038', stroke: '#d46a86'},
+    ml: {start: '#d0b454', end: '#6e5c20', stroke: '#dcc468'},
+    etl: {start: '#cf7a56', end: '#6e3420', stroke: '#d99070'},
+    dbt: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'},
+    jaffle_shop: {start: '#e87d3e', end: '#7a3a14', stroke: '#f0954e'},
 };
 
-// Execution type → symbol ID (defined in setupDefs)
 const EXECUTION_TYPE_ICONS = {
     dbt:    'icon-dbt',
     python: 'icon-python',
     shell:  'icon-shell',
 };
 
-class LatticeGraph {
-    constructor(container) {
-        this.container = container;
+class GroupGraph {
+    constructor(containerId, groupName) {
+        this.container = containerId;
+        this.groupName = groupName;
         this.svg = null;
         this.simulation = null;
         this.nodes = [];
         this.edges = [];
+        this.externalEdges = [];
+        this.stubNodes = [];
         this.width = 0;
         this.height = 0;
 
@@ -57,26 +60,19 @@ class LatticeGraph {
     }
 
     setupZoom() {
-        const zoom = d3.zoom()
+        this.zoom = d3.zoom()
             .scaleExtent([0.1, 4])
             .on('zoom', (event) => {
                 this.g.attr('transform', event.transform);
             });
 
-        this.svg.call(zoom);
-
-        // Initial zoom to center
-        const initialTransform = d3.zoomIdentity
-            .translate(this.width / 2, this.height / 2)
-            .scale(0.8);
-        this.svg.call(zoom.transform, initialTransform);
+        this.svg.call(this.zoom);
     }
 
     setupDefs() {
         const defs = this.svg.append('defs');
 
         // === EDGE GRADIENTS ===
-        // Main edge gradient: dusty purple to muted teal
         const edgeGradient = defs.append('linearGradient')
             .attr('id', 'edge-gradient')
             .attr('gradientUnits', 'userSpaceOnUse');
@@ -90,7 +86,6 @@ class LatticeGraph {
             .attr('offset', '100%')
             .attr('stop-color', '#68b5c2');
 
-        // Highlighted edge gradient: dusty rose to muted teal
         const edgeGradientHighlight = defs.append('linearGradient')
             .attr('id', 'edge-gradient-highlight')
             .attr('gradientUnits', 'userSpaceOnUse');
@@ -102,7 +97,6 @@ class LatticeGraph {
             .attr('stop-color', '#68b5c2');
 
         // === GLOW FILTERS ===
-        // Edge glow filter
         const edgeGlow = defs.append('filter')
             .attr('id', 'edge-glow')
             .attr('x', '-50%')
@@ -116,7 +110,6 @@ class LatticeGraph {
         edgeGlow.append('feMerge')
             .html('<feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>');
 
-        // Intense glow for highlighted edges
         const edgeGlowIntense = defs.append('filter')
             .attr('id', 'edge-glow-intense')
             .attr('x', '-100%')
@@ -131,7 +124,6 @@ class LatticeGraph {
             .html('<feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/>');
 
         // === ARROW MARKERS ===
-        // Futuristic angular arrow - default
         const arrow = defs.append('marker')
             .attr('id', 'arrow')
             .attr('viewBox', '0 -6 14 12')
@@ -140,13 +132,11 @@ class LatticeGraph {
             .attr('markerWidth', 10)
             .attr('markerHeight', 10)
             .attr('orient', 'auto');
-        // Diamond/chevron shape for futuristic feel
         arrow.append('path')
             .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
             .attr('fill', '#68b5c2')
             .attr('filter', 'drop-shadow(0 0 2px rgba(104,181,194,0.4))');
 
-        // Highlighted arrow
         const arrowHighlight = defs.append('marker')
             .attr('id', 'arrow-highlighted')
             .attr('viewBox', '0 -6 14 12')
@@ -159,6 +149,20 @@ class LatticeGraph {
             .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
             .attr('fill', '#68b5c2')
             .attr('filter', 'drop-shadow(0 0 3px rgba(104,181,194,0.5))');
+
+        // === EXTERNAL EDGE ARROW (muted) ===
+        const arrowExternal = defs.append('marker')
+            .attr('id', 'arrow-external')
+            .attr('viewBox', '0 -6 14 12')
+            .attr('refX', 12)
+            .attr('refY', 0)
+            .attr('markerWidth', 8)
+            .attr('markerHeight', 8)
+            .attr('orient', 'auto');
+        arrowExternal.append('path')
+            .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
+            .attr('fill', '#6a6a80')
+            .attr('opacity', 0.5);
 
         // === NODE GRADIENTS ===
         Object.entries(GROUP_COLORS).forEach(([group, colors]) => {
@@ -178,8 +182,22 @@ class LatticeGraph {
                 .attr('stop-color', colors.end);
         });
 
+        // Stub node gradient (muted gray)
+        const stubGradient = defs.append('linearGradient')
+            .attr('id', 'gradient-stub')
+            .attr('x1', '0%')
+            .attr('y1', '0%')
+            .attr('x2', '100%')
+            .attr('y2', '100%');
+        stubGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#5a5a6e');
+        stubGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#2e2e3e');
+
         // === EXECUTION TYPE ICON SYMBOLS ===
-        // dbt logo (Simple Icons)
+        // dbt logo
         const dbtSymbol = defs.append('symbol')
             .attr('id', 'icon-dbt')
             .attr('viewBox', '0 0 24 24');
@@ -187,7 +205,7 @@ class LatticeGraph {
             .attr('fill', '#e87d3e')
             .attr('d', 'M17.9 9.38a8.15 8.15 0 0 0-3.04-3.12l1.77.84a10.29 10.29 0 0 1 3.74 3l3.23-5.93a2.85 2.85 0 0 0-.06-2.96 2.86 2.86 0 0 0-3.57-.86l-5.87 3.21a4.36 4.36 0 0 1-4.18 0L4.18.41a2.85 2.85 0 0 0-2.96.06A2.86 2.86 0 0 0 .35 3.97l3.2 5.94a4.36 4.36 0 0 1 0 4.18l-3.13 5.74a2.86 2.86 0 0 0 .09 3 2.86 2.86 0 0 0 3.54.84l6.06-3.3a10.29 10.29 0 0 1-3-3.75l-.84-1.77a8.15 8.15 0 0 0 3.12 3.04l10.58 5.78a2.86 2.86 0 0 0 3.54-.84 2.87 2.87 0 0 0 .08-3L17.9 9.38zm3.38-7.74a1.09 1.09 0 1 1 0 2.18 1.09 1.09 0 0 1 0-2.18zM2.74 3.82a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18zm0 18.54a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18zm10.36-11.45a2.17 2.17 0 0 0-2.18 2.17c0 .62.26 1.2.7 1.61a2.72 2.72 0 1 1 3.07-4.48 2.16 2.16 0 0 0-1.6-.7v.4zm8.18 11.45a1.09 1.09 0 1 1 0-2.18 1.09 1.09 0 0 1 0 2.18z');
 
-        // Python logo (Simple Icons)
+        // Python logo
         const pySymbol = defs.append('symbol')
             .attr('id', 'icon-python')
             .attr('viewBox', '0 0 24 24');
@@ -216,32 +234,85 @@ class LatticeGraph {
 
     async loadData() {
         try {
-            const response = await fetch('/api/graph');
+            const response = await fetch(`/api/groups/${encodeURIComponent(this.groupName)}/graph`);
             const data = await response.json();
 
             this.nodes = data.nodes.map(n => ({...n}));
             this.edges = data.edges.map(e => ({...e}));
+            this.externalEdges = (data.external_edges || []).map(e => ({...e}));
 
-            // Update asset count
-            document.getElementById('asset-count').textContent = String(this.nodes.length).padStart(3, '0');
+            // Build stub nodes from external edges
+            this.buildStubNodes();
+
+            // Update asset count (intra-group nodes only)
+            const countEl = document.getElementById('asset-count');
+            if (countEl) {
+                countEl.textContent = String(this.nodes.length).padStart(3, '0');
+            }
 
         } catch (error) {
-            console.error('Failed to load graph data:', error);
-            document.getElementById('asset-count').textContent = 'ERR';
+            console.error('Failed to load group graph data:', error);
+            const countEl = document.getElementById('asset-count');
+            if (countEl) {
+                countEl.textContent = 'ERR';
+            }
         }
     }
 
+    buildStubNodes() {
+        const stubMap = new Map();
+
+        this.externalEdges.forEach(ext => {
+            const stubId = ext.external_asset;
+            if (!stubMap.has(stubId)) {
+                stubMap.set(stubId, {
+                    id: stubId,
+                    name: stubId.includes('/') ? stubId.split('/').pop() : stubId,
+                    group: 'stub',
+                    _isStub: true,
+                    _stubDirection: ext.direction, // inbound or outbound
+                    checks: [],
+                });
+            }
+        });
+
+        this.stubNodes = Array.from(stubMap.values());
+    }
+
     render() {
-        // Create edge groups (each edge has multiple layers for glow effect)
-        const edgeGroups = this.g.append('g')
+        // Combine real nodes and stub nodes for layout
+        const allNodes = [...this.nodes, ...this.stubNodes];
+
+        // Build internal edges (source/target reference real node IDs)
+        const internalEdges = this.edges.map(e => ({...e}));
+
+        // Build external edges mapped to stub nodes
+        const externalEdgeMapped = this.externalEdges.map(ext => {
+            if (ext.direction === 'inbound') {
+                // External asset -> internal target (upstream dependency)
+                return {source: ext.external_asset, target: ext.target, _isExternal: true};
+            } else {
+                // Internal source -> external asset (downstream dependent)
+                return {source: ext.source, target: ext.external_asset, _isExternal: true};
+            }
+        });
+
+        const allEdges = [...internalEdges, ...externalEdgeMapped];
+
+        // Store combined data for layout and tick
+        this._allNodes = allNodes;
+        this._allEdges = allEdges;
+
+        // === RENDER INTERNAL EDGES ===
+        const internalEdgeGroups = this.g.append('g')
             .attr('class', 'edges')
             .selectAll('g')
-            .data(this.edges)
+            .data(internalEdges)
             .join('g')
             .attr('class', 'edge-group');
 
-        // Layer 1: Subtle glow layer (wider, soft)
-        edgeGroups.append('path')
+        // Glow layer
+        internalEdgeGroups.append('path')
             .attr('class', 'edge-glow-layer')
             .attr('fill', 'none')
             .attr('stroke', 'url(#edge-gradient)')
@@ -249,18 +320,35 @@ class LatticeGraph {
             .attr('opacity', 0.2)
             .attr('filter', 'url(#edge-glow)');
 
-        // Layer 2: Main edge with gradient
-        edgeGroups.append('path')
+        // Main edge
+        internalEdgeGroups.append('path')
             .attr('class', 'edge-main')
             .attr('fill', 'none')
             .attr('stroke', 'url(#edge-gradient)')
             .attr('stroke-width', 2);
 
-        // Store reference to edge groups for tick updates
-        this.edgeGroups = edgeGroups;
-        this.edgeElements = edgeGroups.selectAll('.edge-main');
+        this.edgeGroups = internalEdgeGroups;
 
-        // Create nodes
+        // === RENDER EXTERNAL EDGES (dashed) ===
+        const externalEdgeGroups = this.g.append('g')
+            .attr('class', 'external-edges')
+            .selectAll('g')
+            .data(externalEdgeMapped)
+            .join('g')
+            .attr('class', 'edge-group edge-group-external');
+
+        externalEdgeGroups.append('path')
+            .attr('class', 'edge-main')
+            .attr('fill', 'none')
+            .attr('stroke', '#6a6a80')
+            .attr('stroke-width', 1.5)
+            .attr('stroke-dasharray', '8 4')
+            .attr('opacity', 0.4)
+            .attr('marker-end', 'url(#arrow-external)');
+
+        this.externalEdgeGroups = externalEdgeGroups;
+
+        // === RENDER INTRA-GROUP NODES ===
         this.nodeElements = this.g.append('g')
             .attr('class', 'nodes')
             .selectAll('g')
@@ -277,14 +365,14 @@ class LatticeGraph {
 
         // Measure each label and store width on datum
         const MIN_NODE_WIDTH = 130;
-        const NODE_PADDING = 28; // horizontal padding around text
+        const NODE_PADDING = 28;
         this.nodeElements.each(function(d) {
             const textEl = d3.select(this).select('text').node();
             const textWidth = textEl.getComputedTextLength();
             d._nodeWidth = Math.max(MIN_NODE_WIDTH, textWidth + NODE_PADDING);
         });
 
-        // Node rectangles with neon glow (sized to fit text)
+        // Node rectangles with gradient and glow
         this.nodeElements.insert('rect', 'text')
             .attr('width', d => d._nodeWidth)
             .attr('height', 44)
@@ -304,27 +392,21 @@ class LatticeGraph {
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
             });
 
-        // Check slivers on the right side of node (full height, stacked horizontally)
+        // Check slivers
         this.nodeElements.each(function(d) {
             const node = d3.select(this);
             const checks = d.checks || [];
             if (checks.length === 0) return;
 
-            // Muted teal variations for multiple checks
             const cyanShades = [
-                '#68b5c2', // Base brighter teal
-                '#5ca0ac', // Slightly darker
-                '#508e9a', // More muted
-                '#457c88', // Deep teal
-                '#78c2ce', // Lighter teal
+                '#68b5c2', '#5ca0ac', '#508e9a', '#457c88', '#78c2ce',
             ];
 
-            // Calculate sliver dimensions
             const sliverWidth = 4;
             const sliverGap = 1;
-            const sliverHeight = 44; // Full height of asset block
+            const sliverHeight = 44;
             const halfWidth = d._nodeWidth / 2;
-            const startX = halfWidth + 2; // Position to right of main rect
+            const startX = halfWidth + 2;
 
             checks.forEach((check, i) => {
                 const color = cyanShades[i % cyanShades.length];
@@ -333,7 +415,7 @@ class LatticeGraph {
                     .attr('width', sliverWidth)
                     .attr('height', sliverHeight)
                     .attr('x', startX + i * (sliverWidth + sliverGap))
-                    .attr('y', -22) // Same y as main rect
+                    .attr('y', -22)
                     .attr('rx', 1)
                     .style('fill', color)
                     .style('filter', `drop-shadow(0 0 4px ${color}cc)`)
@@ -342,7 +424,7 @@ class LatticeGraph {
             });
         });
 
-        // Execution type icons (bottom-right corner of node)
+        // Execution type icons
         this.nodeElements.each(function(d) {
             const symbolId = EXECUTION_TYPE_ICONS[d.execution_type];
             if (!symbolId) return;
@@ -362,27 +444,69 @@ class LatticeGraph {
                 .style('opacity', 0.85);
         });
 
-        // Compute hierarchical layout (left-to-right)
+        // === RENDER STUB NODES ===
+        const MIN_STUB_WIDTH = 80;
+        const STUB_HEIGHT = 32;
+        const STUB_PADDING = 24;
+
+        this.stubNodeElements = this.g.append('g')
+            .attr('class', 'stub-nodes')
+            .selectAll('g')
+            .data(this.stubNodes)
+            .join('g')
+            .attr('class', 'node node-stub');
+
+        // Stub labels (render first to measure text width)
+        this.stubNodeElements.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', '0.35em')
+            .style('font-size', '0.7rem')
+            .style('opacity', 0.5)
+            .text(d => d.name);
+
+        // Measure each stub label and size the box to fit
+        this.stubNodeElements.each(function(d) {
+            const textEl = d3.select(this).select('text').node();
+            const textWidth = textEl.getComputedTextLength();
+            d._nodeWidth = Math.max(MIN_STUB_WIDTH, textWidth + STUB_PADDING);
+        });
+
+        // Stub rectangles sized to fit text
+        this.stubNodeElements.insert('rect', 'text')
+            .attr('width', d => d._nodeWidth)
+            .attr('height', STUB_HEIGHT)
+            .attr('x', d => -d._nodeWidth / 2)
+            .attr('y', -STUB_HEIGHT / 2)
+            .attr('rx', 3)
+            .style('fill', 'url(#gradient-stub)')
+            .style('stroke', '#6a6a80')
+            .style('stroke-width', 1)
+            .style('opacity', 0.5);
+
+        // === LAYOUT ===
         this.computeHierarchicalLayout();
 
+        // Position stub nodes at edges
+        this.positionStubNodes();
+
         // Setup simulation with fixed positions
-        this.simulation = d3.forceSimulation(this.nodes)
-            .force('link', d3.forceLink(this.edges)
+        this.simulation = d3.forceSimulation(allNodes)
+            .force('link', d3.forceLink(allEdges)
                 .id(d => d.id)
                 .distance(150))
             .on('tick', () => this.tick())
             .on('end', () => this.lockAllNodes());
 
-        // Lock nodes immediately since we computed positions
         this.lockAllNodes();
         this.simulation.stop();
         this.tick();
+        this.fitToContent();
     }
 
     computeHierarchicalLayout() {
+        // Only layout real (non-stub) nodes hierarchically
         const nodeMap = new Map(this.nodes.map(n => [n.id, n]));
 
-        // Build adjacency list (what each node depends on)
         const dependencies = new Map();
         const dependents = new Map();
 
@@ -394,16 +518,15 @@ class LatticeGraph {
         this.edges.forEach(e => {
             const sourceId = typeof e.source === 'object' ? e.source.id : e.source;
             const targetId = typeof e.target === 'object' ? e.target.id : e.target;
-            dependencies.get(targetId).push(sourceId);
-            dependents.get(sourceId).push(targetId);
+            if (dependencies.has(targetId)) dependencies.get(targetId).push(sourceId);
+            if (dependents.has(sourceId)) dependents.get(sourceId).push(targetId);
         });
 
-        // Compute level for each node (longest path from any source)
         const levels = new Map();
 
         const computeLevel = (nodeId, visited = new Set()) => {
             if (levels.has(nodeId)) return levels.get(nodeId);
-            if (visited.has(nodeId)) return 0; // Cycle protection
+            if (visited.has(nodeId)) return 0;
 
             visited.add(nodeId);
             const deps = dependencies.get(nodeId) || [];
@@ -421,7 +544,6 @@ class LatticeGraph {
 
         this.nodes.forEach(n => computeLevel(n.id));
 
-        // Group nodes by level
         const levelGroups = new Map();
         this.nodes.forEach(n => {
             const level = levels.get(n.id);
@@ -429,16 +551,13 @@ class LatticeGraph {
             levelGroups.get(level).push(n);
         });
 
-        // Sort levels
         const sortedLevels = Array.from(levelGroups.keys()).sort((a, b) => a - b);
         const maxLevel = sortedLevels[sortedLevels.length - 1] || 0;
 
-        // Layout parameters
         const horizontalSpacing = 200;
         const verticalSpacing = 80;
         const startX = -((maxLevel * horizontalSpacing) / 2);
 
-        // Position nodes
         sortedLevels.forEach(level => {
             const nodesAtLevel = levelGroups.get(level);
             const levelHeight = nodesAtLevel.length * verticalSpacing;
@@ -451,44 +570,113 @@ class LatticeGraph {
                 node.fy = node.y;
             });
         });
+
+        // Store layout bounds for stub positioning
+        this._layoutMinX = Infinity;
+        this._layoutMaxX = -Infinity;
+
+        this.nodes.forEach(n => {
+            const halfW = (n._nodeWidth || 130) / 2;
+            if (n.x - halfW < this._layoutMinX) this._layoutMinX = n.x - halfW;
+            if (n.x + halfW > this._layoutMaxX) this._layoutMaxX = n.x + halfW;
+        });
+    }
+
+    positionStubNodes() {
+        // Position stub nodes at the left (inbound) or right (outbound) edges
+        const STUB_MARGIN = 120;
+        const verticalSpacing = 60;
+
+        const inboundStubs = this.stubNodes.filter(s => s._stubDirection === 'inbound');
+        const outboundStubs = this.stubNodes.filter(s => s._stubDirection === 'outbound');
+
+        // Inbound stubs on the left
+        const leftX = this._layoutMinX - STUB_MARGIN;
+        const inboundHeight = inboundStubs.length * verticalSpacing;
+        const inboundStartY = -inboundHeight / 2 + verticalSpacing / 2;
+
+        inboundStubs.forEach((stub, i) => {
+            stub.x = leftX;
+            stub.y = inboundStartY + i * verticalSpacing;
+            stub.fx = stub.x;
+            stub.fy = stub.y;
+        });
+
+        // Outbound stubs on the right
+        const rightX = this._layoutMaxX + STUB_MARGIN;
+        const outboundHeight = outboundStubs.length * verticalSpacing;
+        const outboundStartY = -outboundHeight / 2 + verticalSpacing / 2;
+
+        outboundStubs.forEach((stub, i) => {
+            stub.x = rightX;
+            stub.y = outboundStartY + i * verticalSpacing;
+            stub.fx = stub.x;
+            stub.fy = stub.y;
+        });
+    }
+
+    fitToContent() {
+        if (this._allNodes.length === 0) return;
+
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        this._allNodes.forEach(n => {
+            const halfW = (n._nodeWidth || 130) / 2;
+            const halfH = n._isStub ? 16 : 22;
+            const sliverOffset = (n.checks && n.checks.length > 0) ? (n.checks.length * 5) + 2 : 0;
+            if (n.x - halfW < minX) minX = n.x - halfW;
+            if (n.x + halfW + sliverOffset > maxX) maxX = n.x + halfW + sliverOffset;
+            if (n.y - halfH < minY) minY = n.y - halfH;
+            if (n.y + halfH > maxY) maxY = n.y + halfH;
+        });
+
+        const contentWidth = maxX - minX;
+        const contentHeight = maxY - minY;
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+
+        const headerHeight = 64;
+        const padding = 60;
+        const availableWidth = this.width - padding * 2;
+        const availableHeight = this.height - headerHeight - padding;
+
+        if (availableWidth <= 0 || availableHeight <= 0) return;
+
+        const scaleX = availableWidth / contentWidth;
+        const scaleY = availableHeight / contentHeight;
+        const scale = Math.min(scaleX, scaleY, 1.2);
+
+        const tx = this.width / 2 - centerX * scale;
+        const ty = headerHeight + availableHeight / 2 - centerY * scale + padding / 2;
+
+        const transform = d3.zoomIdentity.translate(tx, ty).scale(scale);
+        this.svg.call(this.zoom.transform, transform);
     }
 
     tick() {
-        // Generate curved path for an edge
         const generatePath = (d) => {
-            // Per-node widths
             const sourceHalfWidth = (d.source._nodeWidth || 130) / 2;
             const targetHalfWidth = (d.target._nodeWidth || 130) / 2;
 
-            // Calculate check sliver offset for source node (right side)
             const sourceChecks = d.source.checks ? d.source.checks.length : 0;
             const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
 
-            // Source: right edge (plus slivers), Target: left edge
             const sourceX = d.source.x + sourceHalfWidth + sliverOffset;
             const targetX = d.target.x - targetHalfWidth;
             const sourceY = d.source.y;
             const targetY = d.target.y;
 
-            // Calculate control points for smooth bezier curve
             const dx = targetX - sourceX;
             const dy = targetY - sourceY;
 
-            // Control point offset (creates smooth S-curve or gentle arc)
             const curvature = Math.min(Math.abs(dx) * 0.3, 60);
 
-            // Use quadratic bezier for smoother, more elegant curves
             const midX = sourceX + dx * 0.5;
             const midY = sourceY + dy * 0.5;
 
-            // If nodes are mostly horizontal, create gentle arc
-            // If there's vertical offset, create S-curve
             if (Math.abs(dy) < 30) {
-                // Gentle arc
                 const controlY = midY - Math.sign(dy || 1) * curvature * 0.3;
                 return `M${sourceX},${sourceY} Q${midX},${controlY} ${targetX},${targetY}`;
             } else {
-                // S-curve with two control points
                 const c1x = sourceX + curvature;
                 const c1y = sourceY;
                 const c2x = targetX - curvature;
@@ -497,14 +685,53 @@ class LatticeGraph {
             }
         };
 
-        // Update gradient positions to follow edge direction
+        // For stub nodes the half-width calculation uses the smaller rect
+        const generateExternalPath = (d) => {
+            const sourceHalfWidth = (d.source._nodeWidth || 100) / 2;
+            const targetHalfWidth = (d.target._nodeWidth || 100) / 2;
+
+            const sourceChecks = d.source.checks ? d.source.checks.length : 0;
+            const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
+
+            const sourceX = d.source.x + sourceHalfWidth + (d.source._isStub ? 0 : sliverOffset);
+            const targetX = d.target.x - targetHalfWidth;
+            const sourceY = d.source.y;
+            const targetY = d.target.y;
+
+            const dx = targetX - sourceX;
+            const dy = targetY - sourceY;
+
+            const curvature = Math.min(Math.abs(dx) * 0.3, 60);
+
+            if (Math.abs(dy) < 30) {
+                const midX = sourceX + dx * 0.5;
+                const midY = sourceY + dy * 0.5;
+                const controlY = midY - Math.sign(dy || 1) * curvature * 0.3;
+                return `M${sourceX},${sourceY} Q${midX},${controlY} ${targetX},${targetY}`;
+            } else {
+                const c1x = sourceX + curvature;
+                const c1y = sourceY;
+                const c2x = targetX - curvature;
+                const c2y = targetY;
+                return `M${sourceX},${sourceY} C${c1x},${c1y} ${c2x},${c2y} ${targetX},${targetY}`;
+            }
+        };
+
+        // Update internal edge paths
         this.edgeGroups.each(function(d) {
-            // Update all path layers with the same curved path
             const path = generatePath(d);
             d3.select(this).selectAll('path').attr('d', path);
         });
 
+        // Update external edge paths
+        this.externalEdgeGroups.each(function(d) {
+            const path = generateExternalPath(d);
+            d3.select(this).selectAll('path').attr('d', path);
+        });
+
+        // Update node positions
         this.nodeElements.attr('transform', d => `translate(${d.x},${d.y})`);
+        this.stubNodeElements.attr('transform', d => `translate(${d.x},${d.y})`);
     }
 
     drag() {
@@ -520,35 +747,26 @@ class LatticeGraph {
             })
             .on('end', (event, d) => {
                 if (!event.active) this.simulation.alphaTarget(0);
-                // Keep node locked in place after dragging
-                // d.fx and d.fy remain set
             });
     }
 
     lockAllNodes() {
-        this.nodes.forEach(d => {
+        this._allNodes.forEach(d => {
             d.fx = d.x;
             d.fy = d.y;
         });
     }
 
-    unlockAllNodes() {
-        // Recompute hierarchical layout
-        this.computeHierarchicalLayout();
-        this.tick();
-    }
-
     setupEventListeners() {
         const tooltip = document.getElementById('tooltip');
 
-        // Node hover
+        // Node hover (intra-group nodes only)
         this.nodeElements
             .on('mouseenter', (event, d) => {
                 tooltip.innerHTML = `
                     <div class="font-display font-bold" style="color: #68b5c2;">${d.name}</div>
                     <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
                     ${d.return_type ? `<div style="color: #c45270; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
-                    <div style="color: #5a5a72; font-size: 0.65rem; margin-top: 6px; letter-spacing: 0.05em;">CLICK: details</div>
                 `;
                 tooltip.style.opacity = '1';
                 this.highlightConnections(d);
@@ -562,33 +780,27 @@ class LatticeGraph {
                 this.clearHighlights();
             })
             .on('click', (event, d) => {
-                if (event.defaultPrevented) return; // Ignore drag-end clicks (D3 pattern)
+                if (event.defaultPrevented) return;
                 event.stopPropagation();
                 window.location.href = '/asset/' + encodeURIComponent(d.id);
             });
 
-        // Theme toggle
-        document.getElementById('theme-toggle').addEventListener('click', () => {
-            const html = document.documentElement;
-            const isCurrentlyDark = html.classList.contains('dark');
-
-            if (isCurrentlyDark) {
-                html.classList.remove('dark');
-                html.classList.add('light');
-            } else {
-                html.classList.remove('light');
-                html.classList.add('dark');
-            }
-
-            // Toggle sun/moon icons
-            document.querySelector('#theme-toggle .sun').classList.toggle('hidden');
-            document.querySelector('#theme-toggle .moon').classList.toggle('hidden');
-        });
-
-        // Relayout button
-        document.getElementById('relayout-btn').addEventListener('click', () => {
-            this.unlockAllNodes();
-        });
+        // Stub nodes: show tooltip but are non-clickable (no navigation)
+        this.stubNodeElements
+            .on('mouseenter', (event, d) => {
+                tooltip.innerHTML = `
+                    <div class="font-display font-bold" style="color: #6a6a80;">${d.name}</div>
+                    <div style="color: #5a5a72; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">EXTERNAL</div>
+                `;
+                tooltip.style.opacity = '1';
+            })
+            .on('mousemove', (event) => {
+                tooltip.style.left = `${event.pageX + 10}px`;
+                tooltip.style.top = `${event.pageY + 10}px`;
+            })
+            .on('mouseleave', () => {
+                tooltip.style.opacity = '0';
+            });
 
         // Window resize
         window.addEventListener('resize', () => {
@@ -601,34 +813,64 @@ class LatticeGraph {
     highlightConnections(node) {
         const connectedIds = new Set();
 
+        // Check internal edges
         this.edges.forEach(e => {
-            if (e.source.id === node.id) connectedIds.add(e.target.id);
-            if (e.target.id === node.id) connectedIds.add(e.source.id);
+            const srcId = typeof e.source === 'object' ? e.source.id : e.source;
+            const tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+            if (srcId === node.id) connectedIds.add(tgtId);
+            if (tgtId === node.id) connectedIds.add(srcId);
         });
 
-        // Highlight edge groups
+        // Check external edges
+        this.externalEdges.forEach(e => {
+            if (e.source === node.id || (typeof e.source === 'object' && e.source.id === node.id)) {
+                connectedIds.add(e.external_asset);
+            }
+            if (e.target === node.id || (typeof e.target === 'object' && e.target.id === node.id)) {
+                connectedIds.add(e.external_asset);
+            }
+        });
+
+        // Highlight internal edge groups
         this.edgeGroups.each(function(e) {
-            const isConnected = e.source.id === node.id || e.target.id === node.id;
+            const srcId = typeof e.source === 'object' ? e.source.id : e.source;
+            const tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+            const isConnected = srcId === node.id || tgtId === node.id;
             const group = d3.select(this);
 
             group.classed('highlighted', isConnected);
 
-            // Update glow layer
             group.select('.edge-glow-layer')
                 .attr('stroke', isConnected ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
                 .attr('stroke-width', isConnected ? 8 : 4)
                 .attr('opacity', isConnected ? 0.4 : 0.2)
                 .attr('filter', isConnected ? 'url(#edge-glow-intense)' : 'url(#edge-glow)');
 
-            // Update main edge
             group.select('.edge-main')
                 .attr('stroke', isConnected ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
                 .attr('stroke-width', isConnected ? 2.5 : 2);
         });
 
+        // Highlight external edge groups
+        this.externalEdgeGroups.each(function(e) {
+            const srcId = typeof e.source === 'object' ? e.source.id : e.source;
+            const tgtId = typeof e.target === 'object' ? e.target.id : e.target;
+            const isConnected = srcId === node.id || tgtId === node.id;
+            const group = d3.select(this);
+
+            group.select('.edge-main')
+                .attr('opacity', isConnected ? 0.7 : 0.4)
+                .attr('stroke-width', isConnected ? 2 : 1.5);
+        });
+
+        // Dim unconnected intra-group nodes
         this.nodeElements
             .style('opacity', d =>
                 d.id === node.id || connectedIds.has(d.id) ? 1 : 0.3);
+
+        // Dim unconnected stub nodes
+        this.stubNodeElements
+            .style('opacity', d => connectedIds.has(d.id) ? 0.7 : 0.2);
     }
 
     clearHighlights() {
@@ -647,126 +889,34 @@ class LatticeGraph {
                 .attr('stroke-width', 2);
         });
 
+        this.externalEdgeGroups.each(function() {
+            d3.select(this).select('.edge-main')
+                .attr('opacity', 0.4)
+                .attr('stroke-width', 1.5);
+        });
+
         this.nodeElements.style('opacity', 1);
-    }
-
-    async selectNode(node) {
-        const sidebar = document.getElementById('sidebar');
-        const content = document.getElementById('sidebar-content');
-
-        this.nodeElements.classed('selected', d => d.id === node.id);
-
-        // Show loading state
-        content.innerHTML = '<div style="color: #68b5c2; font-family: Orbitron, sans-serif; letter-spacing: 0.2em; animation: textFlicker 1.5s ease-in-out infinite;">LOADING...</div>';
-        sidebar.classList.remove('translate-x-full');
-
-        try {
-            const response = await fetch(`/api/assets/${encodeURIComponent(node.id)}`);
-            const data = await response.json();
-
-            content.innerHTML = `
-                <div class="detail-section">
-                    <div class="detail-label">Name</div>
-                    <div class="detail-value font-display" style="font-size: 1.25rem; color: #68b5c2;">${data.name}</div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">Group</div>
-                    <div class="detail-value" style="letter-spacing: 0.1em;">${data.group.toUpperCase()}</div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">Execution Type</div>
-                    <div class="detail-value" style="display: flex; align-items: center; gap: 8px; letter-spacing: 0.1em;">
-                        <svg width="16" height="16"><use href="#${EXECUTION_TYPE_ICONS[data.execution_type] || 'icon-python'}"/></svg>
-                        <span>${(data.execution_type || 'python').toUpperCase()}</span>
-                    </div>
-                </div>
-
-                ${data.return_type ? `
-                <div class="detail-section">
-                    <div class="detail-label">Return Type</div>
-                    <div class="detail-value" style="color: #d0b454;">${data.return_type}</div>
-                </div>
-                ` : ''}
-
-                ${data.description ? `
-                <div class="detail-section">
-                    <div class="detail-label">Description</div>
-                    <div class="detail-value" style="color: #8282a0; line-height: 1.6;">${data.description}</div>
-                </div>
-                ` : ''}
-
-                <div class="detail-section">
-                    <div class="detail-label">Checks (${data.checks ? data.checks.length : 0})</div>
-                    <div class="check-list">
-                        ${data.checks && data.checks.length > 0
-                ? data.checks.map(c => `
-                    <div class="check-badge">
-                        <span class="check-badge-icon">✓</span>
-                        <span class="check-badge-name">${c.name}</span>
-                        ${c.description ? `<span class="check-badge-desc">${c.description}</span>` : ''}
-                    </div>
-                `).join('')
-                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NO CHECKS ]</span>'}
-                    </div>
-                </div>
-
-                ${data.metadata ? `
-                <div class="detail-section">
-                    <div class="detail-label">Metadata</div>
-                    <div style="display: flex; flex-direction: column; gap: 6px;">
-                        ${Object.entries(data.metadata).map(([k, v]) => `
-                            <div style="display: flex; justify-content: space-between; font-size: 0.8rem;">
-                                <span style="color: #8282a0; letter-spacing: 0.05em;">${k.toUpperCase()}</span>
-                                <span style="color: #d0b454; font-family: 'Space Mono', monospace;">${Array.isArray(v) ? v.join(', ') : v}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                </div>
-                ` : ''}
-
-                <div class="detail-section">
-                    <div class="detail-label">Dependencies (${data.dependencies.length})</div>
-                    <div class="dep-list">
-                        ${data.dependencies.length > 0
-                ? data.dependencies.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NONE ]</span>'}
-                    </div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="detail-label">Dependents (${data.dependents.length})</div>
-                    <div class="dep-list">
-                        ${data.dependents.length > 0
-                ? data.dependents.map(d => `<span class="dep-badge" data-asset="${d}">${d}</span>`).join('')
-                : '<span style="color: #5a5a72; font-size: 0.85rem;">[ NONE ]</span>'}
-                    </div>
-                </div>
-
-            `;
-
-            // Add click handlers for dependency badges
-            content.querySelectorAll('.dep-badge').forEach(badge => {
-                badge.addEventListener('click', () => {
-                    const assetId = badge.dataset.asset;
-                    const targetNode = this.nodes.find(n => n.id === assetId);
-                    if (targetNode) this.selectNode(targetNode);
-                });
-            });
-
-        } catch (error) {
-            content.innerHTML = `<div style="color: #c45270; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
-        }
+        this.stubNodeElements.style('opacity', 1);
     }
 
     hideLoading() {
-        document.getElementById('loading').style.display = 'none';
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            loadingEl.style.display = 'none';
+        }
     }
-
 }
 
 // Initialize on DOM ready
 document.addEventListener('DOMContentLoaded', () => {
-    new LatticeGraph('graph-container');
+    const container = document.getElementById('group-graph-container');
+    if (!container) return;
+
+    const groupName = container.getAttribute('data-group-name');
+    if (!groupName) {
+        console.error('group_graph.js: missing data-group-name attribute on #group-graph-container');
+        return;
+    }
+
+    new GroupGraph('group-graph-container', groupName);
 });

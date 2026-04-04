@@ -314,14 +314,363 @@ class TestPlanEndpoint:
 
 
 class TestIndexPage:
-    """Tests for the main visualization page."""
+    """Tests for the main page (overview graph landing page)."""
 
     def test_index_returns_html(self, populated_client: TestClient) -> None:
-        """Index page returns HTML."""
+        """Index page returns overview graph HTML."""
         response = populated_client.get("/")
         assert response.status_code == 200
         assert "text/html" in response.headers["content-type"]
         assert "LATTICE" in response.text
+        assert "ASSET GROUPS" in response.text
+
+    def test_index_serves_overview_graph(self, populated_client: TestClient) -> None:
+        """GET / serves the overview graph, not the full graph page."""
+        response = populated_client.get("/")
+        assert response.status_code == 200
+        assert "overview-graph-container" in response.text
+        assert "overview_graph.js" in response.text
+
+
+class TestPipelineRoute:
+    """Tests for GET /pipeline serving the full pipeline visualization."""
+
+    def test_pipeline_page_returns_html(self, populated_client: TestClient) -> None:
+        """GET /pipeline returns the pipeline page HTML."""
+        response = populated_client.get("/pipeline")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "graph.js" in response.text
+
+    def test_pipeline_page_has_graph_container(self, populated_client: TestClient) -> None:
+        """GET /pipeline page contains the graph container."""
+        response = populated_client.get("/pipeline")
+        assert "graph-container" in response.text
+
+
+class TestGroupedAssetsAPI:
+    """Tests for /api/assets/grouped endpoint."""
+
+    def test_grouped_empty_registry(self, client: TestClient) -> None:
+        """Empty registry returns empty groups and ungrouped."""
+        response = client.get("/api/assets/grouped")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["groups"] == []
+        assert data["ungrouped_assets"] == []
+
+    def test_grouped_all_default(self, registry: AssetRegistry) -> None:
+        """All-default assets appear in ungrouped, no groups."""
+
+        @asset(registry=registry)
+        def alpha() -> str:
+            return "a"
+
+        @asset(registry=registry)
+        def beta() -> str:
+            return "b"
+
+        app = create_app(registry)
+        client = TestClient(app)
+        response = client.get("/api/assets/grouped")
+        data = response.json()
+
+        assert data["groups"] == []
+        assert len(data["ungrouped_assets"]) == 2
+
+    def test_grouped_named_groups(self, populated_client: TestClient) -> None:
+        """Named groups appear in groups list, default in ungrouped."""
+        response = populated_client.get("/api/assets/grouped")
+        data = response.json()
+
+        group_names = [g["name"] for g in data["groups"]]
+        assert "analytics" in group_names
+
+        analytics = next(g for g in data["groups"] if g["name"] == "analytics")
+        assert analytics["asset_count"] == 1
+        assert analytics["assets"][0]["name"] == "stats"
+
+        ungrouped_names = {a["name"] for a in data["ungrouped_assets"]}
+        assert "source_data" in ungrouped_names
+        assert "processed" in ungrouped_names
+
+    def test_grouped_single_asset_group(self, registry: AssetRegistry) -> None:
+        """A group with a single asset is still returned."""
+
+        @asset(registry=registry, key=AssetKey(name="solo", group="lone"))
+        def solo_asset() -> str:
+            return "solo"
+
+        app = create_app(registry)
+        client = TestClient(app)
+        response = client.get("/api/assets/grouped")
+        data = response.json()
+
+        group_names = [g["name"] for g in data["groups"]]
+        assert "lone" in group_names
+        lone = next(g for g in data["groups"] if g["name"] == "lone")
+        assert lone["asset_count"] == 1
+
+
+class TestGroupGraphAPI:
+    """Tests for /api/groups/{name}/graph endpoint."""
+
+    def test_group_graph_returns_nodes_and_edges(self, populated_client: TestClient) -> None:
+        """Group graph returns nodes within the group."""
+        response = populated_client.get("/api/groups/analytics/graph")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["group_name"] == "analytics"
+        assert len(data["nodes"]) == 1
+        assert data["nodes"][0]["name"] == "stats"
+
+    def test_group_graph_external_edges(self, populated_client: TestClient) -> None:
+        """Cross-group dependencies appear as external edges."""
+        response = populated_client.get("/api/groups/analytics/graph")
+        data = response.json()
+
+        # analytics/stats depends on processed (default group) = inbound external
+        inbound = [e for e in data["external_edges"] if e["direction"] == "inbound"]
+        assert len(inbound) == 1
+        assert inbound[0]["external_asset"] == "processed"
+
+    def test_group_graph_nonexistent(self, populated_client: TestClient) -> None:
+        """Nonexistent group returns 404."""
+        response = populated_client.get("/api/groups/nonexistent/graph")
+        assert response.status_code == 404
+
+    def test_group_graph_intra_group_edges(self, registry: AssetRegistry) -> None:
+        """Intra-group dependencies appear as regular edges."""
+
+        @asset(registry=registry, key=AssetKey(name="a", group="team"))
+        def team_a() -> str:
+            return "a"
+
+        @asset(
+            registry=registry,
+            key=AssetKey(name="b", group="team"),
+            deps=[AssetKey(name="a", group="team")],
+        )
+        def team_b(team_a: str) -> str:
+            return "b"
+
+        app = create_app(registry)
+        client = TestClient(app)
+        response = client.get("/api/groups/team/graph")
+        data = response.json()
+
+        assert len(data["nodes"]) == 2
+        assert len(data["edges"]) == 1
+        assert data["edges"][0]["source"] == "team/a"
+        assert data["edges"][0]["target"] == "team/b"
+        assert data["external_edges"] == []
+
+
+class TestOverviewGraphAPI:
+    """Tests for /api/assets/overview endpoint."""
+
+    def test_overview_empty_registry(self, client: TestClient) -> None:
+        """Empty registry returns empty overview graph."""
+        response = client.get("/api/assets/overview")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["nodes"] == []
+        assert data["edges"] == []
+
+    def test_overview_standalone_only(self, registry: AssetRegistry) -> None:
+        """All-default assets appear as standalone asset nodes."""
+
+        @asset(registry=registry)
+        def alpha() -> str:
+            return "a"
+
+        @asset(registry=registry, deps=["alpha"])
+        def beta(alpha: str) -> str:
+            return "b"
+
+        app = create_app(registry)
+        client = TestClient(app)
+        response = client.get("/api/assets/overview")
+        data = response.json()
+
+        node_ids = {n["id"] for n in data["nodes"]}
+        assert "alpha" in node_ids
+        assert "beta" in node_ids
+        assert all(n["node_type"] == "asset" for n in data["nodes"])
+
+        # Edge from alpha to beta
+        assert len(data["edges"]) == 1
+        assert data["edges"][0]["source"] == "alpha"
+        assert data["edges"][0]["target"] == "beta"
+
+    def test_overview_group_super_nodes(self, populated_client: TestClient) -> None:
+        """Named groups appear as group super-nodes."""
+        response = populated_client.get("/api/assets/overview")
+        data = response.json()
+
+        group_nodes = [n for n in data["nodes"] if n["node_type"] == "group"]
+        group_ids = {n["id"] for n in group_nodes}
+        assert "group:analytics" in group_ids
+
+        analytics = next(n for n in group_nodes if n["id"] == "group:analytics")
+        assert analytics["name"] == "analytics"
+        assert analytics["asset_count"] == 1
+
+    def test_overview_cross_group_edges(self, populated_client: TestClient) -> None:
+        """Edges connect standalone assets to group super-nodes."""
+        response = populated_client.get("/api/assets/overview")
+        data = response.json()
+
+        # processed -> analytics group (analytics/stats depends on processed)
+        edge_pairs = {(e["source"], e["target"]) for e in data["edges"]}
+        assert ("processed", "group:analytics") in edge_pairs
+
+    def test_overview_nodes_include_check_count(self, populated_client: TestClient) -> None:
+        """Overview nodes include check_count field defaulting to 0."""
+        response = populated_client.get("/api/assets/overview")
+        data = response.json()
+
+        for node in data["nodes"]:
+            assert "check_count" in node
+            assert isinstance(node["check_count"], int)
+
+    def test_overview_intra_group_edges_collapsed(self, registry: AssetRegistry) -> None:
+        """Dependencies within the same group do not produce overview edges."""
+
+        @asset(registry=registry, key=AssetKey(name="a", group="team"))
+        def team_a() -> str:
+            return "a"
+
+        @asset(
+            registry=registry,
+            key=AssetKey(name="b", group="team"),
+            deps=[AssetKey(name="a", group="team")],
+        )
+        def team_b(team_a: str) -> str:
+            return "b"
+
+        app = create_app(registry)
+        client = TestClient(app)
+        response = client.get("/api/assets/overview")
+        data = response.json()
+
+        # Only one group node, no edges (intra-group edge is collapsed)
+        assert len(data["nodes"]) == 1
+        assert data["nodes"][0]["node_type"] == "group"
+        assert data["edges"] == []
+
+
+class TestGroupsMainPage:
+    """Tests for GET / serving the overview graph."""
+
+    def test_groups_page_returns_html(self, populated_client: TestClient) -> None:
+        """GET / returns overview graph HTML."""
+        response = populated_client.get("/")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "ASSET GROUPS" in response.text
+
+    def test_groups_page_has_overview_graph(self, populated_client: TestClient) -> None:
+        """Overview page contains the D3 graph container and JS."""
+        response = populated_client.get("/")
+        assert "overview-graph-container" in response.text
+        assert "overview_graph.js" in response.text
+
+
+class TestGroupDetailPage:
+    """Tests for GET /group/{name} page."""
+
+    def test_group_detail_returns_html(self, populated_client: TestClient) -> None:
+        """GET /group/{name} returns HTML with group name."""
+        response = populated_client.get("/group/analytics")
+        assert response.status_code == 200
+        assert "text/html" in response.headers["content-type"]
+        assert "ANALYTICS" in response.text
+
+    def test_group_detail_has_graph_container(self, populated_client: TestClient) -> None:
+        """Group detail page contains the D3 graph container."""
+        response = populated_client.get("/group/analytics")
+        assert "group-graph-container" in response.text
+        assert 'data-group-name="analytics"' in response.text
+
+    def test_group_detail_loads_group_graph_js(self, populated_client: TestClient) -> None:
+        """Group detail page loads group_graph.js."""
+        response = populated_client.get("/group/analytics")
+        assert "group_graph.js" in response.text
+
+
+class TestGroupGraphJS:
+    """Static analysis tests for group_graph.js rendering."""
+
+    JS_PATH = STATIC_DIR / "js" / "group_graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_group_graph_js_exists(self) -> None:
+        """group_graph.js file exists."""
+        assert self.JS_PATH.exists()
+
+    def test_group_graph_js_has_dashed_external_edges(self) -> None:
+        """group_graph.js renders external edges with dashed stroke."""
+        js = self._read_js()
+        assert "8 4" in js or "8, 4" in js or "dasharray" in js
+
+    def test_group_graph_js_fetches_group_api(self) -> None:
+        """group_graph.js fetches from /api/groups/ endpoint."""
+        js = self._read_js()
+        assert "/api/groups/" in js
+
+    def test_group_graph_js_has_stub_nodes(self) -> None:
+        """group_graph.js creates stub nodes for external assets."""
+        js = self._read_js()
+        assert "stub" in js.lower()
+
+    def test_group_graph_js_navigates_to_asset(self) -> None:
+        """group_graph.js navigates to /asset/ on node click."""
+        js = self._read_js()
+        assert "/asset/" in js
+
+
+class TestOverviewGraphJS:
+    """Static analysis tests for overview_graph.js rendering."""
+
+    JS_PATH = STATIC_DIR / "js" / "overview_graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_overview_graph_js_exists(self) -> None:
+        """overview_graph.js file exists."""
+        assert self.JS_PATH.exists()
+
+    def test_overview_graph_js_fetches_overview_api(self) -> None:
+        """overview_graph.js fetches from /api/assets/overview."""
+        js = self._read_js()
+        assert "/api/assets/overview" in js
+
+    def test_overview_graph_js_navigates_to_group(self) -> None:
+        """overview_graph.js navigates to /group/ on group node click."""
+        js = self._read_js()
+        assert "/group/" in js
+
+    def test_overview_graph_js_navigates_to_asset(self) -> None:
+        """overview_graph.js navigates to /asset/ on asset node click."""
+        js = self._read_js()
+        assert "/asset/" in js
+
+    def test_overview_graph_js_has_fit_to_content(self) -> None:
+        """overview_graph.js includes fitToContent for auto-centering."""
+        js = self._read_js()
+        assert "fitToContent" in js
+
+    def test_overview_graph_js_has_group_colors(self) -> None:
+        """overview_graph.js has GROUP_COLORS for group accent styling."""
+        js = self._read_js()
+        assert "GROUP_COLORS" in js
 
 
 class TestExecutionStartRequest:
@@ -1117,17 +1466,6 @@ class TestMemoryPanelPositioning:
         css = self._read_css()
         assert "translateY(120%)" in css
 
-    def test_js_adds_sidebar_open_to_memory_panel(self) -> None:
-        """graph.js adds sidebar-open class to memory-panel when sidebar opens."""
-        js = self._read_js()
-        assert "getElementById('memory-panel')" in js
-        assert "classList.add('sidebar-open')" in js
-
-    def test_js_removes_sidebar_open_from_memory_panel(self) -> None:
-        """graph.js removes sidebar-open class from memory-panel when sidebar closes."""
-        js = self._read_js()
-        assert "classList.remove('sidebar-open')" in js
-
 
 class TestAssetCatalogPage:
     """Tests for /assets page and /api/assets endpoint (AC-2, AC-5)."""
@@ -1206,11 +1544,6 @@ class TestGraphNodeNavigation:
         """graph.js contains navigation to /asset/ in the click handler."""
         js = self._read_js()
         assert "window.location.href = '/asset/' +" in js
-
-    def test_graph_js_shift_click_selects_for_execution(self) -> None:
-        """Click handler checks event.shiftKey for execution selection."""
-        js = self._read_js()
-        assert "event.shiftKey" in js or "shiftKey" in js
 
     def test_graph_js_encodes_asset_id(self) -> None:
         """encodeURIComponent is used in the navigation URL."""
@@ -1332,3 +1665,97 @@ class TestExecutionTypeIcons:
         """graph.js renders elements with the exec-type-icon class."""
         js = self._read_js()
         assert "exec-type-icon" in js
+
+
+class TestGraphPageReadOnly:
+    """Static analysis tests: graph.js is now read-only (no execution code)."""
+
+    JS_PATH = STATIC_DIR / "js" / "graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_no_execution_controls(self) -> None:
+        """graph.js does not create execution-controls."""
+        js = self._read_js()
+        assert "execution-controls" not in js
+
+    def test_no_ws_execution(self) -> None:
+        """graph.js does not connect to /ws/execution."""
+        js = self._read_js()
+        assert "/ws/execution" not in js
+
+    def test_no_start_execution(self) -> None:
+        """graph.js does not contain startExecution."""
+        js = self._read_js()
+        assert "startExecution" not in js
+
+    def test_no_execute_btn(self) -> None:
+        """graph.js does not create an execute-btn."""
+        js = self._read_js()
+        assert "execute-btn" not in js
+
+
+class TestOverviewGraphExecution:
+    """Static analysis tests: overview_graph.js has execution UI."""
+
+    JS_PATH = STATIC_DIR / "js" / "overview_graph.js"
+
+    def _read_js(self) -> str:
+        return self.JS_PATH.read_text()
+
+    def test_has_setup_execution_ui(self) -> None:
+        """overview_graph.js contains setupExecutionUI."""
+        js = self._read_js()
+        assert "setupExecutionUI" in js
+
+    def test_has_start_execution(self) -> None:
+        """overview_graph.js contains startExecution."""
+        js = self._read_js()
+        assert "startExecution" in js
+
+    def test_has_ws_execution(self) -> None:
+        """overview_graph.js connects to /ws/execution."""
+        js = self._read_js()
+        assert "/ws/execution" in js
+
+    def test_has_api_execution_start(self) -> None:
+        """overview_graph.js posts to /api/execution/start."""
+        js = self._read_js()
+        assert "/api/execution/start" in js
+
+    def test_has_date_selection_panel(self) -> None:
+        """overview_graph.js creates date-selection-panel."""
+        js = self._read_js()
+        assert "date-selection-panel" in js
+
+    def test_has_memory_panel(self) -> None:
+        """overview_graph.js creates memory-panel."""
+        js = self._read_js()
+        assert "memory-panel" in js
+
+    def test_has_execution_progress(self) -> None:
+        """overview_graph.js creates execution-progress."""
+        js = self._read_js()
+        assert "execution-progress" in js
+
+    def test_no_selected_node(self) -> None:
+        """overview_graph.js does not use selectedNode (no targeted execution)."""
+        js = self._read_js()
+        assert "selectedNode" not in js
+
+    def test_has_asset_to_node_mapping(self) -> None:
+        """overview_graph.js builds assetToNodeId map for node status visuals."""
+        js = self._read_js()
+        assert "assetToNodeId" in js
+
+    def test_has_group_status_tracking(self) -> None:
+        """overview_graph.js tracks per-group asset statuses for aggregate blink."""
+        js = self._read_js()
+        assert "groupAssetStatuses" in js
+
+    def test_applies_status_class_to_nodes(self) -> None:
+        """overview_graph.js applies status-running/completed/failed classes."""
+        js = self._read_js()
+        assert "status-running" in js or "status-${status}" in js
+        assert "status-${groupStatus}" in js
