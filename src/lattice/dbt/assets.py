@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 DBT_GROUP = "dbt"
 
 
-def _build_asset_key(model: DbtModelInfo) -> AssetKey:
+def _build_asset_key(model: DbtModelInfo, group: str = DBT_GROUP) -> AssetKey:
     """
     Build a Lattice AssetKey for a dbt model.
 
@@ -38,18 +38,21 @@ def _build_asset_key(model: DbtModelInfo) -> AssetKey:
     ----------
     model : DbtModelInfo
         The dbt model metadata.
+    group : str
+        Asset group name.  Defaults to ``"dbt"``.
 
     Returns
     -------
     AssetKey
-        An asset key with group="dbt" and the model's name.
+        An asset key with the given group and the model's name.
     """
-    return AssetKey(name=model.name, group=DBT_GROUP)
+    return AssetKey(name=model.name, group=group)
 
 
 def _build_dependency_keys(
     model: DbtModelInfo,
     model_map: dict[str, DbtModelInfo],
+    group: str = DBT_GROUP,
 ) -> tuple[AssetKey, ...]:
     """
     Build dependency AssetKeys for a dbt model.
@@ -63,6 +66,8 @@ def _build_dependency_keys(
         The dbt model to resolve dependencies for.
     model_map : dict
         Mapping of unique_id to DbtModelInfo for all parsed models.
+    group : str
+        Asset group name.  Defaults to ``"dbt"``.
 
     Returns
     -------
@@ -73,7 +78,7 @@ def _build_dependency_keys(
     for dep_id in model.depends_on:
         if dep_id in model_map:
             dep_model = model_map[dep_id]
-            deps.append(AssetKey(name=dep_model.name, group=DBT_GROUP))
+            deps.append(AssetKey(name=dep_model.name, group=group))
     return tuple(deps)
 
 
@@ -237,11 +242,12 @@ def load_dbt_manifest(
     select: str | None = None,
     deps: list[AssetDefinition] | None = None,
     registry: AssetRegistry | None = None,
+    group: str = DBT_GROUP,
 ) -> list[AssetDefinition]:
     """
     Load a dbt manifest.json and register all models as Lattice assets.
 
-    Each model is registered with ``group="dbt"`` and inter-model
+    Each model is registered with the given *group* and inter-model
     dependencies are preserved as Lattice dependency edges.
 
     Exactly one of *manifest_path* or *project_dir* must be provided.
@@ -265,6 +271,9 @@ def load_dbt_manifest(
         edges between separately filtered sets of models.
     registry : AssetRegistry or None
         Target asset registry. Defaults to the global registry.
+    group : str
+        Asset group name for all registered models.  Defaults to
+        ``"dbt"``.
 
     Returns
     -------
@@ -304,8 +313,8 @@ def load_dbt_manifest(
     asset_defs: list[AssetDefinition] = []
 
     for model in models:
-        asset_key = _build_asset_key(model)
-        manifest_deps = _build_dependency_keys(model, model_map)
+        asset_key = _build_asset_key(model, group)
+        manifest_deps = _build_dependency_keys(model, model_map, group)
         dependencies = tuple(dict.fromkeys(manifest_deps + extra_dep_keys))
         stub_fn = _create_stub_fn(model, len(dependencies))
 
@@ -347,6 +356,7 @@ def dbt_assets(
     select: str | None = None,
     deps: list[Callable[..., Any]] | None = None,
     registry: AssetRegistry | None = None,
+    group: str = DBT_GROUP,
 ) -> Callable[[F], F]:
     """
     Decorator that loads a dbt manifest and registers all models as assets.
@@ -393,6 +403,9 @@ def dbt_assets(
         dependency edges in the DAG.
     registry : AssetRegistry or None
         Target asset registry.  Defaults to the global registry.
+    group : str
+        Asset group name for all registered models.  Defaults to
+        ``"dbt"``.
 
     Returns
     -------
@@ -416,6 +429,7 @@ def dbt_assets(
             select=select,
             deps=dep_assets or None,
             registry=registry,
+            group=group,
         )
         fn._dbt_assets = assets  # type: ignore[attr-defined]
         fn(assets)

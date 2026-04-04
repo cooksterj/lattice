@@ -266,23 +266,25 @@ def shipping_costs(raw_shipping: list[dict], user_orders: list[dict]) -> dict:
     return result
 
 
-# Final dashboard asset
+# Final dashboard asset — pulls from analytics group AND dbt group
 @asset(
     group="analytics",
     deps=[
         AssetKey(name="daily_revenue", group="analytics"),
         AssetKey(name="user_stats", group="analytics"),
         AssetKey(name="product_performance", group="analytics"),
+        AssetKey(name="customer_orders", group="jaffle_shop"),
     ],
 )
-def executive_dashboard(revenue: dict, stats: dict, products: dict) -> dict:
+def executive_dashboard(revenue: dict, stats: dict, products: dict, customer_orders: dict) -> dict:
     """Executive summary dashboard."""
-    logger.info("Assembling executive dashboard from 3 data sources...")
+    logger.info("Assembling executive dashboard from 4 data sources...")
     time.sleep(0.3)
     result = {
         "revenue": revenue,
         "users": stats,
         "products": products,
+        "customer_orders": customer_orders,
     }
     logger.info(
         "Dashboard ready: revenue=$%.2f, %d users, %d products",
@@ -300,7 +302,7 @@ def dashboard_has_all_sections(data: dict) -> bool:
 
 
 # dbt integration: register all models from the sample manifest as Lattice assets
-@dbt_assets(manifest=pathlib.Path(__file__).parent / "sample_manifest.json")
+@dbt_assets(manifest=pathlib.Path(__file__).parent / "sample_manifest.json", group="jaffle_shop")
 def jaffle_shop(assets):
     """Jaffle-shop dbt project (sample manifest)."""
     logger.info("Loaded %d dbt assets from jaffle_shop manifest", len(assets))
@@ -313,6 +315,13 @@ history_store = SQLiteRunHistoryStore()
 if __name__ == "__main__":
     print("Starting Lattice web visualization...")
     print("Open http://localhost:8000 in your browser")
-    print("Visit http://localhost:8000/history to see run history")
+    print()
+    print("Routes:")
+    print("  /               Asset groups landing page")
+    print("  /pipeline       Full dependency pipeline")
+    print("  /group/{name}   Group detail with scoped graph (e.g. /group/analytics)")
+    print("  /assets         Asset catalog")
+    print("  /history        Run history")
+    print()
     print("Press Ctrl+C to stop\n")
     serve(history_store=history_store)
