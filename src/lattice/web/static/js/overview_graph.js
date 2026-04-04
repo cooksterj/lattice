@@ -503,6 +503,9 @@ class OverviewGraph {
             const count = d.check_count || 0;
             if (count === 0) return;
 
+            // Groups get a single indicator; standalone assets get per-check slivers
+            const displayCount = d.node_type === 'group' ? 1 : count;
+
             const node = d3.select(this);
             const sliverWidth = 4;
             const sliverGap = 1;
@@ -510,7 +513,7 @@ class OverviewGraph {
             const halfWidth = d._nodeWidth / 2;
             const startX = halfWidth + 2;
 
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i < displayCount; i++) {
                 const color = cyanShades[i % cyanShades.length];
                 node.append('rect')
                     .attr('class', 'check-sliver')
@@ -543,8 +546,10 @@ class OverviewGraph {
             const targetHalfW = (targetNode._nodeWidth || 130) / 2;
 
             // Offset for check slivers on source node
+            // Groups show a single sliver; standalone assets show per-check slivers
             const sourceChecks = sourceNode.check_count || 0;
-            const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
+            const displayChecks = sourceNode.node_type === 'group' ? Math.min(sourceChecks, 1) : sourceChecks;
+            const sliverOffset = displayChecks > 0 ? (displayChecks * 5) + 2 : 0;
 
             const sx = sourceNode.x + sourceHalfW + sliverOffset;
             const sy = sourceNode.y;
