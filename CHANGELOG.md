@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.15.0](https://github.com/cooksterj/lattice/compare/v0.14.0...v0.15.0) (2026-04-05)
+
+
+### Features
+
+* **web:** SPA navigation, graph polish, and CI fix ([ce4faf8](https://github.com/cooksterj/lattice/commit/ce4faf886363a241ccc9d5e481b32fd85c0d3b49))
+
 ## [0.14.0](https://github.com/cooksterj/lattice/compare/v0.13.0...v0.14.0) (2026-04-05)
 
 
