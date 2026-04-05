@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/cooksterj/lattice/compare/v0.13.0...v0.14.0) (2026-04-05)
+
+
+### Features
+
+* **web:** add SPA navigation, light mode polish, and asset detail redesign ([530656c](https://github.com/cooksterj/lattice/commit/530656c3bc3cdd8971b3bfcaa7c2babaa7199bb3))
+
 ## [0.13.0](https://github.com/cooksterj/lattice/compare/v0.12.0...v0.13.0) (2026-04-04)
 
 
