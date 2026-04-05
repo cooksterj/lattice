@@ -58,6 +58,19 @@ class OverviewGraph {
         // Track per-group asset statuses for aggregate group-node status
         this.groupAssetStatuses = new Map();
 
+        // Drag state (suppresses tooltips while dragging)
+        this._isDragging = false;
+
+        // SPA navigation state
+        this.currentView = 'overview';
+        this.currentGroupName = null;
+        this.overviewNodes = [];
+        this.overviewEdges = [];
+        this.groupViewData = null;
+        this.stubNodeElements = null;
+        this.externalEdgeGroups = null;
+        this._fullGraphNodes = null;
+
         this.init();
     }
 
@@ -66,10 +79,18 @@ class OverviewGraph {
         this.setupZoom();
         this.setupDefs();
         await this.loadData();
+
+        // Save overview data for re-rendering after group view
+        this.overviewNodes = this.nodes.map(n => ({...n}));
+        this.overviewEdges = this.edges.map(e => ({...e}));
+
         if (this.nodes.length > 0) {
             this.render();
+            this.setupOverviewNodeInteractions();
+            this.applyEntranceAnimations();
         }
         this.setupEventListeners();
+        this.setupNavigation();
         this.setupExecutionUI();
         this.hideLoading();
     }
@@ -214,6 +235,30 @@ class OverviewGraph {
                 .attr('offset', '100%')
                 .attr('stop-color', colors.end);
         });
+
+        // Stub node gradient (used in group detail view)
+        const stubGradient = defs.append('linearGradient')
+            .attr('id', 'gradient-stub')
+            .attr('x1', '0%').attr('y1', '0%')
+            .attr('x2', '100%').attr('y2', '100%');
+        stubGradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', '#5a5a6e');
+        stubGradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', '#2e2e3e');
+
+        // External edge arrow marker (muted, for group detail view)
+        const arrowExternal = defs.append('marker')
+            .attr('id', 'arrow-external')
+            .attr('viewBox', '0 -6 14 12')
+            .attr('refX', 12).attr('refY', 0)
+            .attr('markerWidth', 8).attr('markerHeight', 8)
+            .attr('orient', 'auto');
+        arrowExternal.append('path')
+            .attr('d', 'M0,-5 L4,0 L0,5 L12,0 Z')
+            .attr('fill', '#6a6a80')
+            .attr('opacity', 0.5);
     }
 
     async loadData() {
@@ -238,6 +283,7 @@ class OverviewGraph {
             // Build asset ID → overview node ID mapping from full graph data
             if (graphResponse.ok) {
                 const graphData = await graphResponse.json();
+                this._fullGraphNodes = graphData.nodes;
                 for (const asset of graphData.nodes) {
                     // asset.id is like "source_data" or "analytics/stats"
                     // asset.group is like "default" or "analytics"
@@ -457,6 +503,9 @@ class OverviewGraph {
             const count = d.check_count || 0;
             if (count === 0) return;
 
+            // Groups get a single indicator; standalone assets get per-check slivers
+            const displayCount = d.node_type === 'group' ? 1 : count;
+
             const node = d3.select(this);
             const sliverWidth = 4;
             const sliverGap = 1;
@@ -464,7 +513,7 @@ class OverviewGraph {
             const halfWidth = d._nodeWidth / 2;
             const startX = halfWidth + 2;
 
-            for (let i = 0; i < count; i++) {
+            for (let i = 0; i < displayCount; i++) {
                 const color = cyanShades[i % cyanShades.length];
                 node.append('rect')
                     .attr('class', 'check-sliver')
@@ -497,8 +546,10 @@ class OverviewGraph {
             const targetHalfW = (targetNode._nodeWidth || 130) / 2;
 
             // Offset for check slivers on source node
+            // Groups show a single sliver; standalone assets show per-check slivers
             const sourceChecks = sourceNode.check_count || 0;
-            const sliverOffset = sourceChecks > 0 ? (sourceChecks * 5) + 2 : 0;
+            const displayChecks = sourceNode.node_type === 'group' ? Math.min(sourceChecks, 1) : sourceChecks;
+            const sliverOffset = displayChecks > 0 ? (displayChecks * 5) + 2 : 0;
 
             const sx = sourceNode.x + sourceHalfW + sliverOffset;
             const sy = sourceNode.y;
@@ -564,88 +615,107 @@ class OverviewGraph {
     }
 
     drag() {
+        let draggedEl = null;
+
         return d3.drag()
             .on('start', (event, d) => {
                 d._dragged = false;
                 d.fx = d.x;
                 d.fy = d.y;
+                // Capture the node <g> element once — event.sourceEvent.target
+                // shifts to whatever is under the cursor during subsequent moves.
+                draggedEl = event.sourceEvent.target.closest('.node');
             })
             .on('drag', (event, d) => {
+                if (!d._dragged) {
+                    this._isDragging = true;
+                    const tooltip = document.getElementById('tooltip');
+                    if (tooltip) tooltip.style.opacity = '0';
+                }
                 d._dragged = true;
                 d.fx = event.x;
                 d.fy = event.y;
                 d.x = event.x;
                 d.y = event.y;
 
-                // Update node position
-                d3.select(event.sourceEvent.target.closest('.node'))
-                    .attr('transform', `translate(${d.x},${d.y})`);
+                // Move the node visually using the captured element
+                if (draggedEl) {
+                    d3.select(draggedEl)
+                        .attr('transform', `translate(${d.x},${d.y})`);
+                }
 
-                // Recompute edge paths
-                this.updateEdgePaths();
+                // Recompute edge paths for the active view
+                if (this.currentView === 'group') {
+                    this._updateGroupEdgePaths();
+                } else {
+                    this.updateEdgePaths();
+                }
             })
-            .on('end', (event, d) => {
-                // Handled in click handler
+            .on('end', () => {
+                draggedEl = null;
+                this._isDragging = false;
+            });
+    }
+
+    setupOverviewNodeInteractions() {
+        if (!this.nodeElements) return;
+
+        const tooltip = document.getElementById('tooltip');
+
+        this.nodeElements
+            .on('mouseenter', (event, d) => {
+                if (this._isDragging) return;
+                if (d.node_type === 'group') {
+                    const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
+                    const displayName = d.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    const checkLine = d.check_count > 0
+                        ? `<div style="color: #68b5c2; font-size: 0.75rem; font-family: 'Orbitron', sans-serif;">${d.check_count} CHECK${d.check_count !== 1 ? 'S' : ''}</div>`
+                        : '';
+                    tooltip.innerHTML = `
+                        <div class="font-display font-bold" style="color: ${colors.stroke};">${displayName.toUpperCase()}</div>
+                        <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">GROUP</div>
+                        <div style="color: #68b5c2; font-size: 0.75rem; margin-top: 6px; font-family: 'Orbitron', sans-serif;">${d.asset_count} ASSET${d.asset_count !== 1 ? 'S' : ''}</div>
+                        ${checkLine}
+                        <div style="color: #8282a0; font-size: 0.65rem; margin-top: 4px;">Click to explore</div>
+                    `;
+                } else {
+                    const checkLine = d.check_count > 0
+                        ? `<div style="color: #68b5c2; font-size: 0.7rem; margin-top: 4px; font-family: 'Orbitron', sans-serif;">${d.check_count} CHECK${d.check_count !== 1 ? 'S' : ''}</div>`
+                        : '';
+                    tooltip.innerHTML = `
+                        <div class="font-display font-bold" style="color: #9680b8;">${d.name}</div>
+                        <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">STANDALONE ASSET</div>
+                        ${checkLine}
+                    `;
+                }
+                tooltip.style.opacity = '1';
+                this.highlightConnections(d);
+            })
+            .on('mousemove', (event) => {
+                tooltip.style.left = `${event.pageX + 10}px`;
+                tooltip.style.top = `${event.pageY + 10}px`;
+            })
+            .on('mouseleave', () => {
+                tooltip.style.opacity = '0';
+                this.clearHighlights();
+            })
+            .on('click', (event, d) => {
+                if (event.defaultPrevented) return;
+                if (d._dragged) {
+                    d._dragged = false;
+                    return;
+                }
+                event.stopPropagation();
+
+                if (d.node_type === 'group') {
+                    this.transitionToGroup(d.group);
+                } else {
+                    window.location.href = '/asset/' + encodeURIComponent(d.id);
+                }
             });
     }
 
     setupEventListeners() {
-        const tooltip = document.getElementById('tooltip');
-
-        // Node hover
-        if (this.nodeElements) {
-            this.nodeElements
-                .on('mouseenter', (event, d) => {
-                    if (d.node_type === 'group') {
-                        const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
-                        const displayName = d.name.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-                        const checkLine = d.check_count > 0
-                            ? `<div style="color: #68b5c2; font-size: 0.75rem; font-family: 'Orbitron', sans-serif;">${d.check_count} CHECK${d.check_count !== 1 ? 'S' : ''}</div>`
-                            : '';
-                        tooltip.innerHTML = `
-                            <div class="font-display font-bold" style="color: ${colors.stroke};">${displayName.toUpperCase()}</div>
-                            <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">GROUP</div>
-                            <div style="color: #68b5c2; font-size: 0.75rem; margin-top: 6px; font-family: 'Orbitron', sans-serif;">${d.asset_count} ASSET${d.asset_count !== 1 ? 'S' : ''}</div>
-                            ${checkLine}
-                            <div style="color: #8282a0; font-size: 0.65rem; margin-top: 4px;">Click to explore</div>
-                        `;
-                    } else {
-                        const checkLine = d.check_count > 0
-                            ? `<div style="color: #68b5c2; font-size: 0.7rem; margin-top: 4px; font-family: 'Orbitron', sans-serif;">${d.check_count} CHECK${d.check_count !== 1 ? 'S' : ''}</div>`
-                            : '';
-                        tooltip.innerHTML = `
-                            <div class="font-display font-bold" style="color: #9680b8;">${d.name}</div>
-                            <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">STANDALONE ASSET</div>
-                            ${checkLine}
-                        `;
-                    }
-                    tooltip.style.opacity = '1';
-                    this.highlightConnections(d);
-                })
-                .on('mousemove', (event) => {
-                    tooltip.style.left = `${event.pageX + 10}px`;
-                    tooltip.style.top = `${event.pageY + 10}px`;
-                })
-                .on('mouseleave', () => {
-                    tooltip.style.opacity = '0';
-                    this.clearHighlights();
-                })
-                .on('click', (event, d) => {
-                    if (event.defaultPrevented) return;
-                    if (d._dragged) {
-                        d._dragged = false;
-                        return;
-                    }
-                    event.stopPropagation();
-
-                    if (d.node_type === 'group') {
-                        window.location.href = '/group/' + encodeURIComponent(d.group);
-                    } else {
-                        window.location.href = '/asset/' + encodeURIComponent(d.id);
-                    }
-                });
-        }
-
         // Relayout button
         const relayoutBtn = document.getElementById('relayout-btn');
         if (relayoutBtn) {
@@ -1210,7 +1280,11 @@ class OverviewGraph {
         // Reset node visuals after a delay (keep final status visible briefly)
         setTimeout(() => {
             if (!this.executionState.isRunning && this.nodeElements) {
-                this.nodeElements.attr('class', d => `node node-${d.node_type}`);
+                if (this.currentView === 'overview') {
+                    this.nodeElements.attr('class', d => `node node-${d.node_type}`);
+                } else {
+                    this.nodeElements.attr('class', 'node');
+                }
                 this.groupAssetStatuses.clear();
             }
         }, 5000);
@@ -1221,6 +1295,582 @@ class OverviewGraph {
                 document.getElementById('memory-panel').classList.add('hidden');
             }
         }, 5000);
+    }
+
+    // ================================================================
+    //  SPA NAVIGATION — Overview ↔ Group Detail
+    // ================================================================
+
+    setupNavigation() {
+        history.replaceState({ view: 'overview' }, '', window.location.pathname);
+
+        window.addEventListener('popstate', (event) => {
+            if (event.state && event.state.view === 'group') {
+                this._navigateToGroup(event.state.group);
+            } else {
+                this._navigateToOverview();
+            }
+        });
+    }
+
+    async transitionToGroup(groupName) {
+        history.pushState(
+            { view: 'group', group: groupName },
+            '',
+            '/group/' + encodeURIComponent(groupName),
+        );
+        await this._navigateToGroup(groupName);
+    }
+
+    async _navigateToGroup(groupName) {
+        this.currentView = 'group';
+        this.currentGroupName = groupName;
+
+        const displayName = groupName.replace(/_/g, ' ').toUpperCase();
+        const subtitle = document.getElementById('page-subtitle');
+        if (subtitle) subtitle.textContent = `GROUP // ${displayName}`;
+
+        await this._fadeOutView();
+
+        try {
+            const response = await fetch(
+                `/api/groups/${encodeURIComponent(groupName)}/graph`,
+            );
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            this.groupViewData = await response.json();
+        } catch (error) {
+            console.error('Failed to load group graph:', error);
+            return;
+        }
+
+        this._renderGroupView(this.groupViewData);
+        this._rebuildGroupAssetNodeMapping(this.groupViewData);
+        this.applyEntranceAnimations();
+    }
+
+    async _navigateToOverview() {
+        this.currentView = 'overview';
+        this.currentGroupName = null;
+
+        const subtitle = document.getElementById('page-subtitle');
+        if (subtitle) subtitle.textContent = 'ASSET GROUPS';
+
+        await this._fadeOutView();
+
+        // Restore overview data and re-render
+        this.nodes = this.overviewNodes.map(n => ({...n}));
+        this.edges = this.overviewEdges.map(e => ({...e}));
+        this.render();
+        this.setupOverviewNodeInteractions();
+        this._rebuildOverviewAssetNodeMapping();
+        this._updateOverviewCount();
+        this.applyEntranceAnimations();
+    }
+
+    async _fadeOutView() {
+        this.g.selectAll('*').remove();
+        this.nodeElements = null;
+        this.edgeGroups = null;
+        this.stubNodeElements = null;
+        this.externalEdgeGroups = null;
+    }
+
+    _updateOverviewCount() {
+        const countEl = document.getElementById('overview-count');
+        if (!countEl) return;
+        const groups = this.nodes.filter(n => n.node_type === 'group').length;
+        const assets = this.nodes.filter(n => n.node_type === 'asset').length;
+        const parts = [];
+        if (groups > 0) parts.push(`${groups} GROUP${groups !== 1 ? 'S' : ''}`);
+        if (assets > 0) parts.push(`${assets} ASSET${assets !== 1 ? 'S' : ''}`);
+        countEl.textContent = parts.join(' + ') || '0';
+    }
+
+    // ================================================================
+    //  GROUP DETAIL VIEW — Render assets, stubs, and edges
+    // ================================================================
+
+    _renderGroupView(data) {
+        const nodes = data.nodes.map(n => ({...n}));
+        const edges = data.edges.map(e => ({...e}));
+        const externalEdges = (data.external_edges || []).map(e => ({...e}));
+
+        const stubNodes = this._buildStubNodes(externalEdges);
+        this._computeGroupLayout(nodes, edges);
+        this._positionGroupStubNodes(stubNodes, nodes);
+
+        const extEdgeMapped = externalEdges.map(ext =>
+            ext.direction === 'inbound'
+                ? {source: ext.external_asset, target: ext.target, _isExternal: true}
+                : {source: ext.source, target: ext.external_asset, _isExternal: true},
+        );
+
+        // --- Internal edges ---
+        const edgeGroups = this.g.append('g').attr('class', 'edges')
+            .selectAll('g').data(edges).join('g').attr('class', 'edge-group');
+
+        edgeGroups.append('path').attr('class', 'edge-glow-layer')
+            .attr('fill', 'none').attr('stroke', 'url(#edge-gradient)')
+            .attr('stroke-width', 4).attr('opacity', 0.2)
+            .attr('filter', 'url(#edge-glow)');
+        edgeGroups.append('path').attr('class', 'edge-main')
+            .attr('fill', 'none').attr('stroke', 'url(#edge-gradient)')
+            .attr('stroke-width', 2);
+        this.edgeGroups = edgeGroups;
+
+        // --- External edges (dashed) ---
+        const extEdgeGroups = this.g.append('g').attr('class', 'external-edges')
+            .selectAll('g').data(extEdgeMapped).join('g')
+            .attr('class', 'edge-group edge-group-external');
+
+        extEdgeGroups.append('path').attr('class', 'edge-main')
+            .attr('fill', 'none').attr('stroke', '#6a6a80')
+            .attr('stroke-width', 1.5).attr('stroke-dasharray', '8 4')
+            .attr('opacity', 0.4).attr('marker-end', 'url(#arrow-external)');
+        this.externalEdgeGroups = extEdgeGroups;
+
+        // --- Asset nodes ---
+        const NODE_HEIGHT = 44;
+        const MIN_NODE_WIDTH = 130;
+        const NODE_PADDING = 28;
+
+        const nodeGroups = this.g.append('g').attr('class', 'nodes')
+            .selectAll('g').data(nodes).join('g').attr('class', 'node')
+            .call(this.drag());
+
+        nodeGroups.append('text')
+            .attr('text-anchor', 'middle').attr('dy', '0.35em')
+            .text(d => d.name);
+
+        nodeGroups.each(function(d) {
+            const tw = d3.select(this).select('text').node().getComputedTextLength();
+            d._nodeWidth = Math.max(MIN_NODE_WIDTH, tw + NODE_PADDING);
+            d._nodeHeight = NODE_HEIGHT;
+        });
+
+        nodeGroups.insert('rect', 'text')
+            .attr('width', d => d._nodeWidth).attr('height', NODE_HEIGHT)
+            .attr('x', d => -d._nodeWidth / 2).attr('y', -NODE_HEIGHT / 2)
+            .attr('rx', 4)
+            .style('fill', d => `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`)
+            .style('stroke', d => (GROUP_COLORS[d.group] || GROUP_COLORS.default).stroke)
+            .style('filter', d => {
+                const c = GROUP_COLORS[d.group] || GROUP_COLORS.default;
+                return `drop-shadow(0 0 8px ${c.stroke}66)`;
+            });
+
+        // Execution type icons
+        nodeGroups.each(function(d) {
+            const symbolId = EXECUTION_TYPE_ICONS[d.execution_type];
+            if (!symbolId) return;
+            const node = d3.select(this);
+            const halfW = d._nodeWidth / 2;
+            node.append('use').attr('class', 'exec-type-icon')
+                .attr('href', `#${symbolId}`)
+                .attr('width', 12).attr('height', 12)
+                .attr('x', halfW - 15).attr('y', NODE_HEIGHT / 2 - 15)
+                .style('opacity', 0.85);
+        });
+
+        // Check slivers
+        const cyanShades = ['#68b5c2', '#5ca0ac', '#508e9a', '#457c88', '#78c2ce'];
+        nodeGroups.each(function(d) {
+            const checks = d.checks || [];
+            if (checks.length === 0) return;
+            const node = d3.select(this);
+            const halfW = d._nodeWidth / 2;
+            checks.forEach((check, i) => {
+                const color = cyanShades[i % cyanShades.length];
+                node.append('rect').attr('class', 'check-sliver')
+                    .attr('width', 4).attr('height', NODE_HEIGHT)
+                    .attr('x', halfW + 2 + i * 5).attr('y', -NODE_HEIGHT / 2)
+                    .attr('rx', 1)
+                    .style('fill', color)
+                    .style('filter', `drop-shadow(0 0 4px ${color}cc)`)
+                    .append('title').text(check.name);
+            });
+        });
+
+        nodeGroups.attr('transform', d => `translate(${d.x},${d.y})`);
+        this.nodeElements = nodeGroups;
+
+        // --- Stub nodes ---
+        const STUB_HEIGHT = 32;
+        const stubGroups = this.g.append('g').attr('class', 'stub-nodes')
+            .selectAll('g').data(stubNodes).join('g')
+            .attr('class', 'node node-stub');
+
+        stubGroups.append('text')
+            .attr('text-anchor', 'middle').attr('dy', '0.35em')
+            .style('font-size', '0.7rem').style('opacity', 0.5)
+            .text(d => d.name);
+
+        stubGroups.each(function(d) {
+            const tw = d3.select(this).select('text').node().getComputedTextLength();
+            d._nodeWidth = Math.max(80, tw + 24);
+        });
+
+        stubGroups.insert('rect', 'text')
+            .attr('width', d => d._nodeWidth).attr('height', STUB_HEIGHT)
+            .attr('x', d => -d._nodeWidth / 2).attr('y', -STUB_HEIGHT / 2)
+            .attr('rx', 3)
+            .style('fill', 'url(#gradient-stub)')
+            .style('stroke', '#6a6a80').style('stroke-width', 1)
+            .style('opacity', 0.5);
+
+        stubGroups.attr('transform', d => `translate(${d.x},${d.y})`);
+        this.stubNodeElements = stubGroups;
+
+        // --- Update edge paths ---
+        this._groupNodeMap = new Map([...nodes, ...stubNodes].map(n => [n.id, n]));
+        const allNodeMap = this._groupNodeMap;
+        const computePath = (src, tgt) => {
+            const srcHW = (src._nodeWidth || 130) / 2;
+            const tgtHW = (tgt._nodeWidth || 130) / 2;
+            const srcChecks = src.checks ? src.checks.length : 0;
+            const sliver = srcChecks > 0 ? srcChecks * 5 + 2 : 0;
+            const sx = src.x + srcHW + (src._isStub ? 0 : sliver);
+            const sy = src.y;
+            const tx = tgt.x - tgtHW;
+            const ty = tgt.y;
+            const dx = tx - sx;
+            const dy = ty - sy;
+            const cv = Math.min(Math.abs(dx) * 0.3, 60);
+            if (Math.abs(dy) < 30) {
+                const mx = sx + dx * 0.5;
+                const my = sy + dy * 0.5;
+                return `M${sx},${sy} Q${mx},${my - Math.sign(dy || 1) * cv * 0.3} ${tx},${ty}`;
+            }
+            return `M${sx},${sy} C${sx + cv},${sy} ${tx - cv},${ty} ${tx},${ty}`;
+        };
+
+        edgeGroups.each(function(e) {
+            const s = allNodeMap.get(typeof e.source === 'object' ? e.source.id : e.source);
+            const t = allNodeMap.get(typeof e.target === 'object' ? e.target.id : e.target);
+            if (s && t) d3.select(this).selectAll('path').attr('d', computePath(s, t));
+        });
+        extEdgeGroups.each(function(e) {
+            const s = allNodeMap.get(typeof e.source === 'object' ? e.source.id : e.source);
+            const t = allNodeMap.get(typeof e.target === 'object' ? e.target.id : e.target);
+            if (s && t) d3.select(this).selectAll('path').attr('d', computePath(s, t));
+        });
+
+        // --- Count display ---
+        const countEl = document.getElementById('overview-count');
+        if (countEl) countEl.textContent = `${nodes.length} ASSET${nodes.length !== 1 ? 'S' : ''}`;
+
+        // --- Group view interactions ---
+        this._setupGroupViewInteractions(nodes, edges, externalEdges, stubNodes);
+
+        // --- Fit to content ---
+        this._fitGroupToContent([...nodes, ...stubNodes]);
+    }
+
+    _buildStubNodes(externalEdges) {
+        const stubMap = new Map();
+        externalEdges.forEach(ext => {
+            const id = ext.external_asset;
+            if (!stubMap.has(id)) {
+                stubMap.set(id, {
+                    id,
+                    name: id.includes('/') ? id.split('/').pop() : id,
+                    group: 'stub',
+                    _isStub: true,
+                    _stubDirection: ext.direction,
+                    checks: [],
+                });
+            }
+        });
+        return Array.from(stubMap.values());
+    }
+
+    _computeGroupLayout(nodes, edges) {
+        const deps = new Map();
+        nodes.forEach(n => deps.set(n.id, []));
+        edges.forEach(e => {
+            const sid = typeof e.source === 'object' ? e.source.id : e.source;
+            const tid = typeof e.target === 'object' ? e.target.id : e.target;
+            if (deps.has(tid)) deps.get(tid).push(sid);
+        });
+
+        const levels = new Map();
+        const computeLevel = (id, visited = new Set()) => {
+            if (levels.has(id)) return levels.get(id);
+            if (visited.has(id)) return 0;
+            visited.add(id);
+            const d = deps.get(id) || [];
+            if (d.length === 0) { levels.set(id, 0); return 0; }
+            const mx = Math.max(...d.map(x => computeLevel(x, visited)));
+            levels.set(id, mx + 1);
+            return mx + 1;
+        };
+        nodes.forEach(n => computeLevel(n.id));
+
+        const lvlGroups = new Map();
+        nodes.forEach(n => {
+            const l = levels.get(n.id);
+            if (!lvlGroups.has(l)) lvlGroups.set(l, []);
+            lvlGroups.get(l).push(n);
+        });
+
+        const sorted = Array.from(lvlGroups.keys()).sort((a, b) => a - b);
+        const maxLvl = sorted[sorted.length - 1] || 0;
+        const hSp = 200, vSp = 80;
+        const startX = -(maxLvl * hSp) / 2;
+
+        sorted.forEach(level => {
+            const atLevel = lvlGroups.get(level);
+            const h = atLevel.length * vSp;
+            const startY = -h / 2 + vSp / 2;
+            atLevel.forEach((node, i) => {
+                node.x = startX + level * hSp;
+                node.y = startY + i * vSp;
+                node.fx = node.x;
+                node.fy = node.y;
+            });
+        });
+
+        this._groupLayoutMinX = Infinity;
+        this._groupLayoutMaxX = -Infinity;
+        nodes.forEach(n => {
+            const hw = (n._nodeWidth || 130) / 2;
+            if (n.x - hw < this._groupLayoutMinX) this._groupLayoutMinX = n.x - hw;
+            if (n.x + hw > this._groupLayoutMaxX) this._groupLayoutMaxX = n.x + hw;
+        });
+    }
+
+    _positionGroupStubNodes(stubNodes, nodes) {
+        const MARGIN = 120, vSp = 60;
+
+        const inbound = stubNodes.filter(s => s._stubDirection === 'inbound');
+        const outbound = stubNodes.filter(s => s._stubDirection === 'outbound');
+
+        const lx = this._groupLayoutMinX - MARGIN;
+        const inH = inbound.length * vSp;
+        const inY0 = -inH / 2 + vSp / 2;
+        inbound.forEach((s, i) => { s.x = lx; s.y = inY0 + i * vSp; s.fx = s.x; s.fy = s.y; });
+
+        const rx = this._groupLayoutMaxX + MARGIN;
+        const outH = outbound.length * vSp;
+        const outY0 = -outH / 2 + vSp / 2;
+        outbound.forEach((s, i) => { s.x = rx; s.y = outY0 + i * vSp; s.fx = s.x; s.fy = s.y; });
+    }
+
+    _fitGroupToContent(allNodes) {
+        if (allNodes.length === 0) return;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+        allNodes.forEach(n => {
+            const hw = (n._nodeWidth || 130) / 2;
+            const hh = n._isStub ? 16 : 22;
+            const sl = (n.checks && n.checks.length > 0) ? n.checks.length * 5 + 2 : 0;
+            if (n.x - hw < minX) minX = n.x - hw;
+            if (n.x + hw + sl > maxX) maxX = n.x + hw + sl;
+            if (n.y - hh < minY) minY = n.y - hh;
+            if (n.y + hh > maxY) maxY = n.y + hh;
+        });
+        const cw = maxX - minX, ch = maxY - minY;
+        const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+        const hH = 64, pad = 60;
+        const aW = this.width - pad * 2, aH = this.height - hH - pad;
+        if (aW <= 0 || aH <= 0) return;
+        const scale = Math.min(aW / cw, aH / ch, 1.2);
+        const tx = this.width / 2 - cx * scale;
+        const ty = hH + aH / 2 - cy * scale + pad / 2;
+        this.svg.call(this.zoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+    }
+
+    _updateGroupEdgePaths() {
+        if (!this._groupNodeMap) return;
+        const nodeMap = this._groupNodeMap;
+
+        const computePath = (src, tgt) => {
+            const srcHW = (src._nodeWidth || 130) / 2;
+            const tgtHW = (tgt._nodeWidth || 130) / 2;
+            const srcChecks = src.checks ? src.checks.length : 0;
+            const sliver = srcChecks > 0 ? srcChecks * 5 + 2 : 0;
+            const sx = src.x + srcHW + (src._isStub ? 0 : sliver);
+            const sy = src.y;
+            const tx = tgt.x - tgtHW;
+            const ty = tgt.y;
+            const dx = tx - sx;
+            const dy = ty - sy;
+            const cv = Math.min(Math.abs(dx) * 0.3, 60);
+            if (Math.abs(dy) < 30) {
+                const mx = sx + dx * 0.5;
+                const my = sy + dy * 0.5;
+                return `M${sx},${sy} Q${mx},${my - Math.sign(dy || 1) * cv * 0.3} ${tx},${ty}`;
+            }
+            return `M${sx},${sy} C${sx + cv},${sy} ${tx - cv},${ty} ${tx},${ty}`;
+        };
+
+        if (this.edgeGroups) {
+            this.edgeGroups.each(function(e) {
+                const s = nodeMap.get(typeof e.source === 'object' ? e.source.id : e.source);
+                const t = nodeMap.get(typeof e.target === 'object' ? e.target.id : e.target);
+                if (s && t) d3.select(this).selectAll('path').attr('d', computePath(s, t));
+            });
+        }
+        if (this.externalEdgeGroups) {
+            this.externalEdgeGroups.each(function(e) {
+                const s = nodeMap.get(typeof e.source === 'object' ? e.source.id : e.source);
+                const t = nodeMap.get(typeof e.target === 'object' ? e.target.id : e.target);
+                if (s && t) d3.select(this).selectAll('path').attr('d', computePath(s, t));
+            });
+        }
+    }
+
+    _setupGroupViewInteractions(nodes, edges, externalEdges, stubNodes) {
+        const tooltip = document.getElementById('tooltip');
+        const self = this;
+
+        this.nodeElements
+            .on('mouseenter', function(event, d) {
+                if (self._isDragging) return;
+                const checks = d.checks || [];
+                const checkLine = checks.length > 0
+                    ? `<div style="color: #68b5c2; font-size: 0.7rem; margin-top: 4px; font-family: 'Orbitron', sans-serif;">${checks.length} CHECK${checks.length !== 1 ? 'S' : ''}</div>`
+                    : '';
+                tooltip.innerHTML = `
+                    <div class="font-display font-bold" style="color: #68b5c2;">${d.name}</div>
+                    <div style="color: #8282a0; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">${d.group.toUpperCase()}</div>
+                    ${d.return_type ? `<div style="color: #c45270; font-size: 0.75rem; margin-top: 6px; font-family: 'Space Mono', monospace;">${d.return_type}</div>` : ''}
+                    ${checkLine}
+                `;
+                tooltip.style.opacity = '1';
+                self._highlightGroupConnections(d, edges, externalEdges);
+            })
+            .on('mousemove', (event) => {
+                tooltip.style.left = `${event.pageX + 10}px`;
+                tooltip.style.top = `${event.pageY + 10}px`;
+            })
+            .on('mouseleave', () => {
+                tooltip.style.opacity = '0';
+                this._clearGroupHighlights();
+            })
+            .on('click', (event, d) => {
+                if (event.defaultPrevented) return;
+                if (d._dragged) {
+                    d._dragged = false;
+                    return;
+                }
+                event.stopPropagation();
+                window.location.href = '/asset/' + encodeURIComponent(d.id);
+            });
+
+        if (this.stubNodeElements) {
+            this.stubNodeElements
+                .on('mouseenter', (event, d) => {
+                    tooltip.innerHTML = `
+                        <div class="font-display font-bold" style="color: #6a6a80;">${d.name}</div>
+                        <div style="color: #5a5a72; font-size: 0.7rem; letter-spacing: 0.1em; margin-top: 4px;">EXTERNAL</div>
+                    `;
+                    tooltip.style.opacity = '1';
+                })
+                .on('mousemove', (event) => {
+                    tooltip.style.left = `${event.pageX + 10}px`;
+                    tooltip.style.top = `${event.pageY + 10}px`;
+                })
+                .on('mouseleave', () => { tooltip.style.opacity = '0'; });
+        }
+    }
+
+    _highlightGroupConnections(node, edges, externalEdges) {
+        const connected = new Set();
+        edges.forEach(e => {
+            const s = typeof e.source === 'object' ? e.source.id : e.source;
+            const t = typeof e.target === 'object' ? e.target.id : e.target;
+            if (s === node.id) connected.add(t);
+            if (t === node.id) connected.add(s);
+        });
+        externalEdges.forEach(e => {
+            if (e.source === node.id || e.target === node.id) connected.add(e.external_asset);
+        });
+
+        this.edgeGroups.each(function(e) {
+            const s = typeof e.source === 'object' ? e.source.id : e.source;
+            const t = typeof e.target === 'object' ? e.target.id : e.target;
+            const hit = s === node.id || t === node.id;
+            const g = d3.select(this);
+            g.select('.edge-glow-layer')
+                .attr('stroke', hit ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
+                .attr('stroke-width', hit ? 8 : 4)
+                .attr('opacity', hit ? 0.4 : 0.2)
+                .attr('filter', hit ? 'url(#edge-glow-intense)' : 'url(#edge-glow)');
+            g.select('.edge-main')
+                .attr('stroke', hit ? 'url(#edge-gradient-highlight)' : 'url(#edge-gradient)')
+                .attr('stroke-width', hit ? 2.5 : 2);
+        });
+
+        if (this.externalEdgeGroups) {
+            this.externalEdgeGroups.each(function(e) {
+                const s = typeof e.source === 'object' ? e.source.id : e.source;
+                const t = typeof e.target === 'object' ? e.target.id : e.target;
+                const hit = s === node.id || t === node.id;
+                d3.select(this).select('.edge-main')
+                    .attr('opacity', hit ? 0.7 : 0.4)
+                    .attr('stroke-width', hit ? 2 : 1.5);
+            });
+        }
+
+        this.nodeElements.style('opacity', d =>
+            d.id === node.id || connected.has(d.id) ? 1 : 0.3);
+        if (this.stubNodeElements) {
+            this.stubNodeElements.style('opacity', d =>
+                connected.has(d.id) ? 0.7 : 0.2);
+        }
+    }
+
+    _clearGroupHighlights() {
+        this.edgeGroups.each(function() {
+            const g = d3.select(this);
+            g.select('.edge-glow-layer')
+                .attr('stroke', 'url(#edge-gradient)').attr('stroke-width', 4)
+                .attr('opacity', 0.2).attr('filter', 'url(#edge-glow)');
+            g.select('.edge-main')
+                .attr('stroke', 'url(#edge-gradient)').attr('stroke-width', 2);
+        });
+        if (this.externalEdgeGroups) {
+            this.externalEdgeGroups.each(function() {
+                d3.select(this).select('.edge-main')
+                    .attr('opacity', 0.4).attr('stroke-width', 1.5);
+            });
+        }
+        this.nodeElements.style('opacity', 1);
+        if (this.stubNodeElements) this.stubNodeElements.style('opacity', 1);
+    }
+
+    // ================================================================
+    //  ASSET-NODE MAPPING (for execution status tracking)
+    // ================================================================
+
+    _rebuildGroupAssetNodeMapping(groupData) {
+        this.assetToNodeId.clear();
+        this.groupAssetStatuses.clear();
+        for (const node of groupData.nodes) {
+            this.assetToNodeId.set(node.id, node.id);
+        }
+    }
+
+    _rebuildOverviewAssetNodeMapping() {
+        this.assetToNodeId.clear();
+        this.groupAssetStatuses.clear();
+        if (this._fullGraphNodes) {
+            for (const asset of this._fullGraphNodes) {
+                if (asset.group === 'default') {
+                    this.assetToNodeId.set(asset.id, asset.id);
+                } else {
+                    this.assetToNodeId.set(asset.id, `group:${asset.group}`);
+                }
+            }
+        }
+    }
+
+    // ================================================================
+    //  ENTRANCE ANIMATIONS
+    // ================================================================
+
+    applyEntranceAnimations() {
+        // Intentionally instant — no animation delay.
     }
 }
 

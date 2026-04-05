@@ -34,10 +34,10 @@
 }
 
 .light {
-    /* Softer, warm-tinted backgrounds */
-    --bg-void: #f5f4f7;
-    --bg-surface: #fafafa;
-    --bg-elevated: #f0eff2;
+    /* Warm, muted backgrounds — easy on the eyes */
+    --bg-void: #e0dce6;
+    --bg-surface: #f0eff2;
+    --bg-elevated: #e4e2e8;
 
     /* Muted text - not pure black */
     --text-primary: #3d3d4a;
@@ -693,9 +693,37 @@ body {
     text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
 }
 
+/* Light mode: soft card-style nodes — gentle fill, muted border, subtle shadow */
+.light .node rect {
+    fill: var(--bg-surface) !important;
+    stroke: var(--border-glow) !important;
+    stroke-width: 1.5px;
+    filter: drop-shadow(0 1px 3px rgba(60, 60, 80, 0.10)) !important;
+}
+
+.light .node:hover rect {
+    stroke: var(--neon-cyan) !important;
+    stroke-width: 1.5px;
+    filter: drop-shadow(0 2px 6px rgba(74, 157, 170, 0.18)) !important;
+}
+
+.light .node.selected rect {
+    stroke: var(--neon-purple) !important;
+    stroke-width: 2px;
+    filter: drop-shadow(0 2px 6px rgba(125, 98, 168, 0.18)) !important;
+}
+
 .light .node text {
-    fill: #ffffff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    fill: var(--text-primary);
+    text-shadow: none;
+}
+
+.light .check-sliver {
+    filter: drop-shadow(0 0 2px rgba(74, 157, 170, 0.20)) !important;
+}
+
+.light .node:hover .check-sliver {
+    filter: drop-shadow(0 0 3px rgba(74, 157, 170, 0.30)) !important;
 }
 
 /* ============================================
@@ -783,6 +811,7 @@ body {
     stroke: var(--text-secondary);
     stroke-dasharray: 8 4;
 }
+
 
 /* ============================================
    MEMORY PANEL
@@ -1828,7 +1857,10 @@ body {
 
 /* Light mode stub nodes and group cards */
 .light .stub-node rect {
-    fill: #e0e0e8;
+    fill: var(--bg-elevated) !important;
+    stroke: var(--border-dim) !important;
+    stroke-dasharray: 4 3;
+    filter: none !important;
 }
 
 .light .stub-node text {
