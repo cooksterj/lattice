@@ -501,6 +501,7 @@ class GroupGraph {
         this.simulation.stop();
         this.tick();
         this.fitToContent();
+        this.applyEntranceAnimations();
     }
 
     computeHierarchicalLayout() {
@@ -904,6 +905,10 @@ class GroupGraph {
         if (loadingEl) {
             loadingEl.style.display = 'none';
         }
+    }
+
+    applyEntranceAnimations() {
+        // Intentionally instant — no animation delay.
     }
 }
 

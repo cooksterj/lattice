@@ -39,7 +39,7 @@
     }
 
     .light .asset-header {
-        background: rgba(250, 250, 252, 0.9);
+        background: var(--bg-surface);
     }
 
     .asset-name {
@@ -71,30 +71,50 @@
         line-height: 1.6;
     }
 
-    .asset-meta {
+    .asset-props {
         display: flex;
         gap: 2rem;
-        margin-top: 1rem;
+        margin-top: 1.25rem;
         flex-wrap: wrap;
     }
 
-    .asset-meta-item {
+    .asset-props-item {
         font-size: 0.8rem;
     }
 
-    .asset-meta-label {
+    .asset-props-label {
         color: var(--text-secondary);
         font-size: 0.7rem;
         letter-spacing: 0.1em;
         margin-bottom: 0.25rem;
     }
 
-    .asset-meta-value {
+    .asset-props-value {
         color: var(--text-primary);
     }
 
-    .asset-meta-value.type {
+    .asset-props-value.type {
         color: var(--neon-yellow);
+    }
+
+    .asset-section {
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border-dim);
+    }
+
+    .asset-section-label {
+        color: var(--text-secondary);
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        margin-bottom: 0.5rem;
+    }
+
+    .asset-section-content {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.375rem;
+        align-items: center;
     }
 
     .section-title {
@@ -129,7 +149,7 @@
     }
 
     .light .stat-card {
-        background: rgba(250, 250, 252, 0.9);
+        background: var(--bg-surface);
     }
 
     .stat-card-label {
@@ -162,7 +182,7 @@
     }
 
     .light .data-table {
-        background: rgba(250, 250, 252, 0.8);
+        background: var(--bg-surface);
     }
 
     .data-table th {
@@ -655,42 +675,51 @@
                 ? data.dependents.map(d => `<a href="/asset/${encodeURIComponent(d)}" class="dep-badge">${d}</a>`).join('')
                 : '<span style="color: var(--text-secondary); font-size: 0.8rem;">None (terminal asset)</span>';
 
+            // Build inline props row (compact scalar values)
+            const propsItems = [];
+            if (data.return_type) {
+                propsItems.push(`
+                    <div class="asset-props-item">
+                        <div class="asset-props-label">RETURN TYPE</div>
+                        <div class="asset-props-value type">${data.return_type}</div>
+                    </div>`);
+            }
+            if (data.execution_type) {
+                propsItems.push(`
+                    <div class="asset-props-item">
+                        <div class="asset-props-label">SOURCE</div>
+                        <div class="asset-props-value">${data.execution_type}</div>
+                    </div>`);
+            }
+            if (data.metadata) {
+                Object.entries(data.metadata).forEach(([k, v]) => {
+                    propsItems.push(`
+                        <div class="asset-props-item">
+                            <div class="asset-props-label">${k.toUpperCase()}</div>
+                            <div class="asset-props-value">${Array.isArray(v) ? v.join(', ') : v}</div>
+                        </div>`);
+                });
+            }
+
             header.innerHTML = `
                 <div>
                     <span class="asset-name">${data.name}</span>
                     <span class="asset-group-badge">${data.group.toUpperCase()}</span>
                 </div>
                 ${data.description ? `<div class="asset-description">${data.description}</div>` : ''}
-                <div class="asset-meta">
-                    ${data.return_type ? `
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">RETURN TYPE</div>
-                        <div class="asset-meta-value type">${data.return_type}</div>
-                    </div>
-                    ` : ''}
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">DEPENDENCIES</div>
-                        <div>${depsHtml}</div>
-                    </div>
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">DEPENDENTS</div>
-                        <div>${dependentsHtml}</div>
-                    </div>
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">CHECKS</div>
-                        <div>${checksHtml}</div>
-                    </div>
+                ${propsItems.length > 0 ? `<div class="asset-props">${propsItems.join('')}</div>` : ''}
+                <div class="asset-section">
+                    <div class="asset-section-label">DEPENDENCIES</div>
+                    <div class="asset-section-content">${depsHtml}</div>
                 </div>
-                ${data.metadata ? `
-                <div class="asset-meta" style="margin-top: 0.5rem;">
-                    ${Object.entries(data.metadata).map(([k, v]) => `
-                    <div class="asset-meta-item">
-                        <div class="asset-meta-label">${k.toUpperCase()}</div>
-                        <div class="asset-meta-value">${Array.isArray(v) ? v.join(', ') : v}</div>
-                    </div>
-                    `).join('')}
+                <div class="asset-section">
+                    <div class="asset-section-label">DEPENDENTS</div>
+                    <div class="asset-section-content">${dependentsHtml}</div>
                 </div>
-                ` : ''}
+                <div class="asset-section">
+                    <div class="asset-section-label">CHECKS</div>
+                    <div class="asset-section-content">${checksHtml}</div>
+                </div>
             `;
         } catch (e) {
             console.error('Failed to load asset info:', e);
