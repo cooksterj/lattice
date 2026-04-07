@@ -156,9 +156,7 @@ serve(history_store=store)   # binds to LATTICE_HOST:LATTICE_PORT (default 127.0
 
 Then open http://localhost:8000 in your browser.
 
-<p align="center">
-  <img src="docs/web-demo.gif" alt="Lattice web visualization demo" width="900" />
-</p>
+https://github.com/user-attachments/assets/28762d8f-c9cb-4737-884c-5fd49d7be8c5
 
 ### Pages
 
