@@ -845,11 +845,17 @@ class OverviewGraph {
                 <div class="date-preview" id="date-preview" style="display: none;"></div>
             </div>
             <button id="execute-btn" class="execute-btn">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg class="execute-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <svg class="stop-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="display: none;">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/>
                 </svg>
                 <span>EXECUTE</span>
             </button>
@@ -906,8 +912,14 @@ class OverviewGraph {
         `;
         document.body.appendChild(progress);
 
-        // Event listener for execute button
-        document.getElementById('execute-btn').addEventListener('click', () => this.startExecution());
+        // Event listener for execute/stop button
+        document.getElementById('execute-btn').addEventListener('click', () => {
+            if (this.executionState.isRunning) {
+                this.requestStop();
+            } else {
+                this.startExecution();
+            }
+        });
     }
 
     setupDateSelectionListeners() {
@@ -995,6 +1007,8 @@ class OverviewGraph {
         btn.disabled = true;
         btn.classList.add('running');
         btn.querySelector('span').textContent = 'CONNECTING...';
+        btn.querySelector('.execute-icon').style.display = 'none';
+        btn.querySelector('.stop-icon').style.display = 'none';
 
         // Show UI elements
         document.getElementById('memory-panel').classList.remove('hidden');
@@ -1029,7 +1043,11 @@ class OverviewGraph {
         // Connect WebSocket and wait for it to be ready
         try {
             await this.connectExecutionWebSocket();
-            btn.querySelector('span').textContent = 'RUNNING...';
+            btn.disabled = false;
+            btn.querySelector('span').textContent = 'STOP';
+            btn.querySelector('.stop-icon').style.display = '';
+            btn.classList.remove('running');
+            btn.classList.add('stopping');
 
             // Build request body with date parameters (no target — always full pipeline)
             const requestBody = {};
@@ -1056,6 +1074,26 @@ class OverviewGraph {
         } catch (error) {
             console.error('Execution failed:', error);
             this.stopExecution();
+        }
+    }
+
+    async requestStop() {
+        const btn = document.getElementById('execute-btn');
+        btn.disabled = true;
+        btn.querySelector('span').textContent = 'STOPPING...';
+
+        try {
+            const response = await fetch('/api/execution/stop', {method: 'POST'});
+            if (!response.ok) {
+                const error = await response.json();
+                console.error('Stop failed:', error.detail || 'Unknown error');
+                btn.disabled = false;
+                btn.querySelector('span').textContent = 'STOP';
+            }
+        } catch (error) {
+            console.error('Stop request failed:', error);
+            btn.disabled = false;
+            btn.querySelector('span').textContent = 'STOP';
         }
     }
 
@@ -1113,6 +1151,10 @@ class OverviewGraph {
                 this.handlePartitionComplete(message.data);
                 break;
 
+            case 'execution_cancelled':
+                this.showExecutionCancelled();
+                break;
+
             case 'execution_complete':
                 this.showExecutionComplete(message.data);
                 this.stopExecution();
@@ -1149,10 +1191,21 @@ class OverviewGraph {
         console.log('Partition complete:', data);
     }
 
+    showExecutionCancelled() {
+        const currentAssetEl = document.getElementById('progress-current-asset');
+        if (currentAssetEl) {
+            currentAssetEl.textContent = 'STOPPING...';
+            currentAssetEl.style.color = '#d0b454';
+        }
+    }
+
     showExecutionComplete(data) {
         const currentAssetEl = document.getElementById('progress-current-asset');
         if (currentAssetEl) {
-            if (data.failed_count > 0) {
+            if (data.status === 'cancelled') {
+                currentAssetEl.textContent = 'CANCELLED';
+                currentAssetEl.style.color = '#d0b454';
+            } else if (data.failed_count > 0) {
                 currentAssetEl.textContent = 'FAILED';
                 currentAssetEl.style.color = '#c45270';
             } else {
@@ -1271,8 +1324,10 @@ class OverviewGraph {
         const btn = document.getElementById('execute-btn');
         if (btn) {
             btn.disabled = false;
-            btn.classList.remove('running');
+            btn.classList.remove('running', 'stopping');
             btn.querySelector('span').textContent = 'EXECUTE';
+            btn.querySelector('.execute-icon').style.display = '';
+            btn.querySelector('.stop-icon').style.display = 'none';
         }
 
         document.getElementById('execution-progress').classList.add('hidden');

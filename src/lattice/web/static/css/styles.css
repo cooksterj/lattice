@@ -1156,6 +1156,17 @@ body {
     animation: btnPulse 1.5s ease-in-out infinite;
 }
 
+.execute-btn.stopping {
+    background: linear-gradient(135deg, var(--neon-pink), #8b2040);
+    box-shadow: 0 0 12px var(--neon-pink-glow),
+    inset 0 0 8px rgba(255, 255, 255, 0.06);
+}
+
+.execute-btn.stopping:hover:not(:disabled) {
+    box-shadow: 0 0 20px var(--neon-pink-glow),
+    inset 0 0 12px rgba(255, 255, 255, 0.1);
+}
+
 @keyframes btnPulse {
     0%, 100% {
         box-shadow: 0 0 12px rgba(184, 158, 74, 0.25);
