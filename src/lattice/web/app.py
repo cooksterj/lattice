@@ -72,6 +72,17 @@ def create_app(
     # Configure templates
     templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+    def _static_url(path: str) -> str:
+        """Return a static file URL with mtime-based cache busting."""
+        file_path = STATIC_DIR / path
+        try:
+            mtime = int(file_path.stat().st_mtime)
+        except OSError:
+            mtime = 0
+        return f"/static/{path}?v={mtime}"
+
+    templates.env.globals["static"] = _static_url
+
     # Create a shared execution manager with history store for observability
     execution_manager = ExecutionManager(history_store=history_store)
 
