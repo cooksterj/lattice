@@ -25,6 +25,7 @@ from lattice.web.schemas_execution import (
     ExecutionStartRequest,
     ExecutionStartResponse,
     ExecutionStatusSchema,
+    ExecutionStopResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,6 +119,19 @@ def create_execution_router(
             run_id="starting",
             message="Execution started",
         )
+
+    @router.post("/stop", response_model=ExecutionStopResponse)
+    async def stop_execution() -> ExecutionStopResponse:
+        """Stop the current execution.
+
+        Running assets will complete, but no new assets will start.
+        """
+        if manager.cancel_execution():
+            await manager.broadcast(
+                {"type": "execution_cancelled", "data": {"message": "Execution stop requested"}}
+            )
+            return ExecutionStopResponse(success=True, message="Execution stop requested")
+        return ExecutionStopResponse(success=False, message="No execution running")
 
     return router
 

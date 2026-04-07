@@ -75,6 +75,15 @@ class ExecutionStartResponse(BaseModel):
     message: str
 
 
+class ExecutionStopResponse(BaseModel):
+    """Response after requesting execution stop."""
+
+    model_config = ConfigDict(frozen=True)
+
+    success: bool
+    message: str
+
+
 class WebSocketMessage(BaseModel):
     """WebSocket message format."""
 

@@ -115,6 +115,23 @@ class ExecutionManager:
         """Get the memory usage timeline (last 100 snapshots)."""
         return self._memory_timeline[-100:]
 
+    def cancel_execution(self) -> bool:
+        """Request cancellation of the current execution.
+
+        Signals the executor to stop scheduling new assets. Assets that
+        are already running will complete, but no new assets will start.
+
+        Returns
+        -------
+        bool
+            True if cancellation was requested, False if nothing is running.
+        """
+        if self._executor is not None and self._is_running:
+            self._executor.cancel()
+            logger.info("Execution cancellation requested")
+            return True
+        return False
+
     def stop_execution(self) -> None:
         """Mark execution as stopped."""
         self._is_running = False
@@ -343,7 +360,13 @@ class ExecutionManager:
                 list(dates_to_execute) if dates_to_execute else [None]
             )
 
+            was_cancelled = False
+
             for date_index, partition_date in enumerate(execution_dates):
+                if self._executor is not None and self._executor._cancelled:
+                    was_cancelled = True
+                    break
+
                 if partition_date is not None:
                     # Broadcast partition start
                     await self.broadcast(
@@ -398,6 +421,10 @@ class ExecutionManager:
                     self._executor = executor
 
                     result = await executor.execute(plan)
+
+                # Check if this partition was cancelled
+                if executor._cancelled:
+                    was_cancelled = True
 
                 partition_duration = (datetime.now() - partition_start).total_seconds() * 1000
 
@@ -503,12 +530,19 @@ class ExecutionManager:
                 total_failed,
             )
 
+            if was_cancelled:
+                final_status = "cancelled"
+            elif total_failed > 0:
+                final_status = "failed"
+            else:
+                final_status = "completed"
+
             await self.broadcast(
                 {
                     "type": "execution_complete",
                     "data": {
                         "run_id": result.run_id if dates_to_execute else result.run_id,
-                        "status": "failed" if total_failed > 0 else "completed",
+                        "status": final_status,
                         "duration_ms": overall_duration,
                         "completed_count": total_completed,
                         "failed_count": total_failed,
