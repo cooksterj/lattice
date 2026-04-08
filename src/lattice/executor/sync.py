@@ -66,6 +66,11 @@ class Executor:
         self._current_state: ExecutionState | None = None
 
     @property
+    def _partition_key_str(self) -> str | None:
+        """Return partition key as ISO string, or None."""
+        return self._partition_key.isoformat() if self._partition_key else None
+
+    @property
     def current_state(self) -> ExecutionState | None:
         """
         Get the current execution state.
@@ -266,7 +271,9 @@ class Executor:
             param_names = [p for p in sig.parameters if p not in SKIP_PARAMS]
             kwargs: dict[str, Any] = {}
             for param_name, dep_key in zip(param_names, asset_def.dependencies, strict=True):
-                kwargs[param_name] = self.io_manager.load(dep_key)
+                kwargs[param_name] = self.io_manager.load(
+                    dep_key, partition_key=self._partition_key_str
+                )
 
             # Inject partition_key if asset accepts it
             if self._partition_key is not None and "partition_key" in sig.parameters:
@@ -276,7 +283,7 @@ class Executor:
             result_value = asset_def.fn(**kwargs)
 
             # Store result
-            self.io_manager.store(key, result_value)
+            self.io_manager.store(key, result_value, partition_key=self._partition_key_str)
 
             completed_at = datetime.now()
             duration_ms = (completed_at - started_at).total_seconds() * 1000
