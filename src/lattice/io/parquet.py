@@ -44,7 +44,11 @@ class ParquetIOManager(IOManager):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def _key_to_path(self, key: AssetKey) -> Path:
+    def _key_to_path(
+        self,
+        key: AssetKey,
+        partition_key: str | None = None,
+    ) -> Path:
         """
         Convert asset key to parquet file path.
 
@@ -52,17 +56,28 @@ class ParquetIOManager(IOManager):
         ----------
         key : AssetKey
             The asset key.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         Path
             The file path for this asset.
         """
-        group_dir = self.base_path / key.group
-        group_dir.mkdir(exist_ok=True)
-        return group_dir / f"{key.name}.parquet"
+        if partition_key is not None:
+            parent = self.base_path / key.group / partition_key
+        else:
+            parent = self.base_path / key.group
+        parent.mkdir(parents=True, exist_ok=True)
+        return parent / f"{key.name}.parquet"
 
-    def load(self, key: AssetKey, annotation: type[T] | None = None) -> T:
+    def load(
+        self,
+        key: AssetKey,
+        annotation: type[T] | None = None,
+        *,
+        partition_key: str | None = None,
+    ) -> T:
         """
         Load DataFrame from parquet file.
 
@@ -72,6 +87,8 @@ class ParquetIOManager(IOManager):
             The asset to load.
         annotation : type or None, optional
             Ignored for parquet storage.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
@@ -85,14 +102,20 @@ class ParquetIOManager(IOManager):
         """
         import polars as pl
 
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         if not path.exists():
             logger.debug("Asset %s not found at %s", key, path)
             raise KeyError(f"Asset {key} not found at {path}")
         logger.debug("Loading asset %s from %s", key, path)
         return pl.read_parquet(path)  # type: ignore[return-value]
 
-    def store(self, key: AssetKey, value: Any) -> None:
+    def store(
+        self,
+        key: AssetKey,
+        value: Any,
+        *,
+        partition_key: str | None = None,
+    ) -> None:
         """
         Store DataFrame to parquet file.
 
@@ -102,6 +125,8 @@ class ParquetIOManager(IOManager):
             The asset key to store under.
         value : pl.DataFrame
             The DataFrame to store.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Raises
         ------
@@ -114,11 +139,11 @@ class ParquetIOManager(IOManager):
             raise TypeError(
                 f"ParquetIOManager can only store DataFrames, got {type(value).__name__}"
             )
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         logger.debug("Storing asset %s to %s", key, path)
         value.write_parquet(path)
 
-    def has(self, key: AssetKey) -> bool:
+    def has(self, key: AssetKey, *, partition_key: str | None = None) -> bool:
         """
         Check if parquet file exists.
 
@@ -126,15 +151,17 @@ class ParquetIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to check.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         bool
             True if the file exists.
         """
-        return self._key_to_path(key).exists()
+        return self._key_to_path(key, partition_key).exists()
 
-    def delete(self, key: AssetKey) -> None:
+    def delete(self, key: AssetKey, *, partition_key: str | None = None) -> None:
         """
         Delete parquet file.
 
@@ -142,7 +169,9 @@ class ParquetIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to delete.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         if path.exists():
             path.unlink()

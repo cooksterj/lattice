@@ -220,6 +220,93 @@ class TestFileIOManager:
             assert io2.load(key) == "persisted_value"
 
 
+class TestPartitionedStorage:
+    """Tests for partition_key-scoped storage."""
+
+    def test_memory_partition_isolation(self) -> None:
+        """Same AssetKey with different partition_keys are independent."""
+        io = MemoryIOManager()
+        key = AssetKey(name="data", group="etl")
+
+        io.store(key, "day1_value", partition_key="2026-04-05")
+        io.store(key, "day2_value", partition_key="2026-04-06")
+
+        assert io.load(key, partition_key="2026-04-05") == "day1_value"
+        assert io.load(key, partition_key="2026-04-06") == "day2_value"
+
+    def test_memory_no_partition_vs_partition_distinct(self) -> None:
+        """partition_key=None and a real partition_key are separate slots."""
+        io = MemoryIOManager()
+        key = AssetKey(name="data")
+
+        io.store(key, "unpartitioned")
+        io.store(key, "partitioned", partition_key="2026-04-05")
+
+        assert io.load(key) == "unpartitioned"
+        assert io.load(key, partition_key="2026-04-05") == "partitioned"
+
+    def test_memory_has_respects_partition(self) -> None:
+        """has() returns False for unstored partition."""
+        io = MemoryIOManager()
+        key = AssetKey(name="data")
+
+        io.store(key, "value", partition_key="2026-04-05")
+
+        assert io.has(key, partition_key="2026-04-05")
+        assert not io.has(key, partition_key="2026-04-06")
+        assert not io.has(key)  # unpartitioned slot
+
+    def test_memory_delete_respects_partition(self) -> None:
+        """Deleting one partition doesn't affect another."""
+        io = MemoryIOManager()
+        key = AssetKey(name="data")
+
+        io.store(key, "day1", partition_key="2026-04-05")
+        io.store(key, "day2", partition_key="2026-04-06")
+
+        io.delete(key, partition_key="2026-04-05")
+
+        assert not io.has(key, partition_key="2026-04-05")
+        assert io.has(key, partition_key="2026-04-06")
+        assert io.load(key, partition_key="2026-04-06") == "day2"
+
+    def test_file_partition_isolation(self) -> None:
+        """FileIOManager stores partitioned data in separate subdirectories."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            io = FileIOManager(tmpdir)
+            key = AssetKey(name="data", group="etl")
+
+            io.store(key, "day1_value", partition_key="2026-04-05")
+            io.store(key, "day2_value", partition_key="2026-04-06")
+
+            assert io.load(key, partition_key="2026-04-05") == "day1_value"
+            assert io.load(key, partition_key="2026-04-06") == "day2_value"
+
+    def test_file_partition_path_structure(self) -> None:
+        """Verify {group}/{partition}/{name}.pkl layout."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            io = FileIOManager(tmpdir)
+            key = AssetKey(name="clean", group="etl")
+
+            io.store(key, "value", partition_key="2026-04-05")
+
+            base = Path(tmpdir)
+            assert (base / "etl" / "2026-04-05" / "clean.pkl").exists()
+
+    def test_file_backwards_compatible(self) -> None:
+        """partition_key=None still uses {group}/{name}.pkl."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            io = FileIOManager(tmpdir)
+            key = AssetKey(name="data", group="raw")
+
+            io.store(key, "value")
+
+            base = Path(tmpdir)
+            assert (base / "raw" / "data.pkl").exists()
+            # No partition subdirectory
+            assert not (base / "raw" / "None").exists()
+
+
 class TestIOManagerABC:
     """Tests for IOManager interface compliance."""
 

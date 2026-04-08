@@ -130,7 +130,13 @@ class LineageIOManager(IOManager):
         self._wrapped = wrapped
         self._tracker = tracker
 
-    def load(self, key: AssetKey, annotation: type[T] | None = None) -> T:
+    def load(
+        self,
+        key: AssetKey,
+        annotation: type[T] | None = None,
+        *,
+        partition_key: str | None = None,
+    ) -> T:
         """
         Load an asset and record the read event.
 
@@ -140,6 +146,8 @@ class LineageIOManager(IOManager):
             The asset to load.
         annotation : type or None
             Optional type hint for deserialization.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
@@ -147,9 +155,15 @@ class LineageIOManager(IOManager):
             The loaded asset value.
         """
         self._tracker.record_read(key)
-        return self._wrapped.load(key, annotation)
+        return self._wrapped.load(key, annotation, partition_key=partition_key)
 
-    def store(self, key: AssetKey, value: Any) -> None:
+    def store(
+        self,
+        key: AssetKey,
+        value: Any,
+        *,
+        partition_key: str | None = None,
+    ) -> None:
         """
         Store an asset and record the write event.
 
@@ -159,11 +173,13 @@ class LineageIOManager(IOManager):
             The asset key to store under.
         value : Any
             The value to store.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        self._wrapped.store(key, value)
+        self._wrapped.store(key, value, partition_key=partition_key)
         self._tracker.record_write(key)
 
-    def has(self, key: AssetKey) -> bool:
+    def has(self, key: AssetKey, *, partition_key: str | None = None) -> bool:
         """
         Check if an asset exists in the wrapped manager.
 
@@ -171,15 +187,17 @@ class LineageIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to check.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         bool
             True if the asset exists.
         """
-        return self._wrapped.has(key)
+        return self._wrapped.has(key, partition_key=partition_key)
 
-    def delete(self, key: AssetKey) -> None:
+    def delete(self, key: AssetKey, *, partition_key: str | None = None) -> None:
         """
         Delete an asset from the wrapped manager.
 
@@ -187,8 +205,10 @@ class LineageIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to delete.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        self._wrapped.delete(key)
+        self._wrapped.delete(key, partition_key=partition_key)
 
     @property
     def tracker(self) -> LineageTracker:

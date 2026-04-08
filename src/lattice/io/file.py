@@ -38,7 +38,11 @@ class FileIOManager(IOManager):
         self.base_path = Path(base_path)
         self.base_path.mkdir(parents=True, exist_ok=True)
 
-    def _key_to_path(self, key: AssetKey) -> Path:
+    def _key_to_path(
+        self,
+        key: AssetKey,
+        partition_key: str | None = None,
+    ) -> Path:
         """
         Convert asset key to file path.
 
@@ -46,17 +50,28 @@ class FileIOManager(IOManager):
         ----------
         key : AssetKey
             The asset key.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         Path
             The file path for this asset.
         """
-        group_dir = self.base_path / key.group
-        group_dir.mkdir(exist_ok=True)
-        return group_dir / f"{key.name}.pkl"
+        if partition_key is not None:
+            parent = self.base_path / key.group / partition_key
+        else:
+            parent = self.base_path / key.group
+        parent.mkdir(parents=True, exist_ok=True)
+        return parent / f"{key.name}.pkl"
 
-    def load(self, key: AssetKey, annotation: type[T] | None = None) -> T:
+    def load(
+        self,
+        key: AssetKey,
+        annotation: type[T] | None = None,
+        *,
+        partition_key: str | None = None,
+    ) -> T:
         """
         Load value from pickle file.
 
@@ -66,6 +81,8 @@ class FileIOManager(IOManager):
             The asset to load.
         annotation : type or None, optional
             Ignored for pickle storage.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
@@ -77,7 +94,7 @@ class FileIOManager(IOManager):
         KeyError
             If the asset file does not exist.
         """
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         if not path.exists():
             logger.debug("Asset %s not found at %s", key, path)
             raise KeyError(f"Asset {key} not found at {path}")
@@ -85,7 +102,13 @@ class FileIOManager(IOManager):
         with path.open("rb") as f:
             return pickle.load(f)  # type: ignore[no-any-return]  # noqa: S301
 
-    def store(self, key: AssetKey, value: Any) -> None:
+    def store(
+        self,
+        key: AssetKey,
+        value: Any,
+        *,
+        partition_key: str | None = None,
+    ) -> None:
         """
         Store value to pickle file.
 
@@ -95,13 +118,15 @@ class FileIOManager(IOManager):
             The asset key to store under.
         value : Any
             The value to serialize and store.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         logger.debug("Storing asset %s to %s", key, path)
         with path.open("wb") as f:
             pickle.dump(value, f)
 
-    def has(self, key: AssetKey) -> bool:
+    def has(self, key: AssetKey, *, partition_key: str | None = None) -> bool:
         """
         Check if asset file exists.
 
@@ -109,15 +134,17 @@ class FileIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to check.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         bool
             True if the file exists.
         """
-        return self._key_to_path(key).exists()
+        return self._key_to_path(key, partition_key).exists()
 
-    def delete(self, key: AssetKey) -> None:
+    def delete(self, key: AssetKey, *, partition_key: str | None = None) -> None:
         """
         Delete asset file.
 
@@ -125,7 +152,9 @@ class FileIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to delete.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        path = self._key_to_path(key)
+        path = self._key_to_path(key, partition_key)
         if path.exists():
             path.unlink()
