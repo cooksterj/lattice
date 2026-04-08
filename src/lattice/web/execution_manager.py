@@ -436,7 +436,8 @@ class ExecutionManager:
                         checks = check_registry.get_checks(asset_key)
                         for check_def in checks:
                             try:
-                                value: Any = base_io_manager.load(asset_key)
+                                pk_str = partition_date.isoformat() if partition_date else None
+                                value: Any = base_io_manager.load(asset_key, partition_key=pk_str)
                                 check_result = run_check(check_def, value)
                                 check_results.append(check_result)
                             except Exception as e:
