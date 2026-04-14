@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.16.0](https://github.com/cooksterj/lattice/compare/v0.15.0...v0.16.0) (2026-04-14)
+
+
+### Features
+
+* **executor:** pass partition_key to IO manager calls ([e7c9303](https://github.com/cooksterj/lattice/commit/e7c93037d16064018bffc85c7ddbb13572b8643a))
+* **io:** add partition_key parameter to IOManager ABC ([a47f5c8](https://github.com/cooksterj/lattice/commit/a47f5c84df590e7b1c4277e902f50173643c24a2))
+* **io:** implement partition_key in Memory, File, and Parquet managers ([5233af3](https://github.com/cooksterj/lattice/commit/5233af39f6e0aa4ecd3c1579431c0bd99cc6ebc8))
+* **lineage:** forward partition_key in LineageIOManager ([c008360](https://github.com/cooksterj/lattice/commit/c008360092cec25ed6aa464402e412da123e53f1))
+* **plan:** add include_downstream parameter to plan API ([5dc4c6a](https://github.com/cooksterj/lattice/commit/5dc4c6a59c9d88741f7f3a019459f0da60c62165))
+* **web:** add context menu for targeted asset execution ([0daa697](https://github.com/cooksterj/lattice/commit/0daa697010815f68e7a27cc505a9eba8b34d5a19))
+* **web:** add execution stop button and mtime-based cache busting ([092bae9](https://github.com/cooksterj/lattice/commit/092bae99db0ed9e8727337e74b1b898e68c426f4))
+* **web:** add execution stop endpoint ([7f5e4f0](https://github.com/cooksterj/lattice/commit/7f5e4f06e3c9078889cf7de2795694eda41592d2))
+* **web:** add stop button to execution UI ([a6b4c73](https://github.com/cooksterj/lattice/commit/a6b4c739104f42556bfcc31c67b739dcdc511346))
+* **web:** targeted asset execution via right-click context menu ([115be63](https://github.com/cooksterj/lattice/commit/115be63866a9973f46d86fd8f5a084c1d2aca585))
+
+
+### Bug Fixes
+
+* **web:** pass partition_key when loading assets for checks ([29dbe44](https://github.com/cooksterj/lattice/commit/29dbe44ba75dc07f9633d6cd7b9c961522f97405))
+
 ## [0.15.0](https://github.com/cooksterj/lattice/compare/v0.14.0...v0.15.0) (2026-04-05)
 
 
