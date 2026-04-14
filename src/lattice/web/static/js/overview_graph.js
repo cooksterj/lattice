@@ -458,16 +458,16 @@ class OverviewGraph {
             .attr('x', d => -d._nodeWidth / 2)
             .attr('y', d => -d._nodeHeight / 2)
             .attr('rx', 4)
-            .style('fill', d => {
+            .attr('fill', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 return `url(#gradient-${group in GROUP_COLORS ? group : 'default'})`;
             })
-            .style('stroke', d => {
+            .attr('stroke', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 const colors = GROUP_COLORS[group] || GROUP_COLORS.default;
                 return colors.stroke;
             })
-            .style('filter', d => {
+            .attr('filter', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 const colors = GROUP_COLORS[group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
@@ -1507,9 +1507,9 @@ class OverviewGraph {
             .attr('width', d => d._nodeWidth).attr('height', NODE_HEIGHT)
             .attr('x', d => -d._nodeWidth / 2).attr('y', -NODE_HEIGHT / 2)
             .attr('rx', 4)
-            .style('fill', d => `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`)
-            .style('stroke', d => (GROUP_COLORS[d.group] || GROUP_COLORS.default).stroke)
-            .style('filter', d => {
+            .attr('fill', d => `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`)
+            .attr('stroke', d => (GROUP_COLORS[d.group] || GROUP_COLORS.default).stroke)
+            .attr('filter', d => {
                 const c = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${c.stroke}66)`;
             });

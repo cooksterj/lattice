@@ -380,14 +380,14 @@ class GroupGraph {
             .attr('y', -22)
             .attr('rx', 4)
             .attr('class', d => `group-${d.group}`)
-            .style('fill', d => {
+            .attr('fill', d => {
                 return `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`;
             })
-            .style('stroke', d => {
+            .attr('stroke', d => {
                 const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return colors.stroke;
             })
-            .style('filter', d => {
+            .attr('filter', d => {
                 const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
             });
