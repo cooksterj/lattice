@@ -220,3 +220,208 @@ class TestExecutionPlanImmutability:
 
         with pytest.raises(ValidationError):
             plan.target = AssetKey(name="other")  # type: ignore[misc]
+
+
+class TestExecutionPlanDownstream:
+    """Tests for ExecutionPlan.resolve() with include_downstream=True."""
+
+    def test_simple_chain_from_root(self, registry: AssetRegistry) -> None:
+        """A->B->C chain, target=A with downstream runs all three."""
+
+        @asset(registry=registry)
+        def a() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["a"])
+        def b(a: int) -> int:
+            return a + 1
+
+        @asset(registry=registry, deps=["b"])
+        def c(b: int) -> int:
+            return b + 1
+
+        plan = ExecutionPlan.resolve(registry, target="a", include_downstream=True)
+
+        assert len(plan) == 3
+        assert "a" in plan
+        assert "b" in plan
+        assert "c" in plan
+        assert plan.target == AssetKey(name="a")
+
+    def test_simple_chain_from_middle(self, registry: AssetRegistry) -> None:
+        """A->B->C, target=B runs B+C only (not A)."""
+
+        @asset(registry=registry)
+        def a() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["a"])
+        def b(a: int) -> int:
+            return a + 1
+
+        @asset(registry=registry, deps=["b"])
+        def c(b: int) -> int:
+            return b + 1
+
+        plan = ExecutionPlan.resolve(registry, target="b", include_downstream=True)
+
+        assert len(plan) == 2
+        assert "b" in plan
+        assert "c" in plan
+        assert "a" not in plan
+        assert plan.target == AssetKey(name="b")
+
+    def test_diamond_from_fork_point(self, registry: AssetRegistry) -> None:
+        """Diamond pattern, target=root with downstream runs all four."""
+
+        @asset(registry=registry)
+        def root() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["root"])
+        def left(root: int) -> int:
+            return root * 2
+
+        @asset(registry=registry, deps=["root"])
+        def right(root: int) -> int:
+            return root * 3
+
+        @asset(registry=registry, deps=["left", "right"])
+        def leaf(left: int, right: int) -> int:
+            return left + right
+
+        plan = ExecutionPlan.resolve(registry, target="root", include_downstream=True)
+
+        assert len(plan) == 4
+        assert "root" in plan
+        assert "left" in plan
+        assert "right" in plan
+        assert "leaf" in plan
+        assert plan.target == AssetKey(name="root")
+
+    def test_diamond_from_one_branch(self, registry: AssetRegistry) -> None:
+        """Diamond pattern, target=left runs left+leaf (not root or right)."""
+
+        @asset(registry=registry)
+        def root() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["root"])
+        def left(root: int) -> int:
+            return root * 2
+
+        @asset(registry=registry, deps=["root"])
+        def right(root: int) -> int:
+            return root * 3
+
+        @asset(registry=registry, deps=["left", "right"])
+        def leaf(left: int, right: int) -> int:
+            return left + right
+
+        plan = ExecutionPlan.resolve(registry, target="left", include_downstream=True)
+
+        assert len(plan) == 2
+        assert "left" in plan
+        assert "leaf" in plan
+        assert "root" not in plan
+        assert "right" not in plan
+        assert plan.target == AssetKey(name="left")
+
+    def test_cross_group_downstream(self, registry: AssetRegistry) -> None:
+        """Asset in 'dbt' group triggers dependent in 'analytics' group."""
+
+        @asset(registry=registry, key=AssetKey(name="model_x", group="dbt"))
+        def model_x() -> int:
+            return 1
+
+        @asset(
+            registry=registry,
+            key=AssetKey(name="report", group="analytics"),
+            deps=[AssetKey(name="model_x", group="dbt")],
+        )
+        def report(model_x: int) -> int:
+            return model_x + 1
+
+        plan = ExecutionPlan.resolve(registry, target="dbt/model_x", include_downstream=True)
+
+        assert len(plan) == 2
+        assert "dbt/model_x" in plan
+        assert "analytics/report" in plan
+        assert plan.target == AssetKey(name="model_x", group="dbt")
+
+    def test_intra_group_partial(self, registry: AssetRegistry) -> None:
+        """Two independent chains in 'dbt' group; target selects only one chain."""
+
+        @asset(registry=registry, key=AssetKey(name="stg_orders", group="dbt"))
+        def stg_orders() -> int:
+            return 1
+
+        @asset(
+            registry=registry,
+            key=AssetKey(name="fct_orders", group="dbt"),
+            deps=[AssetKey(name="stg_orders", group="dbt")],
+        )
+        def fct_orders(stg_orders: int) -> int:
+            return stg_orders + 1
+
+        @asset(registry=registry, key=AssetKey(name="stg_customers", group="dbt"))
+        def stg_customers() -> int:
+            return 1
+
+        @asset(
+            registry=registry,
+            key=AssetKey(name="dim_customers", group="dbt"),
+            deps=[AssetKey(name="stg_customers", group="dbt")],
+        )
+        def dim_customers(stg_customers: int) -> int:
+            return stg_customers + 1
+
+        plan = ExecutionPlan.resolve(registry, target="dbt/stg_orders", include_downstream=True)
+
+        assert len(plan) == 2
+        assert "dbt/stg_orders" in plan
+        assert "dbt/fct_orders" in plan
+        assert "dbt/stg_customers" not in plan
+        assert "dbt/dim_customers" not in plan
+        assert plan.target == AssetKey(name="stg_orders", group="dbt")
+
+    def test_no_downstream(self, registry: AssetRegistry) -> None:
+        """Leaf node with no dependents runs only itself."""
+
+        @asset(registry=registry)
+        def root() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["root"])
+        def leaf(root: int) -> int:
+            return root + 1
+
+        plan = ExecutionPlan.resolve(registry, target="leaf", include_downstream=True)
+
+        assert len(plan) == 1
+        assert "leaf" in plan
+        assert "root" not in plan
+        assert plan.target == AssetKey(name="leaf")
+
+    def test_downstream_with_unrelated_assets(self, registry: AssetRegistry) -> None:
+        """A->B chain plus unrelated C; target=A runs A+B only, not C."""
+
+        @asset(registry=registry)
+        def a() -> int:
+            return 1
+
+        @asset(registry=registry, deps=["a"])
+        def b(a: int) -> int:
+            return a + 1
+
+        @asset(registry=registry)
+        def c() -> int:
+            return 99
+
+        plan = ExecutionPlan.resolve(registry, target="a", include_downstream=True)
+
+        assert len(plan) == 2
+        assert "a" in plan
+        assert "b" in plan
+        assert "c" not in plan
+        assert plan.target == AssetKey(name="a")

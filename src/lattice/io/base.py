@@ -18,7 +18,13 @@ class IOManager(ABC):
     """
 
     @abstractmethod
-    def load(self, key: AssetKey, annotation: type[T] | None = None) -> T:
+    def load(
+        self,
+        key: AssetKey,
+        annotation: type[T] | None = None,
+        *,
+        partition_key: str | None = None,
+    ) -> T:
         """
         Load a previously stored asset value.
 
@@ -29,6 +35,8 @@ class IOManager(ABC):
         annotation : type or None, optional
             The expected return type hint. Some IO managers may use this
             for type-aware deserialization.
+        partition_key : str or None, optional
+            Partition key for scoped storage (e.g. a date string).
 
         Returns
         -------
@@ -43,7 +51,13 @@ class IOManager(ABC):
         ...
 
     @abstractmethod
-    def store(self, key: AssetKey, value: Any) -> None:
+    def store(
+        self,
+        key: AssetKey,
+        value: Any,
+        *,
+        partition_key: str | None = None,
+    ) -> None:
         """
         Store an asset value.
 
@@ -53,11 +67,13 @@ class IOManager(ABC):
             The asset key to store under.
         value : Any
             The value to store.
+        partition_key : str or None, optional
+            Partition key for scoped storage (e.g. a date string).
         """
         ...
 
     @abstractmethod
-    def has(self, key: AssetKey) -> bool:
+    def has(self, key: AssetKey, *, partition_key: str | None = None) -> bool:
         """
         Check if an asset has been materialized.
 
@@ -65,6 +81,8 @@ class IOManager(ABC):
         ----------
         key : AssetKey
             The asset to check.
+        partition_key : str or None, optional
+            Partition key for scoped storage (e.g. a date string).
 
         Returns
         -------
@@ -73,7 +91,7 @@ class IOManager(ABC):
         """
         ...
 
-    def delete(self, key: AssetKey) -> None:
+    def delete(self, key: AssetKey, *, partition_key: str | None = None) -> None:
         """
         Delete a stored asset.
 
@@ -84,6 +102,8 @@ class IOManager(ABC):
         ----------
         key : AssetKey
             The asset to delete.
+        partition_key : str or None, optional
+            Partition key for scoped storage (e.g. a date string).
 
         Raises
         ------

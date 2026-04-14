@@ -4,20 +4,21 @@ import json
 from collections import deque
 from datetime import date, datetime
 from pathlib import Path
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from lattice import AssetKey, AssetRegistry, SQLiteRunHistoryStore, asset
 from lattice.models import AssetDefinition
 from lattice.observability.models import RunRecord
 from lattice.web.app import STATIC_DIR, TEMPLATES_DIR, create_app
 from lattice.web.execution_manager import ExecutionManager
-from lattice.web.schemas_execution import ExecutionStartRequest
+from lattice.web.schemas_execution import ExecutionStartRequest, ExecutionStopResponse
 
 
 @pytest.fixture
@@ -311,6 +312,50 @@ class TestPlanEndpoint:
         assert "name" in first_step
         assert "group" in first_step
         assert first_step["order"] == 1
+
+
+class TestPlanDownstream:
+    """Tests for /api/plan with include_downstream parameter."""
+
+    def test_plan_with_target_downstream(self, populated_client: TestClient) -> None:
+        """Plan with target and include_downstream includes target + downstream assets."""
+        response = populated_client.get("/api/plan?target=processed&include_downstream=true")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_assets"] == 2
+
+        step_ids = [s["id"] for s in data["steps"]]
+        assert "processed" in step_ids
+        assert "analytics/stats" in step_ids
+        assert "source_data" not in step_ids
+
+    def test_plan_with_downstream_no_target_ignored(self, populated_client: TestClient) -> None:
+        """include_downstream without target returns full plan (flag is meaningless)."""
+        response = populated_client.get("/api/plan?include_downstream=true")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_assets"] == 3
+
+    def test_start_execution_with_target_downstream_and_dates(
+        self, populated_registry: AssetRegistry
+    ) -> None:
+        """POST /api/execution/start accepts target, include_downstream, and date range."""
+        manager = ExecutionManager()
+        app = _create_app_with_manager(populated_registry, manager)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/execution/start",
+            json={
+                "target": "processed",
+                "include_downstream": True,
+                "execution_date": "2024-06-15",
+                "execution_date_end": "2024-06-17",
+            },
+        )
+        assert response.status_code == 200
 
 
 class TestIndexPage:
@@ -1759,3 +1804,101 @@ class TestOverviewGraphExecution:
         js = self._read_js()
         assert "status-running" in js or "status-${status}" in js
         assert "status-${groupStatus}" in js
+
+    def test_has_stop_button(self) -> None:
+        """overview_graph.js contains a stop icon for the execute button."""
+        js = self._read_js()
+        assert "stop-icon" in js
+
+    def test_has_request_stop(self) -> None:
+        """overview_graph.js contains requestStop method."""
+        js = self._read_js()
+        assert "requestStop" in js
+
+    def test_has_api_execution_stop(self) -> None:
+        """overview_graph.js posts to /api/execution/stop."""
+        js = self._read_js()
+        assert "/api/execution/stop" in js
+
+    def test_has_execution_cancelled_handler(self) -> None:
+        """overview_graph.js handles execution_cancelled WebSocket message."""
+        js = self._read_js()
+        assert "execution_cancelled" in js
+
+
+class TestExecutionStopResponse:
+    """Tests for ExecutionStopResponse schema."""
+
+    def test_success_response(self) -> None:
+        """Successful stop response."""
+        resp = ExecutionStopResponse(success=True, message="Execution stop requested")
+        assert resp.success is True
+        assert resp.message == "Execution stop requested"
+
+    def test_failure_response(self) -> None:
+        """Failed stop response when nothing is running."""
+        resp = ExecutionStopResponse(success=False, message="No execution running")
+        assert resp.success is False
+
+    def test_frozen(self) -> None:
+        """ExecutionStopResponse is immutable."""
+        resp = ExecutionStopResponse(success=True, message="ok")
+        with pytest.raises(ValidationError):
+            resp.success = False  # type: ignore[misc]
+
+
+class TestCancelExecution:
+    """Tests for ExecutionManager.cancel_execution."""
+
+    def test_cancel_no_executor(self) -> None:
+        """Returns False when no executor is present."""
+        manager = ExecutionManager()
+        assert manager.cancel_execution() is False
+
+    def test_cancel_not_running(self) -> None:
+        """Returns False when not running."""
+        manager = ExecutionManager()
+        manager._executor = MagicMock()
+        manager._is_running = False
+        assert manager.cancel_execution() is False
+
+    def test_cancel_running(self) -> None:
+        """Returns True and calls cancel on the executor."""
+        manager = ExecutionManager()
+        mock_executor = MagicMock()
+        manager._executor = mock_executor
+        manager._is_running = True
+
+        assert manager.cancel_execution() is True
+        mock_executor.cancel.assert_called_once()
+
+
+class TestStopEndpoint:
+    """Tests for POST /api/execution/stop."""
+
+    def test_stop_no_execution(self, populated_registry: AssetRegistry) -> None:
+        """Stop returns failure when nothing is running."""
+        manager = ExecutionManager()
+        app = _create_app_with_manager(populated_registry, manager)
+        client = TestClient(app)
+
+        resp = client.post("/api/execution/stop")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is False
+
+    def test_stop_running_execution(self, populated_registry: AssetRegistry) -> None:
+        """Stop returns success when an execution is running."""
+        manager = ExecutionManager()
+        mock_executor = MagicMock()
+        manager._executor = mock_executor
+        manager._is_running = True
+
+        app = _create_app_with_manager(populated_registry, manager)
+        client = TestClient(app)
+
+        resp = client.post("/api/execution/stop")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["success"] is True
+        mock_executor.cancel.assert_called_once()

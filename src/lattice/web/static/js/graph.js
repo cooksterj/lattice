@@ -41,6 +41,9 @@ class LatticeGraph {
         await this.loadData();
         this.render();
         this.setupEventListeners();
+        this.contextMenu = new ContextMenu({
+            onRun: (targetId, includeDownstream) => this._runTarget(targetId, includeDownstream),
+        });
         this.hideLoading();
     }
 
@@ -292,14 +295,14 @@ class LatticeGraph {
             .attr('y', -22)
             .attr('rx', 4)
             .attr('class', d => `group-${d.group}`)
-            .style('fill', d => {
+            .attr('fill', d => {
                 return `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`;
             })
-            .style('stroke', d => {
+            .attr('stroke', d => {
                 const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return colors.stroke;
             })
-            .style('filter', d => {
+            .attr('filter', d => {
                 const colors = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
             });
@@ -565,6 +568,11 @@ class LatticeGraph {
                 if (event.defaultPrevented) return; // Ignore drag-end clicks (D3 pattern)
                 event.stopPropagation();
                 window.location.href = '/asset/' + encodeURIComponent(d.id);
+            })
+            .on('contextmenu', (event, d) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.contextMenu?.show(event, d.id);
             });
 
         // Theme toggle
@@ -757,6 +765,24 @@ class LatticeGraph {
 
         } catch (error) {
             content.innerHTML = `<div style="color: #c45270; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
+        }
+    }
+
+    async _runTarget(targetId, includeDownstream) {
+        try {
+            const response = await fetch('/api/execution/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({target: targetId, include_downstream: includeDownstream}),
+            });
+            if (!response.ok) {
+                const err = await response.json().catch(() => ({}));
+                throw new Error(err.detail || `HTTP ${response.status}`);
+            }
+            window.location.href = '/';
+        } catch (error) {
+            console.error('Targeted execution failed:', error);
+            alert(`Failed to start execution: ${error.message}`);
         }
     }
 

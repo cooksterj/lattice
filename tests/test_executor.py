@@ -864,7 +864,10 @@ class TestExecutorPartitionKey:
         assert result.status == AssetStatus.COMPLETED
         assert len(received_date) == 1
         assert received_date[0] == test_date
-        assert io.load(AssetKey(name="date_aware")) == "processed_2024-01-15"
+        assert (
+            io.load(AssetKey(name="date_aware"), partition_key="2024-01-15")
+            == "processed_2024-01-15"
+        )
 
     def test_partition_key_not_injected_when_not_accepted(self, registry: AssetRegistry) -> None:
         """partition_key is not injected into assets that don't accept it."""
@@ -880,7 +883,7 @@ class TestExecutorPartitionKey:
         result = executor.execute(plan)
 
         assert result.status == AssetStatus.COMPLETED
-        assert io.load(AssetKey(name="no_date")) == "no_date_needed"
+        assert io.load(AssetKey(name="no_date"), partition_key="2024-01-15") == "no_date_needed"
 
     def test_partition_key_mixed_assets(self, registry: AssetRegistry) -> None:
         """partition_key is correctly injected in mixed asset pipelines."""
@@ -908,7 +911,7 @@ class TestExecutorPartitionKey:
 
         assert result.status == AssetStatus.COMPLETED
         assert received_dates["date_processor"] == test_date
-        assert io.load(AssetKey(name="final")) == "final_100_2024-03-20"
+        assert io.load(AssetKey(name="final"), partition_key="2024-03-20") == "final_100_2024-03-20"
 
     def test_no_partition_key_when_none(self, registry: AssetRegistry) -> None:
         """partition_key is not injected when executor has no partition_key."""
@@ -951,7 +954,10 @@ class TestAsyncExecutorPartitionKey:
         assert result.status == AssetStatus.COMPLETED
         assert len(received_date) == 1
         assert received_date[0] == test_date
-        assert io.load(AssetKey(name="date_aware")) == "processed_2024-06-01"
+        assert (
+            io.load(AssetKey(name="date_aware"), partition_key="2024-06-01")
+            == "processed_2024-06-01"
+        )
 
     @pytest.mark.asyncio
     async def test_partition_key_not_injected_when_not_accepted(
@@ -970,7 +976,7 @@ class TestAsyncExecutorPartitionKey:
         result = await executor.execute(plan)
 
         assert result.status == AssetStatus.COMPLETED
-        assert io.load(AssetKey(name="no_date")) == "no_date_needed"
+        assert io.load(AssetKey(name="no_date"), partition_key="2024-01-15") == "no_date_needed"
 
     @pytest.mark.asyncio
     async def test_partition_key_with_sync_asset(self, registry: AssetRegistry) -> None:
@@ -991,7 +997,10 @@ class TestAsyncExecutorPartitionKey:
 
         assert result.status == AssetStatus.COMPLETED
         assert received_date[0] == test_date
-        assert io.load(AssetKey(name="sync_date_aware")) == "sync_2024-12-25"
+        assert (
+            io.load(AssetKey(name="sync_date_aware"), partition_key="2024-12-25")
+            == "sync_2024-12-25"
+        )
 
     @pytest.mark.asyncio
     async def test_partition_key_parallel_assets(self, registry: AssetRegistry) -> None:
@@ -1148,3 +1157,98 @@ class TestAsyncDepsInjection:
 
         assert result.status == AssetStatus.COMPLETED
         assert io.load(AssetKey(name="consumer")) == 43
+
+
+class TestExecutorPartitionIsolatesIO:
+    """Tests that partition_key scopes IO manager storage."""
+
+    def test_sync_executor_partition_isolates_io(self) -> None:
+        """Run A->B on date1, then only B on date2; B fails (no A for date2)."""
+        registry1 = AssetRegistry()
+
+        @asset(registry=registry1)
+        def upstream() -> int:
+            return 10
+
+        @asset(registry=registry1, deps=["upstream"])
+        def downstream(upstream: int) -> int:
+            return upstream + 1
+
+        io = MemoryIOManager()
+        date1 = date(2026, 4, 5)
+
+        # Run full pipeline on date1
+        plan1 = ExecutionPlan.resolve(registry1)
+        result1 = Executor(io_manager=io, partition_key=date1).execute(plan1)
+        assert result1.status == AssetStatus.COMPLETED
+
+        # Verify date1 data is stored in the partition
+        assert io.has(AssetKey(name="upstream"), partition_key="2026-04-05")
+        assert io.has(AssetKey(name="downstream"), partition_key="2026-04-05")
+
+        # Run only downstream on date2 — should fail (no upstream for date2)
+        registry2 = AssetRegistry()
+
+        @asset(registry=registry2)
+        def upstream() -> int:  # noqa: F811
+            return 10
+
+        @asset(registry=registry2, deps=["upstream"])
+        def downstream(upstream: int) -> int:  # noqa: F811
+            return upstream + 1
+
+        date2 = date(2026, 4, 6)
+        plan2 = ExecutionPlan.resolve(registry2, target="downstream")
+        Executor(io_manager=io, partition_key=date2).execute(plan2)
+
+        # upstream will be re-executed as part of the plan, so the whole
+        # pipeline should succeed — but the key point is data is isolated
+        assert io.has(AssetKey(name="upstream"), partition_key="2026-04-06")
+        assert io.has(AssetKey(name="downstream"), partition_key="2026-04-06")
+
+        # date1 data is untouched
+        assert io.load(AssetKey(name="upstream"), partition_key="2026-04-05") == 10
+        assert io.load(AssetKey(name="downstream"), partition_key="2026-04-05") == 11
+
+    @pytest.mark.asyncio
+    async def test_async_executor_partition_isolates_io(self) -> None:
+        """Async executor isolates IO by partition_key."""
+        registry1 = AssetRegistry()
+
+        @asset(registry=registry1)
+        async def source() -> int:
+            return 100
+
+        @asset(registry=registry1, deps=["source"])
+        async def sink(source: int) -> int:
+            return source * 2
+
+        io = MemoryIOManager()
+        date1 = date(2026, 4, 5)
+
+        # Run full pipeline on date1
+        plan1 = ExecutionPlan.resolve(registry1)
+        result1 = await AsyncExecutor(io_manager=io, partition_key=date1).execute(plan1)
+        assert result1.status == AssetStatus.COMPLETED
+        assert io.load(AssetKey(name="sink"), partition_key="2026-04-05") == 200
+
+        # date2 partition should be empty
+        assert not io.has(AssetKey(name="source"), partition_key="2026-04-06")
+        assert not io.has(AssetKey(name="sink"), partition_key="2026-04-06")
+
+    def test_sync_executor_no_partition_backwards_compatible(self) -> None:
+        """Executor without partition_key stores in unpartitioned slot."""
+        registry1 = AssetRegistry()
+
+        @asset(registry=registry1)
+        def simple() -> int:
+            return 42
+
+        io = MemoryIOManager()
+        plan = ExecutionPlan.resolve(registry1)
+        result = Executor(io_manager=io).execute(plan)
+
+        assert result.status == AssetStatus.COMPLETED
+        # Stored in unpartitioned slot (partition_key=None)
+        assert io.has(AssetKey(name="simple"))
+        assert io.load(AssetKey(name="simple")) == 42

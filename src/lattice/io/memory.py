@@ -22,9 +22,15 @@ class MemoryIOManager(IOManager):
 
     def __init__(self) -> None:
         """Initialize with empty storage."""
-        self._storage: dict[AssetKey, Any] = {}
+        self._storage: dict[tuple[AssetKey, str | None], Any] = {}
 
-    def load(self, key: AssetKey, annotation: type[T] | None = None) -> T:
+    def load(
+        self,
+        key: AssetKey,
+        annotation: type[T] | None = None,
+        *,
+        partition_key: str | None = None,
+    ) -> T:
         """
         Load value from memory.
 
@@ -34,6 +40,8 @@ class MemoryIOManager(IOManager):
             The asset to load.
         annotation : type or None, optional
             Ignored for memory storage.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
@@ -45,13 +53,20 @@ class MemoryIOManager(IOManager):
         KeyError
             If the asset has not been stored.
         """
-        if key not in self._storage:
+        composite = (key, partition_key)
+        if composite not in self._storage:
             logger.debug("Asset %s not found in memory storage", key)
             raise KeyError(f"Asset {key} not found in memory storage")
         logger.debug("Loading asset %s from memory", key)
-        return self._storage[key]  # type: ignore[no-any-return]
+        return self._storage[composite]  # type: ignore[no-any-return]
 
-    def store(self, key: AssetKey, value: Any) -> None:
+    def store(
+        self,
+        key: AssetKey,
+        value: Any,
+        *,
+        partition_key: str | None = None,
+    ) -> None:
         """
         Store value in memory.
 
@@ -61,11 +76,13 @@ class MemoryIOManager(IOManager):
             The asset key to store under.
         value : Any
             The value to store.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
         logger.debug("Storing asset %s to memory", key)
-        self._storage[key] = value
+        self._storage[(key, partition_key)] = value
 
-    def has(self, key: AssetKey) -> bool:
+    def has(self, key: AssetKey, *, partition_key: str | None = None) -> bool:
         """
         Check if asset exists in memory.
 
@@ -73,15 +90,17 @@ class MemoryIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to check.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
 
         Returns
         -------
         bool
             True if the asset is stored.
         """
-        return key in self._storage
+        return (key, partition_key) in self._storage
 
-    def delete(self, key: AssetKey) -> None:
+    def delete(self, key: AssetKey, *, partition_key: str | None = None) -> None:
         """
         Delete asset from memory.
 
@@ -89,9 +108,12 @@ class MemoryIOManager(IOManager):
         ----------
         key : AssetKey
             The asset to delete.
+        partition_key : str or None, optional
+            Partition key for scoped storage.
         """
-        if key in self._storage:
-            del self._storage[key]
+        composite = (key, partition_key)
+        if composite in self._storage:
+            del self._storage[composite]
 
     def clear(self) -> None:
         """Clear all stored values."""
@@ -102,5 +124,5 @@ class MemoryIOManager(IOManager):
         return len(self._storage)
 
     def __contains__(self, key: AssetKey) -> bool:
-        """Support 'in' operator."""
+        """Support 'in' operator (checks unpartitioned slot)."""
         return self.has(key)
