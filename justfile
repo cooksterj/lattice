@@ -42,6 +42,10 @@ check: lint typecheck
 demo:
     uv run python examples/web_demo.py
 
+# Start lightweight demo for testing targeted execution (localhost:8000)
+demo-lite:
+    uv run python examples/web_demo_lite.py
+
 # Clean build artifacts
 clean:
     rm -rf .pytest_cache .mypy_cache .ruff_cache
