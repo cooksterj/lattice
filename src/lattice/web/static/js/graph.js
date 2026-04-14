@@ -41,6 +41,7 @@ class LatticeGraph {
         await this.loadData();
         this.render();
         this.setupEventListeners();
+        this.setupContextMenu();
         this.hideLoading();
     }
 
@@ -565,6 +566,11 @@ class LatticeGraph {
                 if (event.defaultPrevented) return; // Ignore drag-end clicks (D3 pattern)
                 event.stopPropagation();
                 window.location.href = '/asset/' + encodeURIComponent(d.id);
+            })
+            .on('contextmenu', (event, d) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.showContextMenu(event, d);
             });
 
         // Theme toggle
@@ -758,6 +764,95 @@ class LatticeGraph {
         } catch (error) {
             content.innerHTML = `<div style="color: #c45270; font-family: Orbitron, sans-serif; letter-spacing: 0.1em;">ERROR: ASSET DATA UNAVAILABLE</div>`;
         }
+    }
+
+    setupContextMenu() {
+        const menu = document.getElementById('context-menu');
+        if (!menu) return;
+
+        document.addEventListener('click', () => menu.classList.remove('visible'));
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') menu.classList.remove('visible');
+        });
+
+        document.getElementById('ctx-run-downstream')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = menu.dataset.targetId;
+            if (targetId) {
+                fetch('/api/execution/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: targetId, include_downstream: true}),
+                }).then(() => { window.location.href = '/'; });
+            }
+            menu.classList.remove('visible');
+        });
+
+        document.getElementById('ctx-run-only')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = menu.dataset.targetId;
+            if (targetId) {
+                fetch('/api/execution/start', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: targetId, include_downstream: false}),
+                }).then(() => { window.location.href = '/'; });
+            }
+            menu.classList.remove('visible');
+        });
+
+        document.getElementById('ctx-view-details')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const targetId = menu.dataset.targetId;
+            if (targetId) window.location.href = '/asset/' + encodeURIComponent(targetId);
+            menu.classList.remove('visible');
+        });
+    }
+
+    showContextMenu(event, assetData) {
+        const menu = document.getElementById('context-menu');
+        if (!menu) return;
+
+        const assetId = assetData.id;
+        menu.dataset.targetId = assetId;
+
+        const targetEl = document.getElementById('context-menu-target');
+        const displayName = assetId.includes('/') ? assetId.split('/').pop() : assetId;
+        targetEl.textContent = displayName.toUpperCase();
+
+        const menuWidth = 260;
+        const menuHeight = 300;
+        let x = event.clientX;
+        let y = event.clientY;
+        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
+        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+        menu.classList.add('visible');
+
+        const preview = document.getElementById('context-menu-preview');
+        preview.innerHTML = '<div class="context-menu-preview-loading">LOADING PLAN...</div>';
+
+        fetch(`/api/plan?target=${encodeURIComponent(assetId)}&include_downstream=true`)
+            .then(r => r.json())
+            .then(data => {
+                const steps = data.steps || [];
+                if (steps.length === 0) {
+                    preview.innerHTML = '<div class="context-menu-preview-title">NO ASSETS</div>';
+                    return;
+                }
+                preview.innerHTML = `
+                    <div class="context-menu-preview-title">EXECUTION PLAN (${steps.length})</div>
+                    <div class="context-menu-preview-list">
+                        ${steps.map(s =>
+                            `<div class="context-menu-preview-asset${s.id === assetId ? ' is-target' : ''}">${s.id}</div>`
+                        ).join('')}
+                    </div>
+                `;
+            })
+            .catch(() => {
+                preview.innerHTML = '<div class="context-menu-preview-title">FAILED TO LOAD</div>';
+            });
     }
 
     hideLoading() {
