@@ -314,6 +314,50 @@ class TestPlanEndpoint:
         assert first_step["order"] == 1
 
 
+class TestPlanDownstream:
+    """Tests for /api/plan with include_downstream parameter."""
+
+    def test_plan_with_target_downstream(self, populated_client: TestClient) -> None:
+        """Plan with target and include_downstream includes target + downstream assets."""
+        response = populated_client.get("/api/plan?target=processed&include_downstream=true")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_assets"] == 2
+
+        step_ids = [s["id"] for s in data["steps"]]
+        assert "processed" in step_ids
+        assert "analytics/stats" in step_ids
+        assert "source_data" not in step_ids
+
+    def test_plan_with_downstream_no_target_ignored(self, populated_client: TestClient) -> None:
+        """include_downstream without target returns full plan (flag is meaningless)."""
+        response = populated_client.get("/api/plan?include_downstream=true")
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["total_assets"] == 3
+
+    def test_start_execution_with_target_downstream_and_dates(
+        self, populated_registry: AssetRegistry
+    ) -> None:
+        """POST /api/execution/start accepts target, include_downstream, and date range."""
+        manager = ExecutionManager()
+        app = _create_app_with_manager(populated_registry, manager)
+        client = TestClient(app)
+
+        response = client.post(
+            "/api/execution/start",
+            json={
+                "target": "processed",
+                "include_downstream": True,
+                "execution_date": "2024-06-15",
+                "execution_date_end": "2024-06-17",
+            },
+        )
+        assert response.status_code == 200
+
+
 class TestIndexPage:
     """Tests for the main page (overview graph landing page)."""
 
