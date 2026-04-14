@@ -411,10 +411,22 @@ def create_router(registry: AssetRegistry, templates: Jinja2Templates) -> APIRou
     @router.get("/api/plan", response_model=PlanSchema)
     async def get_plan(
         target: Annotated[str | None, Query(description="Target asset key")] = None,
+        include_downstream: Annotated[
+            bool,
+            Query(
+                description=(
+                    "When `target` is set, also include assets downstream of the "
+                    "target. Has no effect when `target` is omitted — the full "
+                    "plan is already returned in that case."
+                )
+            ),
+        ] = False,
     ) -> PlanSchema:
-        """Get the execution plan, optionally for a specific target."""
+        """Get the execution plan, optionally scoped to a target and its downstream."""
         try:
-            plan = ExecutionPlan.resolve(registry, target=target)
+            plan = ExecutionPlan.resolve(
+                registry, target=target, include_downstream=include_downstream
+            )
         except KeyError as e:
             raise HTTPException(status_code=404, detail=str(e)) from None
 

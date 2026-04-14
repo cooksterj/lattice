@@ -58,6 +58,9 @@ class OverviewGraph {
         // Track per-group asset statuses for aggregate group-node status
         this.groupAssetStatuses = new Map();
 
+        // Track which assets are in the current execution plan (null = all assets)
+        this._executionPlanAssets = null;
+
         // Drag state (suppresses tooltips while dragging)
         this._isDragging = false;
 
@@ -92,6 +95,10 @@ class OverviewGraph {
         this.setupEventListeners();
         this.setupNavigation();
         this.setupExecutionUI();
+        this.contextMenu = new ContextMenu({
+            onRun: (targetId, includeDownstream) => this.startTargetedExecution(targetId, includeDownstream),
+            isRunning: () => this.executionState.isRunning,
+        });
         this.hideLoading();
     }
 
@@ -458,16 +465,16 @@ class OverviewGraph {
             .attr('x', d => -d._nodeWidth / 2)
             .attr('y', d => -d._nodeHeight / 2)
             .attr('rx', 4)
-            .style('fill', d => {
+            .attr('fill', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 return `url(#gradient-${group in GROUP_COLORS ? group : 'default'})`;
             })
-            .style('stroke', d => {
+            .attr('stroke', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 const colors = GROUP_COLORS[group] || GROUP_COLORS.default;
                 return colors.stroke;
             })
-            .style('filter', d => {
+            .attr('filter', d => {
                 const group = d.node_type === 'group' ? d.group : 'default';
                 const colors = GROUP_COLORS[group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${colors.stroke}66)`;
@@ -712,6 +719,12 @@ class OverviewGraph {
                 } else {
                     window.location.href = '/asset/' + encodeURIComponent(d.id);
                 }
+            })
+            .on('contextmenu', (event, d) => {
+                if (d.node_type === 'group') return;
+                event.preventDefault();
+                event.stopPropagation();
+                this.contextMenu?.show(event, d.id);
             });
     }
 
@@ -1023,6 +1036,7 @@ class OverviewGraph {
         this.executionState.currentPartitionIndex = 0;
         this.executionState.totalPartitions = 0;
         this.groupAssetStatuses.clear();
+        this._executionPlanAssets = null;
 
         // Reset node visual states
         if (this.nodeElements) {
@@ -1246,10 +1260,18 @@ class OverviewGraph {
             }
             this.groupAssetStatuses.get(nodeId).set(assetId, status);
 
-            // Derive aggregate status — only mark completed when ALL group assets are done
+            // Derive aggregate status — only mark completed when ALL planned group assets are done
             const statuses = [...this.groupAssetStatuses.get(nodeId).values()];
             const groupNode = this.nodes.find(n => n.id === nodeId);
-            const totalAssets = groupNode ? groupNode.asset_count : statuses.length;
+            let totalAssets;
+            if (this._executionPlanAssets) {
+                // Targeted execution: count only planned assets in this group
+                const groupName = nodeId.replace('group:', '');
+                totalAssets = [...this._executionPlanAssets].filter(a => a.startsWith(groupName + '/')).length;
+                if (totalAssets === 0) totalAssets = statuses.length;
+            } else {
+                totalAssets = groupNode ? groupNode.asset_count : statuses.length;
+            }
             const terminalCount = statuses.filter(s => s === 'completed' || s === 'failed').length;
 
             let groupStatus;
@@ -1268,10 +1290,11 @@ class OverviewGraph {
                 .filter(d => d.id === nodeId)
                 .attr('class', `node node-group status-${groupStatus}`);
         } else {
-            // Standalone asset node — apply status directly
+            // Standalone asset node or group-detail asset — apply status directly
+            const baseClass = this.currentView === 'overview' ? 'node node-asset' : 'node';
             this.nodeElements
                 .filter(d => d.id === nodeId)
-                .attr('class', `node node-asset status-${status}`);
+                .attr('class', `${baseClass} status-${status}`);
         }
     }
 
@@ -1341,6 +1364,8 @@ class OverviewGraph {
                     this.nodeElements.attr('class', 'node');
                 }
                 this.groupAssetStatuses.clear();
+                this.executionState.assetStatuses.clear();
+                this._executionPlanAssets = null;
             }
         }, 5000);
 
@@ -1400,6 +1425,7 @@ class OverviewGraph {
 
         this._renderGroupView(this.groupViewData);
         this._rebuildGroupAssetNodeMapping(this.groupViewData);
+        this._reapplyExecutionStatuses();
         this.applyEntranceAnimations();
     }
 
@@ -1418,6 +1444,7 @@ class OverviewGraph {
         this.render();
         this.setupOverviewNodeInteractions();
         this._rebuildOverviewAssetNodeMapping();
+        this._reapplyExecutionStatuses();
         this._updateOverviewCount();
         this.applyEntranceAnimations();
     }
@@ -1507,9 +1534,9 @@ class OverviewGraph {
             .attr('width', d => d._nodeWidth).attr('height', NODE_HEIGHT)
             .attr('x', d => -d._nodeWidth / 2).attr('y', -NODE_HEIGHT / 2)
             .attr('rx', 4)
-            .style('fill', d => `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`)
-            .style('stroke', d => (GROUP_COLORS[d.group] || GROUP_COLORS.default).stroke)
-            .style('filter', d => {
+            .attr('fill', d => `url(#gradient-${d.group in GROUP_COLORS ? d.group : 'default'})`)
+            .attr('stroke', d => (GROUP_COLORS[d.group] || GROUP_COLORS.default).stroke)
+            .attr('filter', d => {
                 const c = GROUP_COLORS[d.group] || GROUP_COLORS.default;
                 return `drop-shadow(0 0 8px ${c.stroke}66)`;
             });
@@ -1810,6 +1837,11 @@ class OverviewGraph {
                 }
                 event.stopPropagation();
                 window.location.href = '/asset/' + encodeURIComponent(d.id);
+            })
+            .on('contextmenu', (event, d) => {
+                event.preventDefault();
+                event.stopPropagation();
+                this.contextMenu?.show(event, d.id);
             });
 
         if (this.stubNodeElements) {
@@ -1917,6 +1949,152 @@ class OverviewGraph {
                     this.assetToNodeId.set(asset.id, `group:${asset.group}`);
                 }
             }
+        }
+    }
+
+    _reapplyExecutionStatuses() {
+        if (this.executionState.assetStatuses.size === 0 || !this.nodeElements) return;
+
+        for (const [assetId, status] of this.executionState.assetStatuses) {
+            const nodeId = this.assetToNodeId.get(assetId);
+            if (!nodeId) continue;
+
+            if (nodeId.startsWith('group:')) {
+                if (!this.groupAssetStatuses.has(nodeId)) {
+                    this.groupAssetStatuses.set(nodeId, new Map());
+                }
+                this.groupAssetStatuses.get(nodeId).set(assetId, status);
+            }
+        }
+
+        // Apply group aggregate statuses for overview nodes
+        for (const [nodeId, assetMap] of this.groupAssetStatuses) {
+            const statuses = [...assetMap.values()];
+            const groupNode = this.nodes.find(n => n.id === nodeId);
+            let totalAssets;
+            if (this._executionPlanAssets) {
+                const groupName = nodeId.replace('group:', '');
+                totalAssets = [...this._executionPlanAssets].filter(a => a.startsWith(groupName + '/')).length;
+                if (totalAssets === 0) totalAssets = statuses.length;
+            } else {
+                totalAssets = groupNode ? groupNode.asset_count : statuses.length;
+            }
+            const terminalCount = statuses.filter(s => s === 'completed' || s === 'failed').length;
+
+            let groupStatus;
+            if (statuses.includes('running')) {
+                groupStatus = 'running';
+            } else if (terminalCount < totalAssets) {
+                groupStatus = 'running';
+            } else if (statuses.includes('failed')) {
+                groupStatus = 'failed';
+            } else {
+                groupStatus = 'completed';
+            }
+
+            this.nodeElements
+                .filter(d => d.id === nodeId)
+                .attr('class', `node node-group status-${groupStatus}`);
+        }
+
+        // Apply individual asset statuses (for group detail view or standalone assets)
+        const baseClass = this.currentView === 'overview' ? 'node node-asset' : 'node';
+        for (const [assetId, status] of this.executionState.assetStatuses) {
+            const nodeId = this.assetToNodeId.get(assetId);
+            if (!nodeId || nodeId.startsWith('group:')) continue;
+
+            this.nodeElements
+                .filter(d => d.id === nodeId)
+                .attr('class', `${baseClass} status-${status}`);
+        }
+    }
+
+    async startTargetedExecution(targetId, includeDownstream) {
+        if (this.executionState.isRunning) return;
+
+        const btn = document.getElementById('execute-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('running');
+            btn.querySelector('span').textContent = 'CONNECTING...';
+            btn.querySelector('.execute-icon').style.display = 'none';
+            btn.querySelector('.stop-icon').style.display = 'none';
+        }
+
+        // Show UI elements
+        document.getElementById('memory-panel')?.classList.remove('hidden');
+        document.getElementById('execution-progress')?.classList.remove('hidden');
+
+        // Reset state
+        this.executionState.isRunning = true;
+        this.executionState.assetStatuses.clear();
+        this.executionState.memoryTimeline = [];
+        this.executionState.peakRss = 0;
+        this.executionState.currentPartitionDate = null;
+        this.executionState.currentPartitionIndex = 0;
+        this.executionState.totalPartitions = 0;
+        this.groupAssetStatuses.clear();
+
+        // Reset node visual states
+        if (this.nodeElements) {
+            this.nodeElements.attr('class', d => `node node-${d.node_type}`);
+        }
+
+        // Fetch plan to know the total and track planned assets
+        try {
+            const planUrl = `/api/plan?target=${encodeURIComponent(targetId)}&include_downstream=${includeDownstream}`;
+            const planResp = await fetch(planUrl);
+            const planData = await planResp.json();
+            const planAssets = new Set((planData.steps || []).map(s => s.id));
+            this._executionPlanAssets = planAssets;
+
+            document.getElementById('progress-current').textContent = '0';
+            document.getElementById('progress-total').textContent = planAssets.size;
+            const currentAssetEl = document.getElementById('progress-current-asset');
+            if (currentAssetEl) {
+                currentAssetEl.textContent = 'STARTING...';
+                currentAssetEl.style.color = '';
+            }
+            document.getElementById('current-rss').textContent = '-- MB';
+            document.getElementById('peak-rss').textContent = '-- MB';
+
+            // Connect WebSocket
+            await this.connectExecutionWebSocket();
+
+            if (btn) {
+                btn.disabled = false;
+                btn.querySelector('span').textContent = 'STOP';
+                btn.querySelector('.stop-icon').style.display = '';
+                btn.classList.remove('running');
+                btn.classList.add('stopping');
+            }
+
+            // Build request body carrying forward date picker state
+            const requestBody = {
+                target: targetId,
+                include_downstream: includeDownstream,
+            };
+
+            if (this.dateState.mode === 'single' && this.dateState.startDate) {
+                requestBody.execution_date = this.dateState.startDate;
+            } else if (this.dateState.mode === 'range' && this.dateState.startDate && this.dateState.endDate) {
+                requestBody.execution_date = this.dateState.startDate;
+                requestBody.execution_date_end = this.dateState.endDate;
+            }
+
+            const response = await fetch('/api/execution/start', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Failed to start execution');
+            }
+        } catch (error) {
+            console.error('Targeted execution failed:', error);
+            this.stopExecution();
         }
     }
 
