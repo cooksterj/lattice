@@ -95,7 +95,10 @@ class OverviewGraph {
         this.setupEventListeners();
         this.setupNavigation();
         this.setupExecutionUI();
-        this.setupContextMenu();
+        this.contextMenu = new ContextMenu({
+            onRun: (targetId, includeDownstream) => this.startTargetedExecution(targetId, includeDownstream),
+            isRunning: () => this.executionState.isRunning,
+        });
         this.hideLoading();
     }
 
@@ -721,7 +724,7 @@ class OverviewGraph {
                 if (d.node_type === 'group') return;
                 event.preventDefault();
                 event.stopPropagation();
-                this.showContextMenu(event, d);
+                this.contextMenu?.show(event, d.id);
             });
     }
 
@@ -1838,7 +1841,7 @@ class OverviewGraph {
             .on('contextmenu', (event, d) => {
                 event.preventDefault();
                 event.stopPropagation();
-                this.showContextMenu(event, d);
+                this.contextMenu?.show(event, d.id);
             });
 
         if (this.stubNodeElements) {
@@ -2004,103 +2007,6 @@ class OverviewGraph {
                 .filter(d => d.id === nodeId)
                 .attr('class', `${baseClass} status-${status}`);
         }
-    }
-
-    // ================================================================
-    //  CONTEXT MENU
-    // ================================================================
-
-    setupContextMenu() {
-        const menu = document.getElementById('context-menu');
-        if (!menu) return;
-
-        // Close on click-outside
-        document.addEventListener('click', () => {
-            menu.classList.remove('visible');
-        });
-
-        // Close on escape
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') menu.classList.remove('visible');
-        });
-
-        // "RUN + DOWNSTREAM" button
-        document.getElementById('ctx-run-downstream')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const targetId = menu.dataset.targetId;
-            if (targetId) this.startTargetedExecution(targetId, true);
-            menu.classList.remove('visible');
-        });
-
-        // "RUN ONLY THIS" button
-        document.getElementById('ctx-run-only')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const targetId = menu.dataset.targetId;
-            if (targetId) this.startTargetedExecution(targetId, false);
-            menu.classList.remove('visible');
-        });
-
-        // "VIEW DETAILS" button
-        document.getElementById('ctx-view-details')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const targetId = menu.dataset.targetId;
-            if (targetId) window.location.href = '/asset/' + encodeURIComponent(targetId);
-            menu.classList.remove('visible');
-        });
-    }
-
-    showContextMenu(event, assetData) {
-        const menu = document.getElementById('context-menu');
-        if (!menu) return;
-
-        const assetId = assetData.id;
-        menu.dataset.targetId = assetId;
-
-        // Set target label
-        const targetEl = document.getElementById('context-menu-target');
-        const displayName = assetId.includes('/') ? assetId.split('/').pop() : assetId;
-        targetEl.textContent = displayName.toUpperCase();
-
-        // Disable run buttons if execution is already running
-        const isRunning = this.executionState.isRunning;
-        document.getElementById('ctx-run-downstream').disabled = isRunning;
-        document.getElementById('ctx-run-only').disabled = isRunning;
-
-        // Position menu
-        const menuWidth = 260;
-        const menuHeight = 300;
-        let x = event.clientX;
-        let y = event.clientY;
-        if (x + menuWidth > window.innerWidth) x = window.innerWidth - menuWidth - 8;
-        if (y + menuHeight > window.innerHeight) y = window.innerHeight - menuHeight - 8;
-        menu.style.left = `${x}px`;
-        menu.style.top = `${y}px`;
-        menu.classList.add('visible');
-
-        // Fetch plan preview
-        const preview = document.getElementById('context-menu-preview');
-        preview.innerHTML = '<div class="context-menu-preview-loading">LOADING PLAN...</div>';
-
-        fetch(`/api/plan?target=${encodeURIComponent(assetId)}&include_downstream=true`)
-            .then(r => r.json())
-            .then(data => {
-                const steps = data.steps || [];
-                if (steps.length === 0) {
-                    preview.innerHTML = '<div class="context-menu-preview-title">NO ASSETS</div>';
-                    return;
-                }
-                preview.innerHTML = `
-                    <div class="context-menu-preview-title">EXECUTION PLAN (${steps.length})</div>
-                    <div class="context-menu-preview-list">
-                        ${steps.map(s =>
-                            `<div class="context-menu-preview-asset${s.id === assetId ? ' is-target' : ''}">${s.id}</div>`
-                        ).join('')}
-                    </div>
-                `;
-            })
-            .catch(() => {
-                preview.innerHTML = '<div class="context-menu-preview-title">FAILED TO LOAD</div>';
-            });
     }
 
     async startTargetedExecution(targetId, includeDownstream) {
